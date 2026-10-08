@@ -1,6 +1,6 @@
 # 方針(Principles)
 
-このプロジェクトの「変えない前提」を置く。個別の機能は `docs/specs/`、技術選定の理由は `docs/adr/` に書く。
+このプロジェクトの「変えない前提」を置く。タスクごとの仕様書は `docs/specs/`、技術選定の理由は `docs/adr/` に書く。
 
 ## 目的
 
@@ -21,9 +21,9 @@
 
 ## 進め方
 
-- 仕様駆動開発(SDD)。spec → タスク分割 → 1ファイルずつ実装、の順に進める。
-- 1回の実装は 1ファイル(1実装箇所)。書く前に説明し、承認後に書き、動作確認で完了とする。
-- 仕様はファイル(`docs/specs/`)、タスクは Issue、実装は PR で扱う。GitHub での具体的な流れは [development-flow.md](development-flow.md) に書く。
+- 仕様駆動開発(SDD)。全体を決める → タスクに分解する → タスクごとに仕様書を書いてから実装する、の順に進める。
+- Claude Code との対話とコミットは 1ファイル(1実装箇所)単位。書く前に説明し、承認後に書き、差分を確認してからコミットする。
+- PR はタスク単位(1タスク = 1 Issue = 1 ブランチ = 1 PR)。GitHub での具体的な流れは [development-flow.md](development-flow.md) に書く。
 - AI への作業ルールは [CLAUDE.md](../CLAUDE.md) に書く。
 
 ## 非目標(やらないこと)
@@ -44,8 +44,10 @@
 
 | 内容 | 置き場所 |
 |---|---|
-| 機能の振る舞い、API、受け入れ条件 | `docs/specs/NNN-名前.md` |
-| やること(タスク)と進み具合 | GitHub Issue(親 = spec 単位、子 = 1ファイル単位)、GitHub Projects |
+| 今の全体像(機能一覧、画面と API の一覧、データモデル、インフラ構成) | `docs/architecture.md` |
+| フェーズと、その順番・目標 | `docs/roadmap.md`、GitHub Milestone |
+| タスクごとの仕様書(目的、やること、やらないこと、完了条件) | `docs/specs/Issue番号-名前.md` |
+| タスクと進み具合(仕様書へのリンク) | GitHub Issue |
 | 変更内容と、その理由・動作確認の結果 | GitHub PR |
 | 技術選定・設計判断(背景、選択肢、決定、理由) | `docs/adr/NNNN-名前.md` |
 | AI に渡さない情報の線引き | `docs/ai-guideline.md` |
@@ -57,4 +59,4 @@
 
 > Google ログイン(Firebase Auth)→ ID トークンを Rails が検証 → 記事を1件投稿 → 一覧で表示
 
-これを spec 001 にする。
+これを roadmap のフェーズ1にする。

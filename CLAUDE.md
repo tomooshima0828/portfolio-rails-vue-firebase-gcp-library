@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Knowledge Library(仮)。Rails API + Vue 3 SPA を Firebase / Google Cloud 上で動かすポートフォリオ。
-目的・優先順位・非目標は [docs/principles.md](docs/principles.md)、要件と技術一覧は [HANDOFF.md](HANDOFF.md) を参照。
+目的・優先順位・非目標は [docs/principles.md](docs/principles.md)、GitHub での進め方は [docs/development-flow.md](docs/development-flow.md)、要件と技術一覧は [HANDOFF.md](HANDOFF.md) を参照。
 
 ## 進め方(最重要)
 
@@ -34,9 +34,14 @@ Knowledge Library(仮)。Rails API + Vue 3 SPA を Firebase / Google Cloud 上�
 - `.env*`、`config/master.key`、サービスアカウントの鍵ファイル
 - 本番データ、個人情報
 
-詳細は `docs/ai-guideline.md`(作成予定)。`.claude/settings.json` の permissions で deny する(作成予定)。
+- 秘密情報を表示するコマンド(`cat .env`、`printenv`、`rails credentials:show` など)を実行しない。deny は Read ツールしか止められないため、Bash 経由は自分で守る。
+- 鍵の発行や Secret Manager への登録など、秘密情報を扱う作業はオーナーに任せ、手順の説明にとどめる。
+
+詳細は [docs/ai-guideline.md](docs/ai-guideline.md)。Read の禁止は [.claude/settings.json](.claude/settings.json) の deny で設定済み。
 
 ## Git
 
 - GitHub Flow。デフォルトブランチは `main`。変更は PR 経由。
+- 仕様は `docs/specs/` のファイル、タスクは Issue、実装は PR。1 子 Issue = 1ファイル = 1 ブランチ = 1 PR。詳細とブランチ名の付け方は [docs/development-flow.md](docs/development-flow.md)。
+- 実装を始める前に、対応する Issue 番号を確認する。PR 本文には `Closes #番号` と対応 spec を書く。
 - コミットや push は、オーナーが依頼したときだけ行う。

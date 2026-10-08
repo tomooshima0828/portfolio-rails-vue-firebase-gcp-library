@@ -1,0 +1,15 @@
+# 機密情報
+# api/ や web/ を生成すると各ディレクトリにも .gitignore が作られるが、
+# 生成前や生成し忘れに備えて、リポジトリ全体でも除外する
+.env
+.env.*
+!.env.example
+**/config/master.key
+**/config/credentials/*.key
+*service-account*.json
+
+# Claude Code の個人設定(全員で共有する設定は .claude/settings.json)
+.claude/settings.local.json
+
+# OS
+.DS_Store

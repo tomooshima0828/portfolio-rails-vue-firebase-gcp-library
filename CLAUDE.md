@@ -48,3 +48,4 @@ Knowledge Library(仮)。Rails API + Vue 3 SPA を Firebase / Google Cloud 上�
 - 1タスク = 1 Issue = 1 ブランチ = 1 PR。PR は単体で動作確認できるまとまりにする。仕様の中身は仕様書に書き、Issue には仕様書へのリンクだけを置く。詳細とブランチ名の付け方は [docs/development-flow.md](docs/development-flow.md)。
 - 実装を始める前に、対応する Issue 番号を確認する。PR 本文には `Closes #番号` と対応する仕様書を書く。
 - コミットは、差分を確認したオーナーの OK の後に行う。push と PR の作成は、オーナーが依頼したときだけ行う。
+- PR を作成したら、次のセッション用の短い引き継ぎ文を出す(今どこにいて、次に何をするか、文書に書いていない注意点)。注意点が溜まったら、CLAUDE.md か ADR に移す。

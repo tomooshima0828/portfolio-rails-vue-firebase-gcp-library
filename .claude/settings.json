@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/config/master.key)",
+      "Read(**/config/credentials/*.key)",
+      "Read(**/*service-account*.json)"
+    ]
+  }
+}

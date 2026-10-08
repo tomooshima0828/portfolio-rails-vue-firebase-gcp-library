@@ -23,7 +23,8 @@
 
 - 仕様駆動開発(SDD)。spec → タスク分割 → 1ファイルずつ実装、の順に進める。
 - 1回の実装は 1ファイル(1実装箇所)。書く前に説明し、承認後に書き、動作確認で完了とする。
-- 具体的な作業ルールは [CLAUDE.md](../CLAUDE.md) に書く。
+- 仕様はファイル(`docs/specs/`)、タスクは Issue、実装は PR で扱う。GitHub での具体的な流れは [development-flow.md](development-flow.md) に書く。
+- AI への作業ルールは [CLAUDE.md](../CLAUDE.md) に書く。
 
 ## 非目標(やらないこと)
 
@@ -44,6 +45,8 @@
 | 内容 | 置き場所 |
 |---|---|
 | 機能の振る舞い、API、受け入れ条件 | `docs/specs/NNN-名前.md` |
+| やること(タスク)と進み具合 | GitHub Issue(親 = spec 単位、子 = 1ファイル単位)、GitHub Projects |
+| 変更内容と、その理由・動作確認の結果 | GitHub PR |
 | 技術選定・設計判断(背景、選択肢、決定、理由) | `docs/adr/NNNN-名前.md` |
 | AI に渡さない情報の線引き | `docs/ai-guideline.md` |
 | 構成図、runbook、スプリントの記録 | `docs/` 配下 |

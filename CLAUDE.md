@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Knowledge Library(仮)。Rails API + Vue 3 SPA を Firebase / Google Cloud 上で動かすポートフォリオ。
-目的・優先順位・非目標は [docs/principles.md](docs/principles.md)、GitHub での進め方は [docs/development-flow.md](docs/development-flow.md)、要件と技術一覧は [HANDOFF.md](HANDOFF.md) を参照。
+目的・優先順位・非目標は [docs/principles.md](docs/principles.md)、GitHub での進め方は [docs/development-flow.md](docs/development-flow.md)、要件と技術一覧は [README.md](README.md) を参照。
 
 ## 進め方(最重要)
 

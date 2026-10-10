@@ -3,7 +3,7 @@
 会員がノウハウ記事を投稿・検索・ブックマークできる「ノウハウ図書館」風の Web サービス。
 Rails API + Vue 3 の SPA を、Firebase(認証・リアルタイム機能)と Google Cloud(実行基盤・運用)の上で動かす構成にしている。
 
-> 作成中。現時点では「使う技術の一覧」と「求人要件との対応」だけを定義している。
+> 作成中。進め方と全体像は文書にまとめてあり、実装はこれから(フェーズ1)。
 
 ## 目的
 
@@ -11,6 +11,20 @@ Rails API + Vue 3 の SPA を、Firebase(認証・リアルタイム機能)と G
 
 - 求人:https://libegroup.com/job.html?id=nl443jkkx8a
 - 担当サービス:ノウハウ図書館、スキルマーケットなどのリベシティ関連 Web サービスの開発・保守
+
+## ドキュメント
+
+| 文書 | 役割 |
+|---|---|
+| [docs/principles.md](docs/principles.md) | 目的、優先順位、非目標などの変えない前提 |
+| [docs/development-flow.md](docs/development-flow.md) | 仕様駆動開発(SDD)と GitHub の進め方、仕様書の書き方 |
+| [docs/architecture.md](docs/architecture.md) | 今の全体像(機能一覧、構成、画面と API、データモデル) |
+| [docs/roadmap.md](docs/roadmap.md) | フェーズと、その順番・目標 |
+| [docs/adr/](docs/adr/) | 技術選定・設計判断の記録 |
+| [docs/specs/](docs/specs/) | タスクごとの仕様書 |
+| [docs/notes/](docs/notes/) | ADR を書く前の判断材料、技術の解説 |
+| [docs/ai-guideline.md](docs/ai-guideline.md) | AI に渡さない情報の線引き |
+| [CLAUDE.md](CLAUDE.md) | Claude Code への作業ルール |
 
 ## 求人要件と、このポートフォリオでの示し方
 
@@ -102,7 +116,7 @@ Rails API + Vue 3 の SPA を、Firebase(認証・リアルタイム機能)と G
 | Git / GitHub(GitHub Flow、ブランチ保護、PR テンプレート) | 変更は必ず PR 経由 | A |
 | GitHub Actions(CI) | RSpec、RuboCop、Brakeman、Vitest、vue-tsc、ルールテストを PR ごとに実行 | A |
 | GitHub Actions(CD)+ Workload Identity 連携 | サービスアカウントの鍵ファイルを使わずに Cloud Run へデプロイ | A |
-| GitHub Projects | スプリントのボード、バックログ | B |
+| GitHub Projects | スプリントのボード、バックログ | A |
 | Dependabot | 依存ライブラリの更新 | B |
 
 ### 負荷・障害対策

@@ -50,6 +50,7 @@
 | タスクと進み具合(仕様書へのリンク) | GitHub Issue |
 | 変更内容と、その理由・動作確認の結果 | GitHub PR |
 | 技術選定・設計判断(背景、選択肢、決定、理由) | `docs/adr/NNNN-名前.md` |
+| 検討メモ(ADR を書く前の判断材料、技術の解説) | `docs/notes/` |
 | AI に渡さない情報の線引き | `docs/ai-guideline.md` |
 | 構成図、runbook、スプリントの記録 | `docs/` 配下 |
 

@@ -46,7 +46,7 @@
 |---|---|
 | 今の全体像(機能一覧、画面と API の一覧、データモデル、インフラ構成) | `docs/architecture.md` |
 | フェーズと、その順番・目標 | `docs/roadmap.md`、GitHub Milestone |
-| タスクごとの仕様書(目的、やること、やらないこと、完了条件) | `docs/specs/Issue番号-名前.md` |
+| タスクごとの仕様書(目的、やること、やらないこと、完了条件、設計) | `docs/specs/Issue番号-名前.md` |
 | タスクと進み具合(仕様書へのリンク) | GitHub Issue |
 | 変更内容と、その理由・動作確認の結果 | GitHub PR |
 | 技術選定・設計判断(背景、選択肢、決定、理由) | `docs/adr/NNNN-名前.md` |

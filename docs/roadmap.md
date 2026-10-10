@@ -9,8 +9,10 @@
 ## フェーズ1:縦一本を動かす(ローカル)+ CI
 
 - 目標:Google ログイン(Firebase Auth)→ ID トークンを Rails が検証 → 記事を1件投稿 → 一覧で表示、がローカルで動く
-- 範囲:Firebase Auth、Rails API、Vue 3、PostgreSQL(Docker)、GitHub Actions の CI(RSpec、RuboCop、Brakeman、bundler-audit、Vitest、vue-tsc)
-- 完了の目安:縦一本が手動確認で通る。PR ごとに CI が動き、Ruleset で CI の成功を必須にしている
+- 範囲:Firebase Auth、Rails API、Vue 3、PostgreSQL(Docker)、GitHub Actions の CI(RSpec、RuboCop、Brakeman、bundler-audit、Vitest、vue-tsc)、GitHub Projects(スプリントのボード)
+- 完了の目安:縦一本が手動確認で通る。PR ごとに CI が動き、Ruleset で CI の成功を必須にしている。Issue を GitHub Projects のボードで管理し、スプリントの記録を docs に残し始めている
+
+GitHub Projects は、必須要件「チーム開発経験」を示す手段なので、最初のフェーズから使う。スプリントの記録は途中から始めると、チームのやり方で進めてきたことを示しにくいため。
 
 ## フェーズ2:本番にデプロイする
 
@@ -40,7 +42,7 @@ Firebase Hosting は優先度 B だが、本番で Vue を配る場所が必要�
 ## フェーズ5:運用・負荷対策(優先度 B)
 
 - 目標:負荷と障害への備えを、計測の数値と手順書で示す
-- 範囲:Cloud Monitoring(稼働時間チェック、アラート)、k6 による負荷試験、Bullet、Rack::Attack、ヘルスチェックと SIGTERM 時の終了処理、runbook、その他の優先度 B(GitHub Projects、Dependabot、ESLint / Prettier)
+- 範囲:Cloud Monitoring(稼働時間チェック、アラート)、k6 による負荷試験、Bullet、Rack::Attack、ヘルスチェックと SIGTERM 時の終了処理、runbook、その他の優先度 B(Dependabot、ESLint / Prettier)
 - 完了の目安:負荷試験の改善前後の数値と、runbook を docs に残している
 
 ## その後:優先度 C(余力があれば)

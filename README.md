@@ -22,6 +22,7 @@ Rails API + Vue 3 の SPA を、Firebase(認証・リアルタイム機能)と G
 | [docs/roadmap.md](docs/roadmap.md) | フェーズと、その順番・目標 |
 | [docs/adr/](docs/adr/) | 技術選定・設計判断の記録 |
 | [docs/specs/](docs/specs/) | タスクごとの仕様書 |
+| [docs/sprints/](docs/sprints/) | スプリントの計画とふりかえり |
 | [docs/notes/](docs/notes/) | ADR を書く前の判断材料、技術の解説 |
 | [docs/ai-guideline.md](docs/ai-guideline.md) | AI に渡さない情報の線引き |
 | [CLAUDE.md](CLAUDE.md) | Claude Code への作業ルール |

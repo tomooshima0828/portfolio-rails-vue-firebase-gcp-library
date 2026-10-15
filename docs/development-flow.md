@@ -12,6 +12,8 @@
 | `docs/specs/` | タスクごとの仕様書。**実装前に必ず書く** | その時点の記録として残す。マージ後は書き換えない |
 | Issue | タスク名、仕様書へのリンク、進み具合 | 作業が終われば Close |
 | Milestone | フェーズ(Issue のまとまり)と進捗率 | フェーズが終われば Close |
+| GitHub Projects | Issue の状態、見積もり、どのスプリントに入っているか | スプリントごとに更新する |
+| `docs/sprints/` | スプリントの計画とふりかえり | その時点の記録として残す |
 | PR | 実際の変更と、その説明 | マージで完了 |
 
 仕様の中身は仕様書にだけ書き、Issue には書かない(二重管理を避ける)。
@@ -22,6 +24,8 @@
 ```
 ① 全体を決める     → docs/architecture.md、docs/roadmap.md
 ② タスクに分解する → 1タスク = 1 Issue。フェーズごとに Milestone でまとめる
+                     → 依存があれば、Issue の本文に「前提:#番号」を書く
+                     → ボードに載せて見積もる
 ③ タスクを実装する → ブランチを作る
                      → 最初のコミットで仕様書(docs/specs/)を書く
                      → テストを先に書いてコミットする(テストで確かめるタスクのみ)
@@ -118,12 +122,28 @@ Milestone「フェーズ1:ログインして記事を投稿・一覧表示」
 
 コードだけ先に変えて、仕様書が古いまま残る状態を作らない。
 
+## スプリント
+
+GitHub Projects のボードで、2週間ごとのスプリントとして進める。
+
+| 項目 | 内容 |
+|---|---|
+| 長さ | 2週間 |
+| ボードの列 | Backlog / Todo(今のスプリント)/ In Progress / Done |
+| 見積もり | ストーリーポイント 1・2・3・5。他のタスクと比べた相対的な大きさで付ける。5を超えそうなら分割する |
+| 記録 | `docs/sprints/NNN.md`。1スプリント1ファイル。雛形は [docs/sprints/_template.md](sprints/_template.md) |
+
+- **開始時**:Backlog から今のスプリントでやる Issue を選んで Todo に移し、計画(ゴール、Issue、ポイント)を記録する。
+- **終了時**:終わったポイントの合計(ベロシティ)と、ふりかえり(KPT:Keep・Problem・Try)を記録する。終わらなかった Issue は次のスプリントへ持ち越す。
+- **記録の PR**:スプリントの区切りごとに1つにまとめる。前のスプリントのふりかえりと、次のスプリントの計画を同じ PR に入れる。
+
 ## 名前の付け方
 
 | 対象 | 形式 | 例 |
 |---|---|---|
 | 仕様書 | `docs/specs/Issue番号(3桁)-名前.md` | `docs/specs/014-articles-api.md` |
 | ADR | `docs/adr/NNNN-名前.md`(4桁連番) | `docs/adr/0001-database-hosting.md` |
+| スプリントの記録 | `docs/sprints/NNN.md`(3桁連番) | `docs/sprints/001.md` |
 | 機能のブランチ | `feature/Issue番号-名前` | `feature/14-articles-api` |
 | セットアップ・設定のブランチ | `chore/Issue番号-名前` | `chore/11-rails-new` |
 | 修正のブランチ | `fix/Issue番号-名前` | `fix/15-title-validation` |

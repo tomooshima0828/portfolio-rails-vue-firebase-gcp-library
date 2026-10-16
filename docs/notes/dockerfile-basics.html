@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dockerfile の基礎</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --ink: #1f2328;
+    --ink-2: #57606a;
+    --line: #d8dee4;
+    --accent: #0b6bcb;
+
+    --c-file: #8250df;
+    --c-file-bg: #f3edff;
+    --c-build: #c05600;
+    --c-build-bg: #fff1e3;
+    --c-image: #0a7d86;
+    --c-image-bg: #e3f5f6;
+    --c-container: #c2253c;
+    --c-container-bg: #fdecef;
+    --c-registry: #57606a;
+    --c-registry-bg: #f2f3f5;
+    --c-ok: #1a7f37;
+    --c-ok-bg: #e6f6ea;
+    --c-warn: #b42318;
+    --c-warn-bg: #fdecea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115;
+      --surface: #171a21;
+      --ink: #e6e8eb;
+      --ink-2: #9aa4b2;
+      --line: #2d333d;
+      --accent: #6cb6ff;
+
+      --c-file: #b692f6;
+      --c-file-bg: #241b36;
+      --c-build: #f0a35e;
+      --c-build-bg: #2e2014;
+      --c-image: #4fd1db;
+      --c-image-bg: #112a2c;
+      --c-container: #ff7b8f;
+      --c-container-bg: #33161c;
+      --c-registry: #9aa4b2;
+      --c-registry-bg: #1c2027;
+      --c-ok: #57c776;
+      --c-ok-bg: #13281a;
+      --c-warn: #ff8a80;
+      --c-warn-bg: #331816;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115;
+    --surface: #171a21;
+    --ink: #e6e8eb;
+    --ink-2: #9aa4b2;
+    --line: #2d333d;
+    --accent: #6cb6ff;
+
+    --c-file: #b692f6;
+    --c-file-bg: #241b36;
+    --c-build: #f0a35e;
+    --c-build-bg: #2e2014;
+    --c-image: #4fd1db;
+    --c-image-bg: #112a2c;
+    --c-container: #ff7b8f;
+    --c-container-bg: #33161c;
+    --c-registry: #9aa4b2;
+    --c-registry-bg: #1c2027;
+    --c-ok: #57c776;
+    --c-ok-bg: #13281a;
+    --c-warn: #ff8a80;
+    --c-warn-bg: #331816;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Noto Sans JP", system-ui, -apple-system, sans-serif;
+    line-height: 1.8;
+    font-size: 16px;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  header p.lead { color: var(--ink-2); margin-top: 4px; }
+  h1 { font-size: 1.75rem; line-height: 1.4; margin: 0 0 8px; }
+  h2 {
+    font-size: 1.25rem;
+    margin: 56px 0 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  h2 .num { display: inline-block; min-width: 2em; color: var(--ink-2); font-weight: 600; }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p, li { overflow-wrap: anywhere; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.88em;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 0.86rem;
+    line-height: 1.6;
+  }
+  pre code { border: 0; padding: 0; background: none; font-size: 1em; }
+  .question {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 20px 0;
+  }
+  .question strong { display: block; margin-bottom: 4px; }
+  .table-wrap { overflow-x: auto; margin: 16px 0; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); font-weight: 600; white-space: nowrap; }
+  td code { white-space: nowrap; }
+  figure {
+    margin: 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { color: var(--ink-2); font-size: 0.88rem; margin-top: 8px; }
+  .tag {
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 0.85em;
+    font-weight: 600;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .t-file { color: var(--c-file); }
+  .t-build { color: var(--c-build); }
+  .t-image { color: var(--c-image); }
+  .t-container { color: var(--c-container); }
+  .t-registry { color: var(--c-registry); }
+  ol.steps { padding-left: 1.4em; }
+  ol.steps li { margin-bottom: 8px; }
+  .point {
+    background: var(--c-ok-bg);
+    border: 1px solid var(--c-ok);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 16px 0;
+  }
+  .caution {
+    background: var(--c-warn-bg);
+    border: 1px solid var(--c-warn);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 16px 0;
+  }
+  .point p, .caution p { margin: 4px 0; }
+  .note { color: var(--ink-2); font-size: 0.9rem; }
+
+  /* SVG */
+  .s-text { fill: var(--ink); font-size: 14px; }
+  .s-sub { fill: var(--ink-2); font-size: 12px; }
+  .s-title { fill: var(--ink); font-size: 15px; font-weight: 700; }
+  .s-mono { fill: var(--ink); font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .s-line { stroke: var(--ink-2); stroke-width: 1.5; fill: none; }
+  .s-dash { stroke-dasharray: 5 4; }
+  .s-arrowhead { fill: var(--ink-2); }
+  .s-panel { fill: none; stroke: var(--line); stroke-width: 1; }
+  .b-file { fill: var(--c-file-bg); stroke: var(--c-file); stroke-width: 1.5; }
+  .b-build { fill: var(--c-build-bg); stroke: var(--c-build); stroke-width: 1.5; }
+  .b-image { fill: var(--c-image-bg); stroke: var(--c-image); stroke-width: 1.5; }
+  .b-container { fill: var(--c-container-bg); stroke: var(--c-container); stroke-width: 1.5; }
+  .b-registry { fill: var(--c-registry-bg); stroke: var(--c-registry); stroke-width: 1.5; }
+  .b-hit { fill: var(--c-ok-bg); stroke: var(--c-ok); stroke-width: 1.5; }
+  .b-miss { fill: var(--c-warn-bg); stroke: var(--c-warn); stroke-width: 1.5; }
+  .b-stage { fill: none; stroke: var(--c-build); stroke-width: 1.5; stroke-dasharray: 6 4; }
+  .tx-file { fill: var(--c-file); font-weight: 600; }
+  .tx-build { fill: var(--c-build); font-weight: 600; }
+  .tx-image { fill: var(--c-image); font-weight: 600; }
+  .tx-container { fill: var(--c-container); font-weight: 600; }
+  .tx-registry { fill: var(--c-registry); font-weight: 600; }
+  .tx-ok { fill: var(--c-ok); font-weight: 600; }
+  .tx-warn { fill: var(--c-warn); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Dockerfile の基礎</h1>
+  <p class="lead">#5 で書く <code>api/Dockerfile.dev</code> と、<code>rails new</code> が作った本番用の <code>api/Dockerfile</code> を例に、Dockerfile の読み方と書き方の基礎をまとめる。</p>
+</header>
+
+<div class="question">
+  <strong>このページで答える問い</strong>
+  Dockerfile とは何で、1行ずつ何をしていて、なぜ開発用と本番用で書き方が違うのか。
+</div>
+
+<!-- 1 -->
+<h2><span class="num">1.</span>出発点:何に困っているのか</h2>
+
+<p>アプリを動かすには、コードだけでなく、OS、Ruby、gem、gem をビルドするための道具など、たくさんのものが必要になる。これを人の手で毎回そろえると、次のことが起きる。</p>
+
+<ul>
+  <li>自分の Mac では動くのに、他の人のパソコンや本番のサーバーでは動かない(「手元では動くのに」問題)</li>
+  <li>何を、どの順番で、どのバージョンで入れたのかが、どこにも残らない</li>
+  <li>本番のサーバーを作り直すたびに、同じ作業を手でやり直す</li>
+</ul>
+
+<p>そこで、<strong>環境の作り方を手順書として書いておき、その手順書から、毎回まったく同じ環境を機械に作らせる</strong>。この手順書が Dockerfile である。</p>
+
+<!-- 2 -->
+<h2><span class="num">2.</span>前提の言葉</h2>
+
+<ul>
+  <li><strong>Dockerfile</strong>:イメージの作り方を、上から順に1行ずつ書いた手順書。ファイル名は普通 <code>Dockerfile</code>。このプロジェクトでは、開発用を <code>Dockerfile.dev</code> という名前にする。</li>
+  <li><strong>イメージ</strong>:Dockerfile の手順どおりに組み上げ、保存した「環境の型」。中には OS の最小限、Ruby、gem などが入っている。一度作れば、何度でも同じものを使える。</li>
+  <li><strong>コンテナ</strong>:イメージから起動した、実際に動いている環境。1つのイメージから、いくつでもコンテナを作れる。</li>
+  <li><strong>ビルド</strong>:Dockerfile からイメージを作る作業。<code>docker build</code> や <code>docker compose build</code> で行う。</li>
+  <li><strong>ベースイメージ</strong>:Dockerfile の最初に指定する、土台にする既製のイメージ。たとえば <code>ruby:3.4.11-slim</code> は、「Debian(Linux)に Ruby 3.4.11 を入れたもの」を Docker 公式が配っているもの。</li>
+  <li><strong>レイヤー(層)</strong>:Dockerfile の手順1つごとに作られる、変更分の記録。イメージは、このレイヤーを下から積み重ねたものになっている。</li>
+  <li><strong>キャッシュ</strong>:前回のビルドで作ったレイヤーの保存。手順と材料が前回と同じなら、Docker はやり直さずにこれを再利用する。</li>
+  <li><strong>レジストリ</strong>:イメージを置いておく倉庫。ベースイメージは Docker Hub から取ってくる。フェーズ2では、自分のイメージを Google Cloud の Artifact Registry に置く。</li>
+</ul>
+
+<!-- 3 -->
+<h2><span class="num">3.</span>登場人物と全体の流れ</h2>
+
+<figure>
+  <svg viewBox="0 0 760 260" role="img" aria-label="Dockerfile をビルドしてイメージを作り、イメージを起動してコンテナにする。ベースイメージはレジストリから取ってくる">
+    <defs>
+      <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="s-arrowhead"/>
+      </marker>
+    </defs>
+    <!-- registry -->
+    <rect x="200" y="14" width="200" height="56" rx="8" class="b-registry"/>
+    <text x="300" y="38" text-anchor="middle" class="s-text tx-registry">レジストリ(Docker Hub)</text>
+    <text x="300" y="58" text-anchor="middle" class="s-sub">ruby:3.4.11-slim を配っている</text>
+
+    <!-- dockerfile -->
+    <rect x="20" y="130" width="150" height="76" rx="8" class="b-file"/>
+    <text x="95" y="158" text-anchor="middle" class="s-text tx-file">Dockerfile</text>
+    <text x="95" y="180" text-anchor="middle" class="s-sub">手順書</text>
+    <text x="95" y="196" text-anchor="middle" class="s-sub">(あなたが書く)</text>
+
+    <!-- build -->
+    <rect x="220" y="130" width="160" height="76" rx="8" class="b-build"/>
+    <text x="300" y="158" text-anchor="middle" class="s-text tx-build">ビルド</text>
+    <text x="300" y="180" text-anchor="middle" class="s-sub">docker compose build</text>
+    <text x="300" y="196" text-anchor="middle" class="s-sub">手順を上から実行</text>
+
+    <!-- image -->
+    <rect x="430" y="130" width="140" height="76" rx="8" class="b-image"/>
+    <text x="500" y="158" text-anchor="middle" class="s-text tx-image">イメージ</text>
+    <text x="500" y="180" text-anchor="middle" class="s-sub">環境の型</text>
+    <text x="500" y="196" text-anchor="middle" class="s-sub">(保存される)</text>
+
+    <!-- containers -->
+    <rect x="620" y="110" width="124" height="50" rx="8" class="b-container"/>
+    <text x="682" y="140" text-anchor="middle" class="s-text tx-container">コンテナ</text>
+    <rect x="620" y="176" width="124" height="50" rx="8" class="b-container"/>
+    <text x="682" y="206" text-anchor="middle" class="s-text tx-container">コンテナ</text>
+
+    <line x1="170" y1="168" x2="216" y2="168" class="s-line" marker-end="url(#ah1)"/>
+    <line x1="300" y1="70" x2="300" y2="126" class="s-line s-dash" marker-end="url(#ah1)"/>
+    <text x="308" y="102" class="s-sub">FROM で取ってくる</text>
+    <line x1="380" y1="168" x2="426" y2="168" class="s-line" marker-end="url(#ah1)"/>
+    <line x1="570" y1="160" x2="616" y2="138" class="s-line" marker-end="url(#ah1)"/>
+    <line x1="570" y1="176" x2="616" y2="198" class="s-line" marker-end="url(#ah1)"/>
+    <text x="594" y="244" text-anchor="middle" class="s-sub">起動(docker compose up / run)</text>
+  </svg>
+  <figcaption>Dockerfile(紫)をビルド(橙)するとイメージ(青緑)ができ、イメージを起動するとコンテナ(赤)になる。1つのイメージから、何個でもコンテナを作れる。</figcaption>
+</figure>
+
+<ol class="steps">
+  <li><span class="tag t-file">Dockerfile</span>:あなたが、環境の作り方を手順書として書く。</li>
+  <li><span class="tag t-build">ビルド</span> → <span class="tag t-registry">レジストリ</span>:Docker が手順書の1行目(<code>FROM</code>)を読み、土台にするベースイメージを Docker Hub から取ってくる。</li>
+  <li><span class="tag t-build">ビルド</span>:Docker が残りの手順を上から1つずつ実行し、手順ごとにレイヤーを積み重ねる。</li>
+  <li><span class="tag t-build">ビルド</span> → <span class="tag t-image">イメージ</span>:積み重ねたレイヤーが、イメージとして保存される。</li>
+  <li><span class="tag t-image">イメージ</span> → <span class="tag t-container">コンテナ</span>:<code>docker compose up</code> などで、Docker がイメージからコンテナを起動する。このとき、ポートの公開、バインドマウント、環境変数など「動かし方」を <code>compose.yaml</code> で渡す。</li>
+</ol>
+
+<div class="point">
+  <p><strong>押さえておきたい区別</strong>:Dockerfile は「何を入れた環境か(型の作り方)」を書く。<code>compose.yaml</code> は「その型をどう動かすか(ポート、マウント、他のコンテナとのつながり)」を書く。</p>
+</div>
+
+<!-- 4 -->
+<h2><span class="num">4.</span>Dockerfile.dev を1行ずつ読む</h2>
+
+<pre><code># 開発用のイメージ。本番用は Dockerfile(フェーズ2で Cloud Run に使う)
+ARG RUBY_VERSION=3.4.11
+FROM docker.io/library/ruby:$RUBY_VERSION-slim
+
+WORKDIR /rails
+
+RUN apt-get update -qq &amp;&amp; \
+    apt-get install --no-install-recommends -y build-essential git libpq-dev libyaml-dev pkg-config &amp;&amp; \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
+ENV BUNDLE_PATH="/usr/local/bundle"
+
+COPY Gemfile Gemfile.lock ./
+RUN bundle install
+
+EXPOSE 3000
+CMD ["bin/rails", "server", "-b", "0.0.0.0"]</code></pre>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>命令</th><th>この行がすること</th><th>知っておきたいこと</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>ARG</code></td>
+      <td>ビルドのときだけ使う変数 <code>RUBY_VERSION</code> を決める</td>
+      <td>Ruby のバージョンを1か所で変えられるようにするため。本番用の Dockerfile と同じ書き方にそろえている</td>
+    </tr>
+    <tr>
+      <td><code>FROM</code></td>
+      <td>土台にするベースイメージを決める。ここでは <code>ruby:3.4.11-slim</code></td>
+      <td>必ず最初の命令(<code>ARG</code> を除く)。<code>-slim</code> は余計なものを省いた軽量版で、gem をビルドする道具は入っていない</td>
+    </tr>
+    <tr>
+      <td><code>WORKDIR</code></td>
+      <td>以降の命令を実行するフォルダを <code>/rails</code> にする</td>
+      <td>フォルダがなければ作り、そこへ移動する(<code>mkdir</code> と <code>cd</code> を合わせたもの)。コンテナを起動したときも、このフォルダから始まる</td>
+    </tr>
+    <tr>
+      <td><code>RUN</code>(1つ目)</td>
+      <td>Linux のパッケージ管理(<code>apt-get</code>)で、gem のビルドに必要な道具を入れる</td>
+      <td><code>build-essential</code> は C のコンパイラなど、<code>libpq-dev</code> は <code>pg</code> gem が PostgreSQL につなぐためのライブラリ。最後の <code>rm -rf</code> は、もう要らないパッケージの一覧を消してイメージを小さくする</td>
+    </tr>
+    <tr>
+      <td><code>ENV</code></td>
+      <td>環境変数 <code>BUNDLE_PATH</code> を設定し、gem の入れ先を <code>/usr/local/bundle</code> にする</td>
+      <td>イメージの中にずっと残る設定。コンテナの中で動くすべてのコマンドから見える</td>
+    </tr>
+    <tr>
+      <td><code>COPY</code></td>
+      <td>Mac 側の <code>Gemfile</code> と <code>Gemfile.lock</code> を、イメージの <code>/rails</code> にコピーする</td>
+      <td>コード全体ではなく、この2つだけをコピーする。理由は「5. レイヤーとキャッシュ」で説明する</td>
+    </tr>
+    <tr>
+      <td><code>RUN</code>(2つ目)</td>
+      <td><code>bundle install</code> で gem を入れる</td>
+      <td>開発用なので、RSpec などの開発・テスト用の gem も入る</td>
+    </tr>
+    <tr>
+      <td><code>EXPOSE</code></td>
+      <td>「このイメージはポート 3000 を使う」と書いておく</td>
+      <td><strong>メモにすぎず、これだけではポートは公開されない</strong>。実際の公開は <code>compose.yaml</code> の <code>ports</code> で行う</td>
+    </tr>
+    <tr>
+      <td><code>CMD</code></td>
+      <td>コンテナを起動したときに、標準で実行するコマンドを決める</td>
+      <td>ここでは Rails のサーバーを起動する。<code>docker compose run --rm api bundle exec rspec</code> のように別のコマンドを指定すると、<code>CMD</code> の代わりにそちらが実行される</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="caution">
+  <p><strong><code>-b 0.0.0.0</code> がないとどうなるか</strong>:Rails は開発環境では、標準で <code>localhost</code> だけで待ち受ける。コンテナの中の <code>localhost</code> は「そのコンテナ自身」のことなので、Mac からポートの公開を通して届いたリクエストを受け取れない。<code>0.0.0.0</code>(すべての接続口)で待ち受けるように指定すると、Mac の <code>localhost:3000</code> から届くようになる。</p>
+</div>
+
+<!-- 5 -->
+<h2><span class="num">5.</span>レイヤーとキャッシュ:なぜ Gemfile だけを先にコピーするのか</h2>
+
+<p>Docker は手順を1つ実行するたびに、その結果をレイヤーとして保存する。次にビルドしたとき、<strong>手順の文面も、コピーするファイルの中身も前回と同じなら、保存したレイヤーを再利用する</strong>(キャッシュ)。ただし、<strong>どこか1つの手順でやり直しが起きると、それより下の手順はすべてやり直しになる</strong>。</p>
+
+<figure>
+  <svg viewBox="0 0 760 330" role="img" aria-label="コードだけを変えた場合はすべてのレイヤーがキャッシュから再利用される。Gemfile を変えた場合は、COPY Gemfile とそれ以降のレイヤーがやり直しになる">
+    <rect x="8" y="8" width="364" height="314" rx="8" class="s-panel"/>
+    <text x="24" y="34" class="s-title">コードだけを変えたとき</text>
+    <text x="24" y="54" class="s-sub">(app/ の .rb ファイルなど)</text>
+
+    <rect x="24" y="72" width="332" height="34" rx="6" class="b-hit"/>
+    <text x="36" y="94" class="s-mono">FROM ruby:3.4.11-slim</text>
+    <text x="344" y="94" text-anchor="end" class="s-sub tx-ok">再利用</text>
+    <rect x="24" y="112" width="332" height="34" rx="6" class="b-hit"/>
+    <text x="36" y="134" class="s-mono">RUN apt-get install ...</text>
+    <text x="344" y="134" text-anchor="end" class="s-sub tx-ok">再利用</text>
+    <rect x="24" y="152" width="332" height="34" rx="6" class="b-hit"/>
+    <text x="36" y="174" class="s-mono">COPY Gemfile Gemfile.lock</text>
+    <text x="344" y="174" text-anchor="end" class="s-sub tx-ok">再利用</text>
+    <rect x="24" y="192" width="332" height="34" rx="6" class="b-hit"/>
+    <text x="36" y="214" class="s-mono">RUN bundle install</text>
+    <text x="344" y="214" text-anchor="end" class="s-sub tx-ok">再利用</text>
+    <text x="190" y="256" text-anchor="middle" class="s-text tx-ok">作り直し不要</text>
+    <text x="190" y="278" text-anchor="middle" class="s-sub">コードはイメージに入っていない。</text>
+    <text x="190" y="296" text-anchor="middle" class="s-sub">バインドマウントで、変更がすぐ見える</text>
+
+    <rect x="388" y="8" width="364" height="314" rx="8" class="s-panel"/>
+    <text x="404" y="34" class="s-title">Gemfile を変えたとき</text>
+    <text x="404" y="54" class="s-sub">(gem を足した、消した)</text>
+
+    <rect x="404" y="72" width="332" height="34" rx="6" class="b-hit"/>
+    <text x="416" y="94" class="s-mono">FROM ruby:3.4.11-slim</text>
+    <text x="724" y="94" text-anchor="end" class="s-sub tx-ok">再利用</text>
+    <rect x="404" y="112" width="332" height="34" rx="6" class="b-hit"/>
+    <text x="416" y="134" class="s-mono">RUN apt-get install ...</text>
+    <text x="724" y="134" text-anchor="end" class="s-sub tx-ok">再利用</text>
+    <rect x="404" y="152" width="332" height="34" rx="6" class="b-miss"/>
+    <text x="416" y="174" class="s-mono">COPY Gemfile Gemfile.lock</text>
+    <text x="724" y="174" text-anchor="end" class="s-sub tx-warn">やり直し</text>
+    <rect x="404" y="192" width="332" height="34" rx="6" class="b-miss"/>
+    <text x="416" y="214" class="s-mono">RUN bundle install</text>
+    <text x="724" y="214" text-anchor="end" class="s-sub tx-warn">やり直し</text>
+    <text x="570" y="256" text-anchor="middle" class="s-text tx-warn">docker compose build api が必要</text>
+    <text x="570" y="278" text-anchor="middle" class="s-sub">apt-get の段は再利用されるので、</text>
+    <text x="570" y="296" text-anchor="middle" class="s-sub">やり直すのは gem の分だけ</text>
+  </svg>
+  <figcaption>レイヤーは上から下へ積み重なる。緑は前回のものを再利用、赤はやり直し。変わりにくい手順を上に、変わりやすい手順を下に置くのが基本。</figcaption>
+</figure>
+
+<p>もし <code>COPY . .</code>(コード全体のコピー)を <code>bundle install</code> より上に置くと、コードを1文字変えただけで <code>COPY</code> がやり直しになり、続く <code>bundle install</code> も毎回やり直しになる。Gemfile だけを先にコピーするのは、<strong>gem が変わらない限り <code>bundle install</code> をやり直さないため</strong>である。本番用の Dockerfile も、同じ理由で Gemfile を先にコピーしている。</p>
+
+<div class="point">
+  <p><strong>同じ <code>RUN</code> の中で片付ける理由</strong>:<code>apt-get update</code> と <code>install</code> と <code>rm -rf</code> を <code>&amp;&amp;</code> でつないで1つの <code>RUN</code> にしているのは、レイヤーが「変更分の記録」だからである。別々の <code>RUN</code> にすると、ダウンロードした一覧が前のレイヤーに残ったままになり、後で消してもイメージは小さくならない。</p>
+</div>
+
+<!-- 6 -->
+<h2><span class="num">6.</span>本番用の Dockerfile:マルチステージビルド</h2>
+
+<p><code>rails new</code> が作った本番用の <code>Dockerfile</code> は、<code>FROM</code> が3回出てくる。これは<strong>マルチステージビルド</strong>という書き方で、作業用の段階と、最終的に残す段階を分けている。</p>
+
+<figure>
+  <svg viewBox="0 0 760 290" role="img" aria-label="本番用 Dockerfile は base、build、最終の3段階。build 段階でコンパイラを使って gem をビルドし、最終段階には gem とコードだけをコピーする">
+    <defs>
+      <marker id="ah6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="s-arrowhead"/>
+      </marker>
+    </defs>
+    <rect x="20" y="20" width="200" height="120" rx="8" class="b-stage"/>
+    <text x="36" y="44" class="s-text tx-build">base 段階</text>
+    <text x="36" y="70" class="s-sub">ruby:3.4.11-slim</text>
+    <text x="36" y="90" class="s-sub">実行に要るものだけ入れる</text>
+    <text x="36" y="110" class="s-sub">RAILS_ENV=production</text>
+
+    <rect x="280" y="20" width="220" height="250" rx="8" class="b-stage"/>
+    <text x="296" y="44" class="s-text tx-build">build 段階(作業用)</text>
+    <text x="296" y="70" class="s-sub">base を土台にする</text>
+    <text x="296" y="92" class="s-sub">+ コンパイラ(build-essential)</text>
+    <text x="296" y="114" class="s-sub">+ bundle install(開発用 gem なし)</text>
+    <text x="296" y="136" class="s-sub">+ COPY . .(コード全体)</text>
+    <text x="296" y="158" class="s-sub">+ bootsnap で起動を速くする準備</text>
+    <rect x="296" y="186" width="188" height="64" rx="6" class="b-miss"/>
+    <text x="390" y="212" text-anchor="middle" class="s-sub tx-warn">コンパイラなどは</text>
+    <text x="390" y="232" text-anchor="middle" class="s-sub tx-warn">最終段階に持っていかない</text>
+
+    <rect x="560" y="20" width="180" height="250" rx="8" class="b-image"/>
+    <text x="576" y="44" class="s-text tx-image">最終段階</text>
+    <text x="576" y="70" class="s-sub">base を土台にする</text>
+    <text x="576" y="92" class="s-sub">+ 専用ユーザー rails</text>
+    <text x="576" y="114" class="s-sub">+ gem をコピー</text>
+    <text x="576" y="136" class="s-sub">+ コードをコピー</text>
+    <text x="576" y="166" class="s-sub tx-ok">小さく、余計な道具が</text>
+    <text x="576" y="186" class="s-sub tx-ok">ない(安全)</text>
+    <text x="576" y="216" class="s-sub">これが Cloud Run で</text>
+    <text x="576" y="236" class="s-sub">動くイメージになる</text>
+
+    <line x1="220" y1="80" x2="276" y2="80" class="s-line" marker-end="url(#ah6)"/>
+    <path d="M120,140 C120,280 520,290 556,250" class="s-line s-dash" marker-end="url(#ah6)"/>
+    <text x="300" y="286" class="s-sub">base を土台にする</text>
+    <line x1="500" y1="130" x2="556" y2="130" class="s-line" marker-end="url(#ah6)"/>
+    <text x="528" y="120" text-anchor="middle" class="s-sub">COPY --from</text>
+  </svg>
+  <figcaption>build 段階でコンパイラを使って gem を作り、できあがった gem とコードだけを最終段階に <code>COPY --from=build</code> で持っていく。最終的なイメージには、コンパイラが残らない。</figcaption>
+</figure>
+
+<p>本番では、イメージが小さいほどダウンロードと起動が速く、余計な道具が入っていないほど攻撃されたときの被害が小さい。そのため、作業用の段階で使った道具は最終段階に持っていかない。開発用の <code>Dockerfile.dev</code> は、小ささより分かりやすさを優先して、1段階で書く。</p>
+
+<!-- 7 -->
+<h2><span class="num">7.</span>開発用と本番用の違い</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>観点</th><th>開発用 <code>Dockerfile.dev</code></th><th>本番用 <code>Dockerfile</code></th></tr></thead>
+  <tbody>
+    <tr><td>使う場所</td><td>手元の Docker Compose(#5〜)</td><td>Cloud Run(フェーズ2〜)</td></tr>
+    <tr><td>Rails の環境</td><td>development(指定しない)</td><td><code>RAILS_ENV=production</code></td></tr>
+    <tr><td>gem</td><td>開発・テスト用も入れる</td><td>開発用は入れない(<code>BUNDLE_WITHOUT=development</code>)</td></tr>
+    <tr><td>コード</td><td>入れない。バインドマウントで渡す</td><td>イメージの中にコピーする(<code>COPY . .</code>)</td></tr>
+    <tr><td>段階</td><td>1段階</td><td>3段階(マルチステージ)</td></tr>
+    <tr><td>実行するユーザー</td><td>root</td><td>専用ユーザー <code>rails</code></td></tr>
+    <tr><td>起動時の処理</td><td>なし(<code>db:prepare</code> は自分で実行)</td><td><code>bin/docker-entrypoint</code> が <code>db:prepare</code> を実行してからサーバーを起動</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>本番のコンテナは、作ったら中身を変えずにそのまま動かす。コードを変えたら、イメージを作り直して入れ替える。開発のコンテナは、コードを何度も書き換えるので、コードはイメージに入れずマウントで渡す。この使い方の違いが、書き方の違いになっている。</p>
+
+<!-- 8 -->
+<h2><span class="num">8.</span>ビルドコンテキストと .dockerignore</h2>
+
+<ul>
+  <li><strong>ビルドコンテキスト</strong>:ビルドのときに Docker に渡すフォルダ。<code>COPY</code> でコピーできるのは、このフォルダの中のファイルだけ。このプロジェクトでは <code>api/</code> になる(<code>compose.yaml</code> で指定する)。</li>
+  <li><strong><code>.dockerignore</code></strong>:ビルドコンテキストから外すファイルの一覧。<code>.gitignore</code> の Docker 版。<code>rails new</code> が作った <code>api/.dockerignore</code> は、<code>master.key</code>、<code>.env*</code>、ログ、一時ファイルなどを外している。鍵や秘密情報がイメージに入るのを防ぐ、大事な安全装置である。</li>
+</ul>
+
+<!-- 9 -->
+<h2><span class="num">9.</span>例え話:レンタルキッチン</h2>
+
+<p>前回のメモ(<code>local-dev-docker.html</code>)と同じく、レンタルキッチンに例える。</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>例え</th><th>実際</th></tr></thead>
+  <tbody>
+    <tr><td>台所の設備の一覧表(何を、どの順番で設置するか)</td><td><span class="tag t-file">Dockerfile</span></td></tr>
+    <tr><td>一覧表どおりに設備を設置する作業</td><td><span class="tag t-build">ビルド</span></td></tr>
+    <tr><td>設置し終えた台所の「型」(何度でも同じ台所を用意できる)</td><td><span class="tag t-image">イメージ</span></td></tr>
+    <tr><td>型から用意された、実際に料理している台所</td><td><span class="tag t-container">コンテナ</span></td></tr>
+    <tr><td>設置作業の1工程ずつの記録</td><td>レイヤー</td></tr>
+    <tr><td>前回と同じ工程は、記録を使ってやり直さないこと</td><td>キャッシュ</td></tr>
+    <tr><td>設備の一覧表に「コンロは3口」と書いておくだけのメモ</td><td><code>EXPOSE</code>(実際に使えるようにするのは <code>compose.yaml</code>)</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>一覧表の上のほうには、めったに変えないもの(床、水道、コンロ)を書き、下のほうには、よく入れ替えるもの(調味料 = gem)を書く。調味料を入れ替えるときは、床から作り直さずに済む。これが「変わりにくい手順を上に、変わりやすい手順を下に」の意味である。</p>
+
+<!-- 10 -->
+<h2><span class="num">10.</span>よく使うコマンド</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>コマンド</th><th>すること</th></tr></thead>
+  <tbody>
+    <tr><td><code>docker compose build api</code></td><td>api のイメージを、Dockerfile.dev からビルドする(Gemfile を変えたとき)</td></tr>
+    <tr><td><code>docker compose build --no-cache api</code></td><td>キャッシュを使わず、最初からビルドし直す(様子がおかしいとき)</td></tr>
+    <tr><td><code>docker images</code></td><td>手元にあるイメージの一覧を見る</td></tr>
+    <tr><td><code>docker compose run --rm api bash</code></td><td>api のコンテナを起動して、中に入る(中で何が起きているか調べるとき)</td></tr>
+    <tr><td><code>docker image prune</code></td><td>使われていない古いイメージを消して、ディスクを空ける</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 11 -->
+<h2><span class="num">11.</span>用語集</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>日本語</th><th>英語</th><th>意味</th></tr></thead>
+  <tbody>
+    <tr><td>Dockerfile</td><td>Dockerfile</td><td>イメージの作り方を上から順に書いた手順書</td></tr>
+    <tr><td>イメージ</td><td>image</td><td>Dockerfile から作った環境の型</td></tr>
+    <tr><td>コンテナ</td><td>container</td><td>イメージから起動した、実際に動いている環境</td></tr>
+    <tr><td>ビルド</td><td>build</td><td>Dockerfile からイメージを作る作業</td></tr>
+    <tr><td>ベースイメージ</td><td>base image</td><td><code>FROM</code> で指定する、土台にする既製のイメージ</td></tr>
+    <tr><td>レイヤー</td><td>layer</td><td>手順1つごとの変更分の記録。積み重なってイメージになる</td></tr>
+    <tr><td>キャッシュ</td><td>build cache</td><td>前回のレイヤーの保存。同じ手順なら再利用される</td></tr>
+    <tr><td>マルチステージビルド</td><td>multi-stage build</td><td>作業用の段階と最終段階を分け、必要なものだけを最終段階に持っていく書き方</td></tr>
+    <tr><td>ビルドコンテキスト</td><td>build context</td><td>ビルドのときに Docker に渡すフォルダ</td></tr>
+    <tr><td>レジストリ</td><td>registry</td><td>イメージを置く倉庫(Docker Hub、Artifact Registry など)</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">作成日:2026-10-16。#5 の <code>api/Dockerfile.dev</code> を書く前の基礎知識として作成。</p>
+
+</main>
+</body>
+</html>

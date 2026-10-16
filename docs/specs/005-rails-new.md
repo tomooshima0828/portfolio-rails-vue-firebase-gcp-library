@@ -11,6 +11,7 @@ Rails API の土台を Docker で動かせるようにし、以降のタスク�
 - `api/` に Rails 8.1(API モード)を作る。Ruby は 3.4 系の最新にする
 - リポジトリ直下の `compose.yaml` で、db(PostgreSQL 17)と api(Rails)の2つのコンテナを動かす。ローカル開発はすべて Docker で行う(ADR 0002)
 - RSpec を入れ、`/up`(Rails 標準のヘルスチェック)の request spec を1つ書く
+- README に、Docker でのローカル開発のコマンド(初回の準備、起動・停止、テスト、gem の追加、マイグレーション、DB の作り直し)を書く
 
 ## やらないこと
 
@@ -22,7 +23,7 @@ Rails API の土台を Docker で動かせるようにし、以降のタスク�
 
 ## 完了条件
 
-<!-- コマンドは、すべて docker compose run --rm api … の形でコンテナ内で実行する -->
+<!-- コマンドは、すべて docker compose run --rm api … の形でコンテナ内で実行する。AC-6 は db を起動させないよう --no-deps を付ける -->
 
 - AC-1:`docker compose up` したとき、db と api のコンテナが起動し、api は `localhost:3000` で待ち受ける
 - AC-2:`bin/rails db:prepare` を実行したとき、Rails は開発用とテスト用のデータベースを作る
@@ -30,6 +31,7 @@ Rails API の土台を Docker で動かせるようにし、以降のタスク�
 - AC-4:`bundle exec rspec` を実行したとき、RSpec は `/up` の request spec を実行し、すべて成功する
 - AC-5:`bin/rubocop` と `bin/brakeman` を実行したとき、どちらも違反・警告なしで終わる
 - AC-6:db コンテナが停止している場合、`bin/rails db:prepare` は接続エラーを表示して失敗する
+- AC-7:README の手順どおりにコマンドを実行したとき、初回の準備から起動・停止まで、エラーなく完了する
 
 ## 設計
 
@@ -47,3 +49,4 @@ Rails API の土台を Docker で動かせるようにし、以降のタスク�
 7. `api/Gemfile`:rspec-rails を追加する
 8. `api/spec/` 一式:`rails generate rspec:install` のコマンド1回で1コミット
 9. `api/spec/requests/health_spec.rb`:`/up` の request spec
+10. `README.md`:ローカル開発のコマンド。1〜9 ができてから、実際に試したコマンドだけを書く

@@ -43,7 +43,7 @@ Rails API の土台を Docker で動かせるようにし、以降のタスク�
 2. `docs/adr/0002-local-dev-on-docker.md`:ローカル開発をすべて Docker で行う判断
 3. `api/` 一式:`rails new` のコマンド1回で1コミット。使い捨てのコンテナ内で実行する
    - オプション:`--api -d postgresql --skip-git --skip-test --skip-kamal --skip-solid --skip-thruster --skip-ci`
-4. `.gitignore`(リポジトリ直下):Rails が普段 `api/.gitignore` に書くルールを、`api/` を付けて追加する。`.gitignore` は各ディレクトリに置かず、リポジトリ直下で一元管理する
+4. `api/.gitignore`:Rails が普段作るものと同じ内容。`--skip-git` を付けると作られないため、手で足す。リポジトリ直下の `.gitignore` には全体に共通するルール(機密情報、OS のファイル)だけを置き、`api/` や `web/` に固有のルールは各ディレクトリの `.gitignore` に書く
 5. `api/Dockerfile.dev`:開発用のイメージ(Ruby 3.4、gem のインストール)。`rails new` が作る本番用の `Dockerfile` は、フェーズ2の Cloud Run 用に残す
 6. `compose.yaml`:db と api の2サービス。db のポートは Mac 側に公開しない。db のパスワードは開発専用の値を直接書く
 7. `api/config/database.yml`:接続先を、環境変数で db コンテナにする

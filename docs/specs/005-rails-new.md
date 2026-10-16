@@ -43,10 +43,11 @@ Rails API の土台を Docker で動かせるようにし、以降のタスク�
 2. `docs/adr/0002-local-dev-on-docker.md`:ローカル開発をすべて Docker で行う判断
 3. `api/` 一式:`rails new` のコマンド1回で1コミット。使い捨てのコンテナ内で実行する
    - オプション:`--api -d postgresql --skip-git --skip-test --skip-kamal --skip-solid --skip-thruster --skip-ci`
-4. `api/Dockerfile.dev`:開発用のイメージ(Ruby 3.4、gem のインストール)。`rails new` が作る本番用の `Dockerfile` は、フェーズ2の Cloud Run 用に残す
-5. `compose.yaml`:db と api の2サービス。db のポートは Mac 側に公開しない。db のパスワードは開発専用の値を直接書く
-6. `api/config/database.yml`:接続先を、環境変数で db コンテナにする
-7. `api/Gemfile`:rspec-rails を追加する
-8. `api/spec/` 一式:`rails generate rspec:install` のコマンド1回で1コミット
-9. `api/spec/requests/health_spec.rb`:`/up` の request spec
-10. `README.md`:ローカル開発のコマンド。1〜9 ができてから、実際に試したコマンドだけを書く
+4. `.gitignore`(リポジトリ直下):Rails が普段 `api/.gitignore` に書くルールを、`api/` を付けて追加する。`.gitignore` は各ディレクトリに置かず、リポジトリ直下で一元管理する
+5. `api/Dockerfile.dev`:開発用のイメージ(Ruby 3.4、gem のインストール)。`rails new` が作る本番用の `Dockerfile` は、フェーズ2の Cloud Run 用に残す
+6. `compose.yaml`:db と api の2サービス。db のポートは Mac 側に公開しない。db のパスワードは開発専用の値を直接書く
+7. `api/config/database.yml`:接続先を、環境変数で db コンテナにする
+8. `api/Gemfile`:rspec-rails を追加する
+9. `api/spec/` 一式:`rails generate rspec:install` のコマンド1回で1コミット
+10. `api/spec/requests/health_spec.rb`:`/up` の request spec
+11. `README.md`:ローカル開発のコマンド。1〜10 ができてから、実際に試したコマンドだけを書く

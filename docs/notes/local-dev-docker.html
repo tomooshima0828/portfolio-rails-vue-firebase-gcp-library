@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ローカル開発の構成</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --ink: #1f2328;
+    --ink-2: #57606a;
+    --line: #d8dee4;
+    --accent: #0b6bcb;
+
+    --c-host: #57606a;
+    --c-host-bg: #f2f3f5;
+    --c-ruby: #c2253c;
+    --c-ruby-bg: #fdecef;
+    --c-db: #1f5fbf;
+    --c-db-bg: #e8f0fc;
+    --c-docker: #0a7d86;
+    --c-docker-bg: #e3f5f6;
+    --c-editor: #8250df;
+    --c-editor-bg: #f3edff;
+    --c-ok: #1a7f37;
+    --c-warn: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115;
+      --surface: #171a21;
+      --ink: #e6e8eb;
+      --ink-2: #9aa4b2;
+      --line: #2d333d;
+      --accent: #6cb6ff;
+
+      --c-host: #9aa4b2;
+      --c-host-bg: #1c2027;
+      --c-ruby: #ff7b8f;
+      --c-ruby-bg: #33161c;
+      --c-db: #79aaff;
+      --c-db-bg: #15223a;
+      --c-docker: #4fd1db;
+      --c-docker-bg: #112a2c;
+      --c-editor: #b692f6;
+      --c-editor-bg: #241b36;
+      --c-ok: #57c776;
+      --c-warn: #ff8a80;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115;
+    --surface: #171a21;
+    --ink: #e6e8eb;
+    --ink-2: #9aa4b2;
+    --line: #2d333d;
+    --accent: #6cb6ff;
+
+    --c-host: #9aa4b2;
+    --c-host-bg: #1c2027;
+    --c-ruby: #ff7b8f;
+    --c-ruby-bg: #33161c;
+    --c-db: #79aaff;
+    --c-db-bg: #15223a;
+    --c-docker: #4fd1db;
+    --c-docker-bg: #112a2c;
+    --c-editor: #b692f6;
+    --c-editor-bg: #241b36;
+    --c-ok: #57c776;
+    --c-warn: #ff8a80;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Noto Sans JP", system-ui, -apple-system, sans-serif;
+    line-height: 1.8;
+    font-size: 16px;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  header p.lead { color: var(--ink-2); margin-top: 4px; }
+  h1 { font-size: 1.75rem; line-height: 1.4; margin: 0 0 8px; }
+  h2 {
+    font-size: 1.25rem;
+    margin: 56px 0 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  h2 .num { display: inline-block; min-width: 2em; color: var(--ink-2); font-weight: 600; }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p, li { overflow-wrap: anywhere; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.88em;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .question {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 20px 0;
+  }
+  .question strong { display: block; margin-bottom: 4px; }
+  .table-wrap { overflow-x: auto; margin: 16px 0; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); font-weight: 600; }
+  td.better { color: var(--c-ok); font-weight: 600; }
+  figure {
+    margin: 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { color: var(--ink-2); font-size: 0.88rem; margin-top: 8px; }
+  .tag {
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 0.85em;
+    font-weight: 600;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .t-host { color: var(--c-host); }
+  .t-ruby { color: var(--c-ruby); }
+  .t-db { color: var(--c-db); }
+  .t-docker { color: var(--c-docker); }
+  .t-editor { color: var(--c-editor); }
+  .label-a, .label-b {
+    display: inline-block;
+    font-weight: 700;
+    border-radius: 4px;
+    padding: 0 8px;
+    margin-right: 6px;
+    color: var(--bg);
+  }
+  .label-a { background: var(--c-ruby); }
+  .label-b { background: var(--c-docker); }
+  ol.steps { padding-left: 1.4em; }
+  ol.steps li { margin-bottom: 8px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 1rem; }
+  .card ul { margin: 0; padding-left: 1.2em; }
+  .note { color: var(--ink-2); font-size: 0.9rem; }
+
+  /* SVG */
+  .s-text { fill: var(--ink); font-size: 14px; }
+  .s-sub { fill: var(--ink-2); font-size: 12px; }
+  .s-title { fill: var(--ink); font-size: 15px; font-weight: 700; }
+  .s-line { stroke: var(--ink-2); stroke-width: 1.5; fill: none; }
+  .s-dash { stroke-dasharray: 5 4; }
+  .s-arrowhead { fill: var(--ink-2); }
+  .b-host { fill: var(--c-host-bg); stroke: var(--c-host); stroke-width: 1.5; }
+  .b-ruby { fill: var(--c-ruby-bg); stroke: var(--c-ruby); stroke-width: 1.5; }
+  .b-db { fill: var(--c-db-bg); stroke: var(--c-db); stroke-width: 1.5; }
+  .b-docker { fill: var(--c-docker-bg); stroke: var(--c-docker); stroke-width: 1.5; }
+  .b-docker-area { fill: none; stroke: var(--c-docker); stroke-width: 1.5; stroke-dasharray: 7 5; }
+  .b-net { fill: none; stroke: var(--c-docker); stroke-width: 1; stroke-dasharray: 3 4; }
+  .b-editor { fill: var(--c-editor-bg); stroke: var(--c-editor); stroke-width: 1.5; }
+  .b-files { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5; }
+  .b-ghost { fill: none; stroke: var(--c-host); stroke-width: 1.2; stroke-dasharray: 4 4; }
+  .tx-ruby { fill: var(--c-ruby); font-weight: 600; }
+  .tx-db { fill: var(--c-db); font-weight: 600; }
+  .tx-docker { fill: var(--c-docker); font-weight: 600; }
+  .tx-editor { fill: var(--c-editor); font-weight: 600; }
+  .tx-host { fill: var(--c-host); font-weight: 600; }
+  .tx-warn { fill: var(--c-warn); font-weight: 600; }
+  .tx-ok { fill: var(--c-ok); font-weight: 600; }
+  .mount { stroke: var(--c-docker); stroke-width: 3; fill: none; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>ローカル開発の構成:Rails を手元で動かすか、すべて Docker か</h1>
+  <p class="lead">#5「Rails API プロジェクトを作る」と ADR 0002 の判断材料。2つの構成を、同じ図の描き方で比べる。</p>
+</header>
+
+<div class="question">
+  <strong>このページで答える問い</strong>
+  <span class="label-a">A</span>Rails は Mac で直接動かし、PostgreSQL だけ Docker で動かす構成と、<span class="label-b">B</span>Rails も PostgreSQL もすべて Docker で動かす構成は、何がどう違うのか。
+</div>
+
+<!-- 1 -->
+<h2><span class="num">1.</span>出発点:何に困っているのか</h2>
+
+<p>開発者(オーナー)は、自分の Mac で Rails API と PostgreSQL を動かし、コードを書いては動作を確かめたい。ところが、Mac に入っているものと、作りたい環境が合っていない。</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th></th><th>Mac に今入っているもの</th><th>このプロジェクトで使うもの</th><th>本番(フェーズ2)</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag t-ruby">Ruby</span></td><td>3.2.2(rbenv)</td><td>3.4 系</td><td>3.4 系(Cloud Run のコンテナ)</td></tr>
+    <tr><td><span class="tag t-db">PostgreSQL</span></td><td>14(Homebrew)</td><td>17</td><td>17(Cloud SQL)</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>この差をどこで埋めるかが、2つの構成の違いになる。<span class="label-a">A</span>は Ruby を Mac に入れて埋め、PostgreSQL だけをコンテナに任せる。<span class="label-b">B</span>は両方をコンテナに任せ、Mac には Docker 以外を入れない。</p>
+
+<!-- 2 -->
+<h2><span class="num">2.</span>前提の言葉</h2>
+
+<ul>
+  <li><strong>イメージ</strong>:アプリを動かすのに必要なもの(OS の最小限、Ruby、gem など)を1つにまとめた「型」。<code>Dockerfile</code> という手順書から作る。</li>
+  <li><strong>コンテナ</strong>:イメージから起動した、実際に動いている実行環境。1つのイメージから、何度でも同じコンテナを作れる。</li>
+  <li><strong>Docker Desktop</strong>:Mac でコンテナを動かすためのアプリ。コンテナは Linux 用の仕組みなので、Docker Desktop は Mac の中に <strong>Linux の仮想マシン</strong>を1台動かし、コンテナはその中で動く。</li>
+  <li><strong>Docker Compose</strong>:複数のコンテナ(ここでは api と db)の起動方法を <code>compose.yaml</code> に書いておき、まとめて起動・停止する道具。</li>
+  <li><strong>ポートの公開</strong>:コンテナの中で待ち受けているポートを、Mac 側の <code>localhost</code> のポートにつなぐ設定。公開しないポートは、Mac からは見えない。</li>
+  <li><strong>バインドマウント</strong>:Mac 上のフォルダ(<code>./api</code>)を、コンテナの中のフォルダ(<code>/rails</code>)として見せる設定。Mac で保存したファイルが、すぐコンテナの中でも見える。</li>
+  <li><strong>rbenv</strong>:Mac に複数の Ruby を入れ、フォルダごとに使い分ける道具。今の Mac にも入っている。</li>
+  <li><strong>gem / bundle install</strong>:gem は Ruby のライブラリ。<code>bundle install</code> は、<code>Gemfile</code> に書いた gem をまとめて入れるコマンド。</li>
+  <li><strong>Ruby LSP</strong>:VS Code で Ruby の補完や定義ジャンプを行う拡張機能。Mac に Ruby と gem があることを前提に動く。</li>
+</ul>
+
+<figure>
+  <svg viewBox="0 0 760 250" role="img" aria-label="Mac の中に Docker Desktop の Linux 仮想マシンがあり、その中でコンテナが動く。Mac のフォルダはバインドマウントでコンテナに見せ、コンテナのポートは公開すると Mac の localhost につながる">
+    <defs>
+      <marker id="ah0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="s-arrowhead"/>
+      </marker>
+    </defs>
+    <rect x="10" y="10" width="740" height="230" rx="10" class="b-host"/>
+    <text x="28" y="36" class="s-title">あなたの Mac</text>
+
+    <rect x="34" y="70" width="170" height="56" rx="8" class="b-files"/>
+    <text x="119" y="94" text-anchor="middle" class="s-text">./api フォルダ</text>
+    <text x="119" y="114" text-anchor="middle" class="s-sub">Mac 上のファイル</text>
+
+    <rect x="34" y="160" width="170" height="56" rx="8" class="b-host"/>
+    <text x="119" y="184" text-anchor="middle" class="s-text">localhost:3000</text>
+    <text x="119" y="204" text-anchor="middle" class="s-sub">Mac 側のポート</text>
+
+    <rect x="300" y="50" width="430" height="176" rx="10" class="b-docker-area"/>
+    <text x="318" y="74" class="s-text tx-docker">Docker Desktop(Linux の仮想マシン)</text>
+
+    <rect x="330" y="96" width="190" height="110" rx="8" class="b-docker"/>
+    <text x="425" y="120" text-anchor="middle" class="s-text tx-docker">コンテナ</text>
+    <text x="425" y="146" text-anchor="middle" class="s-sub">/rails フォルダ</text>
+    <text x="425" y="186" text-anchor="middle" class="s-sub">ポート 3000</text>
+
+    <rect x="560" y="96" width="150" height="110" rx="8" class="b-docker"/>
+    <text x="635" y="128" text-anchor="middle" class="s-text tx-docker">イメージ</text>
+    <text x="635" y="152" text-anchor="middle" class="s-sub">Dockerfile から作る</text>
+    <text x="635" y="174" text-anchor="middle" class="s-sub">コンテナの「型」</text>
+    <line x1="560" y1="150" x2="524" y2="150" class="s-line" marker-end="url(#ah0)"/>
+    <text x="542" y="140" text-anchor="middle" class="s-sub">起動</text>
+
+    <line x1="204" y1="98" x2="326" y2="140" class="mount"/>
+    <text x="262" y="104" text-anchor="middle" class="s-sub tx-docker">バインドマウント</text>
+
+    <line x1="204" y1="188" x2="326" y2="182" class="s-line" marker-start="url(#ah0)" marker-end="url(#ah0)"/>
+    <text x="262" y="206" text-anchor="middle" class="s-sub">ポートの公開</text>
+  </svg>
+  <figcaption>コンテナは Mac の上で直接動くのではなく、Docker Desktop が用意した Linux の仮想マシンの中で動く。Mac とコンテナの間は、バインドマウント(ファイル)とポートの公開(通信)でつなぐ。</figcaption>
+</figure>
+
+<!-- 3 -->
+<h2><span class="num">3.</span>登場人物</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>役割</th><th>具体例</th><th>やること</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag t-editor">エディタ</span></td><td>VS Code</td><td><code>api/</code> のコードを書く。補完のために Ruby LSP が動く</td></tr>
+    <tr><td><span class="tag t-ruby">Ruby / Rails</span></td><td>Ruby 3.4、Rails 8.1</td><td>API サーバーとして <code>localhost:3000</code> で待ち受ける。テストもここで動く</td></tr>
+    <tr><td><span class="tag t-db">PostgreSQL</span></td><td>PostgreSQL 17</td><td>開発用・テスト用のデータを保存する</td></tr>
+    <tr><td><span class="tag t-docker">Docker</span></td><td>Docker Desktop、Docker Compose</td><td>コンテナを作り、起動し、つなぐ</td></tr>
+    <tr><td><span class="tag t-host">Mac</span></td><td>あなたの Mac</td><td>上のすべての土台。A では Ruby も直接動かす</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 4 -->
+<h2><span class="num">4.</span>全体の構成図</h2>
+
+<h3><span class="label-a">A</span>Rails は Mac、PostgreSQL だけ Docker(推奨していた構成)</h3>
+
+<figure>
+  <svg viewBox="0 0 760 400" role="img" aria-label="構成 A:Mac の rbenv の Ruby で Rails が動き、localhost:5432 経由で Docker の PostgreSQL につなぐ">
+    <defs>
+      <marker id="ahA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="s-arrowhead"/>
+      </marker>
+    </defs>
+    <rect x="10" y="10" width="740" height="380" rx="10" class="b-host"/>
+    <text x="28" y="36" class="s-title">あなたの Mac</text>
+
+    <!-- editor -->
+    <rect x="30" y="60" width="160" height="56" rx="8" class="b-editor"/>
+    <text x="110" y="84" text-anchor="middle" class="s-text tx-editor">VS Code</text>
+    <text x="110" y="104" text-anchor="middle" class="s-sub">Ruby LSP がそのまま動く</text>
+
+    <rect x="30" y="160" width="160" height="56" rx="8" class="b-files"/>
+    <text x="110" y="184" text-anchor="middle" class="s-text">./api のファイル</text>
+    <text x="110" y="204" text-anchor="middle" class="s-sub">Mac 上</text>
+    <line x1="110" y1="116" x2="110" y2="156" class="s-line" marker-end="url(#ahA)"/>
+    <text x="118" y="140" class="s-sub">編集</text>
+
+    <rect x="30" y="300" width="160" height="56" rx="8" class="b-host"/>
+    <text x="110" y="324" text-anchor="middle" class="s-text">ブラウザ / curl</text>
+    <text x="110" y="344" text-anchor="middle" class="s-sub">localhost:3000/up</text>
+
+    <!-- ruby -->
+    <rect x="230" y="150" width="200" height="76" rx="8" class="b-ruby"/>
+    <text x="330" y="174" text-anchor="middle" class="s-text tx-ruby">Ruby 3.4(rbenv)</text>
+    <text x="330" y="194" text-anchor="middle" class="s-sub">gem は ~/.rbenv の中</text>
+    <text x="330" y="212" text-anchor="middle" class="s-sub">bin/rails s で起動</text>
+    <line x1="190" y1="188" x2="226" y2="188" class="s-line" marker-end="url(#ahA)"/>
+    <text x="208" y="178" text-anchor="middle" class="s-sub">読む</text>
+
+    <rect x="230" y="290" width="200" height="66" rx="8" class="b-ruby"/>
+    <text x="330" y="318" text-anchor="middle" class="s-text tx-ruby">Rails サーバー</text>
+    <text x="330" y="340" text-anchor="middle" class="s-sub">Mac の localhost:3000</text>
+    <line x1="330" y1="226" x2="330" y2="286" class="s-line" marker-end="url(#ahA)"/>
+    <line x1="190" y1="328" x2="226" y2="328" class="s-line" marker-end="url(#ahA)"/>
+
+    <!-- brew pg -->
+    <rect x="230" y="56" width="200" height="60" rx="8" class="b-ghost"/>
+    <text x="330" y="80" text-anchor="middle" class="s-text tx-host">Homebrew の PostgreSQL 14</text>
+    <text x="330" y="100" text-anchor="middle" class="s-sub tx-warn">起動すると 5432 が衝突する</text>
+
+    <!-- docker -->
+    <rect x="470" y="50" width="260" height="320" rx="10" class="b-docker-area"/>
+    <text x="486" y="74" class="s-text tx-docker">Docker Desktop</text>
+    <rect x="510" y="220" width="190" height="80" rx="8" class="b-db"/>
+    <text x="605" y="248" text-anchor="middle" class="s-text tx-db">db コンテナ</text>
+    <text x="605" y="270" text-anchor="middle" class="s-sub">PostgreSQL 17</text>
+    <text x="605" y="288" text-anchor="middle" class="s-sub">ポート 5432 を公開</text>
+
+    <path d="M430,320 C470,320 470,262 506,262" class="s-line" marker-end="url(#ahA)"/>
+    <text x="474" y="344" text-anchor="middle" class="s-sub">localhost:5432</text>
+  </svg>
+  <figcaption>Ruby と Rails は Mac の上で直接動く。コンテナは PostgreSQL の1つだけで、Rails からは「Mac の localhost:5432」に見える。</figcaption>
+</figure>
+
+<h3><span class="label-b">B</span>すべて Docker(オーナーが選んだ構成)</h3>
+
+<figure>
+  <svg viewBox="0 0 760 430" role="img" aria-label="構成 B:Rails も PostgreSQL もコンテナで動く。Mac のファイルはバインドマウントで api コンテナに見え、api コンテナは compose のネットワーク内で db コンテナにつなぐ">
+    <defs>
+      <marker id="ahB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="s-arrowhead"/>
+      </marker>
+    </defs>
+    <rect x="10" y="10" width="740" height="410" rx="10" class="b-host"/>
+    <text x="28" y="36" class="s-title">あなたの Mac</text>
+
+    <rect x="30" y="60" width="160" height="56" rx="8" class="b-editor"/>
+    <text x="110" y="84" text-anchor="middle" class="s-text tx-editor">VS Code</text>
+    <text x="110" y="104" text-anchor="middle" class="s-sub tx-warn">Mac に Ruby がない</text>
+
+    <rect x="30" y="160" width="160" height="56" rx="8" class="b-files"/>
+    <text x="110" y="184" text-anchor="middle" class="s-text">./api のファイル</text>
+    <text x="110" y="204" text-anchor="middle" class="s-sub">Mac 上</text>
+    <line x1="110" y1="116" x2="110" y2="156" class="s-line" marker-end="url(#ahB)"/>
+    <text x="118" y="140" class="s-sub">編集</text>
+
+    <rect x="30" y="300" width="160" height="56" rx="8" class="b-host"/>
+    <text x="110" y="324" text-anchor="middle" class="s-text">ブラウザ / curl</text>
+    <text x="110" y="344" text-anchor="middle" class="s-sub">localhost:3000/up</text>
+
+    <!-- docker area -->
+    <rect x="240" y="50" width="490" height="356" rx="10" class="b-docker-area"/>
+    <text x="256" y="74" class="s-text tx-docker">Docker Desktop(Linux の仮想マシン)</text>
+
+    <rect x="262" y="92" width="448" height="236" rx="8" class="b-net"/>
+    <text x="276" y="112" class="s-sub tx-docker">compose のネットワーク</text>
+
+    <rect x="282" y="130" width="210" height="120" rx="8" class="b-ruby"/>
+    <text x="387" y="154" text-anchor="middle" class="s-text tx-ruby">api コンテナ</text>
+    <text x="387" y="176" text-anchor="middle" class="s-sub">Ruby 3.4 + gem(イメージ内)</text>
+    <text x="387" y="196" text-anchor="middle" class="s-sub">/rails = Mac の ./api</text>
+    <text x="387" y="216" text-anchor="middle" class="s-sub">bin/rails s → ポート 3000</text>
+    <text x="387" y="236" text-anchor="middle" class="s-sub">3000 を公開</text>
+
+    <rect x="540" y="150" width="150" height="80" rx="8" class="b-db"/>
+    <text x="615" y="178" text-anchor="middle" class="s-text tx-db">db コンテナ</text>
+    <text x="615" y="200" text-anchor="middle" class="s-sub">PostgreSQL 17</text>
+    <text x="615" y="218" text-anchor="middle" class="s-sub tx-ok">ポートは公開しない</text>
+
+    <line x1="492" y1="190" x2="536" y2="190" class="s-line" marker-end="url(#ahB)"/>
+    <text x="514" y="180" text-anchor="middle" class="s-sub">db:5432</text>
+
+    <rect x="282" y="350" width="210" height="44" rx="8" class="b-docker"/>
+    <text x="387" y="370" text-anchor="middle" class="s-text tx-docker">api のイメージ</text>
+    <text x="387" y="388" text-anchor="middle" class="s-sub">Dockerfile.dev から作る</text>
+    <line x1="387" y1="350" x2="387" y2="254" class="s-line" marker-end="url(#ahB)"/>
+
+    <!-- bind mount -->
+    <path d="M190,188 C232,188 240,180 278,180" class="mount"/>
+    <text x="232" y="168" text-anchor="middle" class="s-sub tx-docker">マウント</text>
+
+    <!-- port -->
+    <path d="M190,328 C236,328 250,240 278,240" class="s-line" marker-end="url(#ahB)"/>
+    <text x="226" y="300" text-anchor="middle" class="s-sub">localhost:3000</text>
+  </svg>
+  <figcaption>Mac の上で動くのはエディタとブラウザだけ。Ruby も gem もイメージの中にあり、コードだけがバインドマウントでコンテナに見えている。db のポートは Mac に公開しないので、Homebrew の PostgreSQL 14 とは衝突しない。</figcaption>
+</figure>
+
+<!-- 5 -->
+<h2><span class="num">5.</span>日々の作業の流れ</h2>
+
+<p>同じ作業を、2つの構成でどう行うかを並べる。<span class="label-b">B</span>では、Rails に関わるコマンドの前に <code>docker compose run --rm api</code> が付く。</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>場面</th><th><span class="label-a">A</span>Rails は Mac</th><th><span class="label-b">B</span>すべて Docker</th></tr></thead>
+  <tbody>
+    <tr><td>最初の準備</td><td>ruby-build を更新 → <code>rbenv install 3.4.x</code>(数分かかる)→ <code>bundle install</code></td><td><code>docker compose build</code>(イメージを作る)</td></tr>
+    <tr><td>起動</td><td><code>docker compose up -d db</code> → <code>bin/rails s</code></td><td><code>docker compose up</code></td></tr>
+    <tr><td>コードを直して確かめる</td><td>保存してリクエストすれば反映</td><td>保存してリクエストすれば反映(バインドマウント経由)</td></tr>
+    <tr><td>テスト</td><td><code>bundle exec rspec</code></td><td><code>docker compose run --rm api bundle exec rspec</code></td></tr>
+    <tr><td>gem を追加</td><td>Gemfile を編集 → <code>bundle install</code></td><td>Gemfile を編集 → <code>docker compose build api</code>(イメージを作り直す)</td></tr>
+    <tr><td>DB の中を見る</td><td><code>psql -h localhost</code>(Mac の psql)</td><td><code>docker compose exec db psql -U postgres</code></td></tr>
+    <tr><td>Ruby のバージョンの決め方</td><td><code>.ruby-version</code> と rbenv</td><td><code>Dockerfile.dev</code> の <code>FROM ruby:3.4.x</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>流れの詳細:<code>GET /up</code> が返るまで</h3>
+
+<div class="two-col">
+  <div class="card">
+    <h4><span class="label-a">A</span>Rails は Mac</h4>
+    <ol class="steps">
+      <li><span class="tag t-host">ブラウザ</span> → <span class="tag t-ruby">Rails</span>:Mac の <code>localhost:3000/up</code> にリクエストを送る。</li>
+      <li><span class="tag t-ruby">Rails</span>:Mac の上で動く Ruby が、Mac のファイルをそのまま読んで応答を作る。</li>
+      <li><span class="tag t-ruby">Rails</span> → <span class="tag t-db">PostgreSQL</span>:DB を使う場合は <code>localhost:5432</code> に接続する。Docker が、それを db コンテナへ転送する。</li>
+    </ol>
+  </div>
+  <div class="card">
+    <h4><span class="label-b">B</span>すべて Docker</h4>
+    <ol class="steps">
+      <li><span class="tag t-host">ブラウザ</span> → <span class="tag t-docker">Docker</span>:Mac の <code>localhost:3000/up</code> にリクエストを送る。Docker が、それを api コンテナのポート 3000 へ転送する。</li>
+      <li><span class="tag t-ruby">Rails</span>:コンテナの中の Ruby が、バインドマウントされた <code>/rails</code>(中身は Mac の <code>./api</code>)を読んで応答を作る。</li>
+      <li><span class="tag t-ruby">Rails</span> → <span class="tag t-db">PostgreSQL</span>:DB を使う場合は、ホスト名 <code>db</code> のポート 5432 に接続する。compose のネットワークの中だけで完結し、Mac は通らない。</li>
+    </ol>
+  </div>
+</div>
+
+<!-- 6 -->
+<h2><span class="num">6.</span>例え話:料理と台所</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>例え</th><th>実際</th></tr></thead>
+  <tbody>
+    <tr><td>自宅の台所</td><td><span class="tag t-host">Mac</span></td></tr>
+    <tr><td>レンタルキッチン(設備の一覧表どおりに毎回同じものが用意される)</td><td><span class="tag t-docker">コンテナ</span>(設備の一覧表が <code>Dockerfile</code>)</td></tr>
+    <tr><td>調理器具(包丁、コンロ)</td><td><span class="tag t-ruby">Ruby と gem</span></td></tr>
+    <tr><td>冷蔵庫</td><td><span class="tag t-db">PostgreSQL</span></td></tr>
+    <tr><td>レシピと食材</td><td>あなたが書くコード(<code>./api</code>)</td></tr>
+    <tr><td>レンタルキッチンへの受け渡し窓口</td><td>バインドマウント</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><span class="label-a">A</span>は、自宅の台所で料理し、冷蔵庫だけレンタルする形。使い慣れた包丁がすぐ手に取れて速い。ただ、自宅の包丁は自分で研いで(Ruby を入れて)管理する必要がある。前から置いてある古い冷蔵庫(Homebrew の PostgreSQL 14)と置き場所(ポート)を取り合うこともある。</p>
+<p><span class="label-b">B</span>は、台所ごとレンタルする形。設備の一覧表(<code>Dockerfile</code>)どおりの台所が毎回用意されるので、誰がいつ借りても同じ環境になる。その代わり、器具を1つ足すたびに一覧表を書き換えて台所を用意し直す(イメージを作り直す)必要がある。レシピと食材は窓口(バインドマウント)から受け渡す。</p>
+
+<!-- 7 -->
+<h2><span class="num">7.</span>比べたときの違い</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>観点</th><th><span class="label-a">A</span>Rails は Mac</th><th><span class="label-b">B</span>すべて Docker</th></tr></thead>
+  <tbody>
+    <tr><td>Mac の状態に左右されるか</td><td>左右される(rbenv、Homebrew の PostgreSQL)</td><td class="better">左右されにくい(Docker だけあればよい)</td></tr>
+    <tr><td>環境が文書として残るか</td><td>手順は README などに書く必要がある</td><td class="better"><code>Dockerfile.dev</code> と <code>compose.yaml</code> がそのまま構成の記録になる</td></tr>
+    <tr><td>本番との近さ</td><td>Ruby は Mac 版、本番は Linux 版</td><td class="better">本番(Cloud Run)と同じく Linux のコンテナで動く</td></tr>
+    <tr><td>コマンドの手軽さ</td><td class="better"><code>bin/rails ...</code> だけ</td><td>毎回 <code>docker compose run --rm api</code> が付く</td></tr>
+    <tr><td>速さ</td><td class="better">ファイルを直接読むので速い</td><td>バインドマウント越しにファイルを読むので、やや遅い(Rails の起動、テストの実行)</td></tr>
+    <tr><td>gem の追加</td><td class="better"><code>bundle install</code> だけ</td><td>イメージの作り直しが要る</td></tr>
+    <tr><td>エディタの補完</td><td class="better">Ruby LSP がそのまま動く</td><td>Mac に Ruby がないので弱くなる(Dev Containers を使えば補える)</td></tr>
+    <tr><td>トラブルの切り分け</td><td class="better">登場人物が少ない</td><td>Docker の層が1枚増える(ネットワーク、マウント、イメージ)</td></tr>
+    <tr><td>Docker の理解が深まるか</td><td>DB のコンテナだけ</td><td class="better">イメージ、マウント、ネットワークまで、フェーズ2の前に手で触れる</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">緑の太字が、その観点で有利な側。どちらが正解というより、「日々の手軽さ」をとるか、「環境の再現性と本番への近さ」をとるかの違い。</p>
+
+<!-- 8 -->
+<h2><span class="num">8.</span>押さえておきたい仕組み(B を選んだ場合)</h2>
+
+<ul>
+  <li><strong>開発用と本番用で Dockerfile を分ける理由</strong>:<code>rails new</code> が作る <code>Dockerfile</code> は本番向けで、開発・テスト用の gem(RSpec など)を入れない設定になっている。開発には <code>Dockerfile.dev</code> を別に用意し、本番用はフェーズ2の Cloud Run 用に残す。</li>
+  <li><strong>gem はイメージの中、コードはマウント</strong>:gem は <code>bundle install</code> でイメージの中(<code>/usr/local/bundle</code>)に入る。コードは Mac の <code>./api</code> を <code>/rails</code> にマウントする。置き場所が別なので、マウントしても gem は消えない。gem を変えたときだけイメージを作り直せばよいのは、このため。</li>
+  <li><strong>db のポートを公開しない理由</strong>:api と db は、Compose が作るネットワークの中で、サービス名(<code>db</code>)を使って直接話せる。Mac から DB に直接つなぐ必要がないので、公開しない。公開しなければ、Homebrew の PostgreSQL 14 とポートがぶつかることもない。</li>
+  <li><strong>コードの変更がすぐ反映される理由</strong>:Rails は開発環境では、リクエストのたびにファイルが変わったかを確かめ、変わっていれば読み直す。バインドマウントで Mac の変更がすぐコンテナに見えるので、A と同じ感覚で開発できる。</li>
+</ul>
+
+<!-- 9 -->
+<h2><span class="num">9.</span>実務での位置づけと、隣の選択肢</h2>
+
+<ul>
+  <li><strong>実務では両方ある</strong>:チームに新しい人が入ったとき、すぐに同じ環境を作れるように、B(Docker Compose)を採るチームは多い。一方で、速さを重視して A を採るチームや、DB だけ Docker の A を採るチームもある。</li>
+  <li><strong>Dev Containers(3つ目の選択肢)</strong>:VS Code が、エディタごとコンテナの中で動く仕組み。B の弱点である「エディタの補完が弱い」を解消できる。Rails 8 は <code>rails new --devcontainer</code> で、その設定を生成できる。その代わり、VS Code に強く依存し、設定ファイルも増える。</li>
+  <li><strong>本番(フェーズ2)との関係</strong>:本番の Cloud Run も、イメージからコンテナを起動して動かす。B で「イメージを作る」「コンテナにポートを公開する」「環境変数で接続先を渡す」に慣れておくと、フェーズ2で同じ考え方をそのまま使える。</li>
+</ul>
+
+<!-- 10 -->
+<h2><span class="num">10.</span>どちらを選ぶかの問い</h2>
+
+<p>次の問いに、自分の言葉で答えられる側を選ぶとよい。ADR 0002 の「理由」には、その答えを書く。</p>
+
+<ul>
+  <li>毎回 <code>docker compose run --rm api</code> を打つ手間と、Mac の環境に左右されない安心感の、どちらが自分にとって大きいか。</li>
+  <li>フェーズ2(Cloud Run)の前に、イメージやコンテナの仕組みを手で触っておきたいか。</li>
+  <li>エディタの補完が弱くなることを、許容できるか(または、Dev Containers で補う手間をかけるか)。</li>
+  <li>面接で「なぜこの構成にしたのか」と聞かれたら、何と答えたいか。</li>
+</ul>
+
+<!-- glossary -->
+<h2><span class="num">11.</span>用語集</h2>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>日本語</th><th>英語</th><th>意味</th></tr></thead>
+  <tbody>
+    <tr><td>イメージ</td><td>image</td><td>コンテナの「型」。Ruby や gem など、動かすのに必要なものをまとめたもの</td></tr>
+    <tr><td>コンテナ</td><td>container</td><td>イメージから起動した、実際に動いている実行環境</td></tr>
+    <tr><td>Dockerfile</td><td>Dockerfile</td><td>イメージの作り方を書いた手順書</td></tr>
+    <tr><td>Docker Compose</td><td>Docker Compose</td><td>複数のコンテナの起動方法を <code>compose.yaml</code> に書き、まとめて動かす道具</td></tr>
+    <tr><td>バインドマウント</td><td>bind mount</td><td>Mac のフォルダを、コンテナの中のフォルダとして見せる設定</td></tr>
+    <tr><td>ポートの公開</td><td>port publishing</td><td>コンテナのポートを、Mac の localhost のポートにつなぐ設定</td></tr>
+    <tr><td>仮想マシン</td><td>virtual machine</td><td>Mac の中で動く、もう1台のコンピュータ。Docker Desktop はこの中の Linux でコンテナを動かす</td></tr>
+    <tr><td>Ruby バージョン管理</td><td>rbenv</td><td>Mac に複数の Ruby を入れて使い分ける道具</td></tr>
+    <tr><td>開発コンテナ</td><td>Dev Containers</td><td>VS Code ごとコンテナの中で開発する仕組み</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">作成日:2026-10-16。#5 と ADR 0002 の検討のために作成。</p>
+
+</main>
+</body>
+</html>

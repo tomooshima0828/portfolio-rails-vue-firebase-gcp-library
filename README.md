@@ -27,6 +27,63 @@ Rails API + Vue 3 の SPA を、Firebase(認証・リアルタイム機能)と G
 | [docs/ai-guideline.md](docs/ai-guideline.md) | AI に渡さない情報の線引き |
 | [CLAUDE.md](CLAUDE.md) | Claude Code への作業ルール |
 
+## ローカル開発
+
+Rails も PostgreSQL も Docker で動かす([ADR 0002](docs/adr/0002-local-dev-on-docker.md))。必要なのは Docker Desktop だけで、Mac に Ruby や PostgreSQL を入れる必要はない。コマンドはリポジトリ直下で実行する。
+
+### 初回の準備
+
+```bash
+docker compose build                              # イメージを作る
+docker compose run --rm api bin/rails db:prepare  # 開発用とテスト用の DB を作る
+```
+
+### 起動と停止
+
+```bash
+docker compose up -d        # 起動する。http://localhost:3000/up が 200 を返せば OK
+docker compose logs -f api  # ログを見る(Ctrl+C で抜ける)
+docker compose down         # 停止する。DB のデータは残る
+```
+
+### テスト・静的解析・よく使うコマンド
+
+| やること | 起動中(`docker compose up -d` の後) | 起動していないとき |
+|---|---|---|
+| テスト | `docker compose exec api bundle exec rspec` | `docker compose run --rm api bundle exec rspec` |
+| RuboCop | `docker compose exec api bin/rubocop` | `docker compose run --rm --no-deps api bin/rubocop` |
+| Brakeman | `docker compose exec api bin/brakeman --no-pager` | `docker compose run --rm --no-deps api bin/brakeman --no-pager` |
+| bundler-audit | `docker compose exec api bin/bundler-audit` | `docker compose run --rm --no-deps api bin/bundler-audit` |
+| マイグレーション | `docker compose exec api bin/rails db:migrate` | `docker compose run --rm api bin/rails db:migrate` |
+| Rails コンソール | `docker compose exec api bin/rails console` | `docker compose run --rm api bin/rails console` |
+
+- `exec` は、動いている api コンテナの中で実行する。新しくコンテナを作らないので速い。
+- `run --rm` は、そのコマンドのためだけに api コンテナを作り、終わったら消す。db も自動で起動する。
+- `--no-deps` は、db を起動しない指定。DB を使わない静的解析に付けると速い。
+- 1つのファイルだけテストするときは、`rspec spec/requests/health_spec.rb` のようにファイル名を付ける。
+
+### gem を追加する
+
+```bash
+# 1. api/Gemfile を編集する
+docker compose run --rm --no-deps api bundle lock  # 2. api/Gemfile.lock を更新する
+docker compose build api                           # 3. gem をイメージに入れる
+```
+
+`docker compose build` だけでは、イメージの中の `Gemfile.lock` しか更新されない。手順 2 で、リポジトリの `Gemfile.lock` を更新してからコミットする。
+
+### DB を最初から作り直す
+
+```bash
+docker compose down -v                            # コンテナと一緒に DB のデータも消す
+docker compose run --rm api bin/rails db:prepare  # DB を作り直す
+```
+
+### 困ったとき
+
+- **「A server is already running」と出て api が起動しない**:前回の終了の仕方によって、`api/tmp/pids/server.pid` が残っている。このファイルを消してから、もう一度起動する。
+- **様子がおかしいので、イメージを作り直したい**:`docker compose build --no-cache api`
+
 ## 求人要件と、このポートフォリオでの示し方
 
 ### 必須スキル

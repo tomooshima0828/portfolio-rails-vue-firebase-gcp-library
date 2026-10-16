@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      # 開発専用の値。本番の値は Secret Manager に入れる(フェーズ2)
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./api:/rails
+    environment:
+      DB_HOST: db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:

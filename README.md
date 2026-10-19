@@ -29,20 +29,21 @@ Rails API + Vue 3 の SPA を、Firebase(認証・リアルタイム機能)と G
 
 ## ローカル開発
 
-Rails も PostgreSQL も Docker で動かす([ADR 0002](docs/adr/0002-local-dev-on-docker.md))。必要なのは Docker Desktop だけで、Mac に Ruby や PostgreSQL を入れる必要はない。コマンドはリポジトリ直下で実行する。
+Rails、Vue、PostgreSQL を Docker で動かす([ADR 0002](docs/adr/0002-local-dev-on-docker.md))。必要なのは Docker Desktop だけで、Mac に Ruby、Node、PostgreSQL を入れる必要はない。コマンドはリポジトリ直下で実行する。
 
 ### 初回の準備
 
 ```bash
 docker compose build                              # イメージを作る
 docker compose run --rm api bin/rails db:prepare  # 開発用とテスト用の DB を作る
+docker compose run --rm web npm ci                # web/node_modules を作る
 ```
 
 ### 起動と停止
 
 ```bash
-docker compose up -d        # 起動する。http://localhost:3000/up が 200 を返せば OK
-docker compose logs -f api  # ログを見る(Ctrl+C で抜ける)
+docker compose up -d        # 起動する。http://localhost:3000/up が 200 を返し、http://localhost:5173 に Vue の画面が出れば OK
+docker compose logs -f api  # ログを見る(Ctrl+C で抜ける)。Vue のログは web
 docker compose down         # 停止する。DB のデータは残る
 ```
 
@@ -56,11 +57,15 @@ docker compose down         # 停止する。DB のデータは残る
 | bundler-audit | `docker compose exec api bin/bundler-audit` | `docker compose run --rm --no-deps api bin/bundler-audit` |
 | マイグレーション | `docker compose exec api bin/rails db:migrate` | `docker compose run --rm api bin/rails db:migrate` |
 | Rails コンソール | `docker compose exec api bin/rails console` | `docker compose run --rm api bin/rails console` |
+| テスト(Vue) | `docker compose exec web npm run test:unit -- --run` | `docker compose run --rm web npm run test:unit -- --run` |
+| 型チェック(vue-tsc) | `docker compose exec web npm run type-check` | `docker compose run --rm web npm run type-check` |
+| ビルド(Vue) | `docker compose exec web npm run build` | `docker compose run --rm web npm run build` |
 
-- `exec` は、動いている api コンテナの中で実行する。新しくコンテナを作らないので速い。
-- `run --rm` は、そのコマンドのためだけに api コンテナを作り、終わったら消す。db も自動で起動する。
-- `--no-deps` は、db を起動しない指定。DB を使わない静的解析に付けると速い。
+- `exec` は、動いているコンテナの中で実行する。新しくコンテナを作らないので速い。
+- `run --rm` は、そのコマンドのためだけにコンテナを作り、終わったら消す。api の場合は db も自動で起動する。
+- `--no-deps` は、db を起動しない指定。DB を使わない静的解析に付けると速い。web は db を使わないので、付けなくてよい。
 - 1つのファイルだけテストするときは、`rspec spec/requests/health_spec.rb` のようにファイル名を付ける。
+- Vitest は、そのままだとファイルの変更を待ち続ける(監視モード)。`-- --run` を付けると、1回実行して終わる。ビルドの成果物は `web/dist` にできる。
 
 ### gem を追加する
 
@@ -71,6 +76,15 @@ docker compose build api                           # 3. gem をイメージに�
 ```
 
 `docker compose build` だけでは、イメージの中の `Gemfile.lock` しか更新されない。手順 2 で、リポジトリの `Gemfile.lock` を更新してからコミットする。
+
+### npm のパッケージを追加する
+
+```bash
+docker compose run --rm web npm install パッケージ名  # package.json、package-lock.json、web/node_modules が更新される
+```
+
+- gem と違い、イメージは作り直さなくてよい。`web/node_modules` はイメージではなく、Mac の `web/` の中にあり、コンテナからはバインドマウントで見えるため。Mac から見える場所に置くのは、VS Code が型を読めるようにするため([docs/specs/006-vue-new.md](docs/specs/006-vue-new.md))。
+- **npm は Mac で実行しない**。`web/node_modules` にはコンテナ(Linux)用のバイナリが入っているので、Mac で `npm install` すると中身が Mac 用に入れ替わり、コンテナの Vite が起動しなくなる。
 
 ### DB を最初から作り直す
 
@@ -83,6 +97,8 @@ docker compose run --rm api bin/rails db:prepare  # DB を作り直す
 
 - **「A server is already running」と出て api が起動しない**:前回の終了の仕方によって、`api/tmp/pids/server.pid` が残っている。このファイルを消してから、もう一度起動する。
 - **様子がおかしいので、イメージを作り直したい**:`docker compose build --no-cache api`
+- **web が「Cannot find module '@rolldown/binding-linux-arm64-gnu'」などで起動しない**:Mac で npm を実行して、`web/node_modules` が Mac 用になった可能性がある。`docker compose run --rm web npm ci` で入れ直す(`npm ci` は `node_modules` を消して、`package-lock.json` のとおりに入れ直す)。`package-lock.json` に差分が出ていたら、先に `git restore web/package-lock.json` で戻す。
+- **VS Code で、`.vue` や `.ts` の import に赤線が出る**:`web/node_modules` がまだない。`docker compose run --rm web npm ci` を実行する。それでも消えないときは、コマンドパレットの「Developer: Reload Window」で VS Code を読み込み直す。
 
 ## 求人要件と、このポートフォリオでの示し方
 

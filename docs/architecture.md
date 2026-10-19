@@ -35,7 +35,7 @@
 
 - 配信:Vue は Firebase Hosting から配信し、`/api` を Cloud Run へ転送する(優先度 B)
 - デプロイ:GitHub Actions → Artifact Registry → Cloud Run。Workload Identity 連携を使い、鍵ファイルを使わない
-- ローカル環境:Rails と PostgreSQL を Docker Compose で動かす([ADR 0002](adr/0002-local-dev-on-docker.md))。Firebase は Emulator Suite を使う
+- ローカル環境:Rails、Vue(Vite の開発サーバー)、PostgreSQL を Docker Compose で動かす([ADR 0002](adr/0002-local-dev-on-docker.md))。Firebase は Emulator Suite を使う
 
 ディレクトリ構成は [README.md](../README.md) の「想定するディレクトリ構成」にある。
 

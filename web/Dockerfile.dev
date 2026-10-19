@@ -1,0 +1,10 @@
+# 開発用のイメージ。本番は Firebase Hosting から配信するので(フェーズ2)、イメージは使わない
+ARG NODE_VERSION=24.22.0
+FROM docker.io/library/node:$NODE_VERSION-slim
+
+WORKDIR /app
+
+# 依存パッケージは compose.yaml のバインドマウント先の web/node_modules に置くので、イメージには入れない
+
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

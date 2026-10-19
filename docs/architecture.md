@@ -34,6 +34,7 @@
 ```
 
 - 配信:Vue は Firebase Hosting から配信し、`/api` を Cloud Run へ転送する(優先度 B)
+- CI:PR の作成・更新と main への push のたびに、GitHub Actions が RSpec、RuboCop、Brakeman、bundler-audit、Vitest、vue-tsc を実行する。main の Ruleset で、その成功をマージの条件にしている([ADR 0003](adr/0003-ci-environment.md))
 - デプロイ:GitHub Actions → Artifact Registry → Cloud Run。Workload Identity 連携を使い、鍵ファイルを使わない
 - ローカル環境:Rails、Vue(Vite の開発サーバー)、PostgreSQL を Docker Compose で動かす([ADR 0002](adr/0002-local-dev-on-docker.md))。Firebase は Emulator Suite を使う
 

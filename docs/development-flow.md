@@ -166,4 +166,6 @@ GitHub Projects のボードで、2週間ごとのスプリントとして進め
 
 - `main` への直接 push、force push、ブランチ削除を禁止し、変更は PR 経由にする
 - 承認数は 0
-- CI の成功を必須にする(CI 導入後に追加する)
+- CI(`.github/workflows/ci.yml`)の4つのジョブ(`api-lint`、`api-security`、`api-test`、`web`)の成功を必須にする。PR のブランチが最新の main を取り込んでいることまでは求めない
+
+ci.yml のジョブの名前を変えたり、ジョブを足したりしたら、同じ PR で Ruleset の必須のチェックも直す。GitHub は、Ruleset に書かれた名前のチェックの結果を待つので、名前が食い違うと、PR は「待ち」のままマージできなくなる。

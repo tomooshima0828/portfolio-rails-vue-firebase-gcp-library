@@ -108,7 +108,7 @@ Firebase 公式の手順のとおり。1つでも満たさなければ 401。
 
 ### 判断したこと
 
-- **公開鍵は JWKS(JSON Web Key Set)の URL から取る**(`https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com`)。`jwt` gem の `jwks:` に渡すと、gem がトークンの `kid` に合う鍵を選ぶ。知らない `kid` が来たときに取り直す仕組み(AC-11)も、gem に用意されている。tech-notes の firebase-auth-handson と同じ形
+- **公開鍵は JWKS(JSON Web Key Set)の URL から取る**(`https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com`)。`jwt` gem の `jwks:` に渡すと、gem がトークンの `kid` に合う鍵を選ぶ。知らない `kid` が来たときに取り直す仕組み(AC-11)も、gem に用意されている。tech-notes の firebase-auth-handson と同じ形。Firebase の公式文書に載っている取得先は、同じ鍵を証明書(X.509)の形で返す `https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com` のほう。JWK の形なら `jwt` gem がそのまま読めるため、こちらを使う。この URL が使えなくなったら、公式文書の URL に替えて、証明書から鍵を取り出す処理を足す
 - **公開鍵は、検証のクラスの中にメモリで保存する**。期間は Google が返す `max-age`。複数のスレッドが同時に取り直さないよう、`Mutex` で守る。テストでは、テストごとに保存した鍵を消す
 - **知らない `kid` での取り直しは、5分に1回までにする**(AC-13)。適当な `kid` を書いた偽物を大量に送られると、そのたびに Google へ取りに行くことになり、Rails が遅くなったり、Google に通信を止められたりするため。5分は、前回の「知らない `kid` での取り直し」から数える。期限切れでの取り直しは制限しない。Google の鍵の入れ替えと偽物が5分以内に重なると、本物のトークンが最大5分 401 になるが、まれなので受け入れる。`jwt` gem の README にも、同じ考え方の例がある
 - **検証のクラスは `app/lib/` に置く**。モデルでもコントローラーでもない、Firebase のための道具のため。`app/` の下なので、Rails が自動で読み込む

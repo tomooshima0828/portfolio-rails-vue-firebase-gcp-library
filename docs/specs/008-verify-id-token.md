@@ -38,6 +38,7 @@ API が、リクエストした会員を Firebase の ID トークンで特定�
 - AC-10:Google が示すキャッシュの期間(`Cache-Control: max-age`)の間、検証のクラスは公開鍵を取得し直さない
 - AC-11:キャッシュにない `kid` のトークンが届いたとき、検証のクラスは公開鍵を取得し直し、新しい鍵で確かめる(Google が鍵を入れ替えたとき)
 - AC-12:PR の CI の4つのジョブが成功する
+- AC-13:キャッシュにない `kid` のトークンで公開鍵を取得し直してから5分の間は、別のキャッシュにない `kid` のトークンが届いても、検証のクラスは公開鍵を取得し直さない(偽物のトークンで、Google への通信を増やされないため)
 
 ## 設計
 
@@ -50,7 +51,7 @@ API が、リクエストした会員を Firebase の ID トークンで特定�
 3. `api/spec/rails_helper.rb`:`spec/support` のファイルを読み込む行を有効にする
 4. `api/spec/support/firebase_id_token_helper.rb`:テスト用の道具。RSA の鍵を作ってトークンに署名し、検証のクラスが取り寄せる公開鍵を、その鍵に差し替える。#10 でも使う
 5. `api/spec/requests/api/me_spec.rb`:AC-1〜9 の request spec
-6. `api/spec/lib/firebase_id_token_verifier_spec.rb`:AC-10、AC-11 のテスト
+6. `api/spec/lib/firebase_id_token_verifier_spec.rb`:AC-10、AC-11、AC-13 のテスト
 7. `rails generate model Member 'firebase_uid:string!:uniq' --no-test-framework`:migration とモデル。`!` で `null: false` を付ける。コマンド1回で1コミット。モデルのテストの雛形は作らない(request spec で確かめるため)
 8. `bin/rails db:migrate`:`api/db/schema.rb` を更新する。コマンド1回で1コミット
 9. `api/config/application.rb`:Firebase のプロジェクト ID を、環境変数 `FIREBASE_PROJECT_ID` から読む
@@ -109,6 +110,7 @@ Firebase 公式の手順のとおり。1つでも満たさなければ 401。
 
 - **公開鍵は JWKS(JSON Web Key Set)の URL から取る**(`https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com`)。`jwt` gem の `jwks:` に渡すと、gem がトークンの `kid` に合う鍵を選ぶ。知らない `kid` が来たときに取り直す仕組み(AC-11)も、gem に用意されている。tech-notes の firebase-auth-handson と同じ形
 - **公開鍵は、検証のクラスの中にメモリで保存する**。期間は Google が返す `max-age`。複数のスレッドが同時に取り直さないよう、`Mutex` で守る。テストでは、テストごとに保存した鍵を消す
+- **知らない `kid` での取り直しは、5分に1回までにする**(AC-13)。適当な `kid` を書いた偽物を大量に送られると、そのたびに Google へ取りに行くことになり、Rails が遅くなったり、Google に通信を止められたりするため。5分は、前回の「知らない `kid` での取り直し」から数える。期限切れでの取り直しは制限しない。Google の鍵の入れ替えと偽物が5分以内に重なると、本物のトークンが最大5分 401 になるが、まれなので受け入れる。`jwt` gem の README にも、同じ考え方の例がある
 - **検証のクラスは `app/lib/` に置く**。モデルでもコントローラーでもない、Firebase のための道具のため。`app/` の下なので、Rails が自動で読み込む
 - **会員は `create_or_find_by!` で作る**。初めてのリクエストが同時に2つ届いても、一意のインデックスのおかげで、会員は1人だけになる
 - **Firebase のプロジェクト ID は、Rails の設定(`config.x`)に1か所で持つ**。設定がない場合、検証のクラスはエラーにする(誤ったプロジェクトのトークンを通さないため)

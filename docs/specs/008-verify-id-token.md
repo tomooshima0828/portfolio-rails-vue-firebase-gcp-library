@@ -51,7 +51,7 @@ API が、リクエストした会員を Firebase の ID トークンで特定�
 4. `api/spec/support/firebase_id_token_helper.rb`:テスト用の道具。RSA の鍵を作ってトークンに署名し、検証のクラスが取り寄せる公開鍵を、その鍵に差し替える。#10 でも使う
 5. `api/spec/requests/api/me_spec.rb`:AC-1〜9 の request spec
 6. `api/spec/lib/firebase_id_token_verifier_spec.rb`:AC-10、AC-11 のテスト
-7. `rails generate model Member firebase_uid:string:uniq`:migration とモデル。コマンド1回で1コミット。モデルのテストの雛形は作らない(request spec で確かめるため)
+7. `rails generate model Member 'firebase_uid:string!:uniq' --no-test-framework`:migration とモデル。`!` で `null: false` を付ける。コマンド1回で1コミット。モデルのテストの雛形は作らない(request spec で確かめるため)
 8. `bin/rails db:migrate`:`api/db/schema.rb` を更新する。コマンド1回で1コミット
 9. `api/config/application.rb`:Firebase のプロジェクト ID を、環境変数 `FIREBASE_PROJECT_ID` から読む
 10. `api/config/environments/test.rb`:テストでは、プロジェクト ID を固定の値にする

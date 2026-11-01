@@ -560,6 +560,27 @@ ol.plain li { margin-bottom: 6px; }
 }</pre>
             </div>
             <p><code>n</code> と <code>e</code> が、公開鍵の本体の数値です。鍵が複数並んでいるのは、Google が鍵を入れ替える途中で、古い鍵で署名したトークンと新しい鍵で署名したトークンの両方が出回るためです。</p>
+            <p>JWKS の URL は、ブラウザでも開けます。Rails がこの手順でしていることを、人が手で試すのと同じです。2026年11月1日に開いたときは、次の JSON が返りました(<code>n</code> は途中を省略しています)。</p>
+            <div class="code env">
+              <div class="file">ブラウザで JWKS の URL を開いた結果(2026-11-01)</div>
+<pre>{
+  "keys": [
+    { "alg": "RS256", "kid": "81805e76fd5fa2fd91c2bb39e4b7ef05469bddce", "e": "AQAB", "kty": "RSA", "n": "7E01XMLvsyIH…0tVZw", "use": "sig" },
+    { "e": "AQAB", "kty": "RSA", "n": "22q04PsB_qjo…KY7wxw", "use": "sig", "alg": "RS256", "kid": "904b0f91be6eb0867dabbaab587dfc2e33f00a24" }
+  ]
+}</pre>
+            </div>
+            <p>この一覧には、次の3つの性質があります。</p>
+            <div class="tablewrap">
+              <table>
+                <thead><tr><th>性質</th><th>意味</th><th>Rails がしていること</th></tr></thead>
+                <tbody>
+                  <tr><td>誰が開いても同じ</td><td>ログインも API キーも要らない。世界中の誰が開いても、同じ JSON が返る</td><td>一度取ってきたら、すべてのリクエストで使い回す(06 章)</td></tr>
+                  <tr><td>ときどき入れ替わる</td><td>Google が鍵を入れ替えると、並ぶ kid が変わる。しばらくたってから開くと、上とは違う kid になっている</td><td>期限(max-age)が来たら取り直す。知らない kid のトークンが届いたら取り直す(06 章)</td></tr>
+                  <tr><td>すべてのプロジェクトで共通</td><td>このアプリ専用の鍵ではない。Firebase Authentication を使うすべてのプロジェクトが、同じ鍵で署名している</td><td>署名が合うだけでは、他人のプロジェクトのトークンも通ってしまう。そのため、宛先(<code>aud</code>)と発行元(<code>iss</code>)が自分のプロジェクトかも確かめる</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </li>
 

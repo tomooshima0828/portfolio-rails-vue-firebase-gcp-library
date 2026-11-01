@@ -48,4 +48,29 @@ RSpec.describe FirebaseIdTokenVerifier do
       expect(described_class).to have_received(:download_jwks).twice
     end
   end
+
+  context "キャッシュにない kid のトークンが続けて届いた場合(偽物のトークンを大量に送られたとき)" do
+    before { stub_firebase_public_keys }
+
+    it "取得し直してから5分の間は、公開鍵を取得し直さない" do
+      verifier.verify!(firebase_id_token)
+      expect { verifier.verify!(firebase_id_token(kid: "fake-kid-1")) }.to raise_error(described_class::InvalidToken)
+      travel(4.minutes) do
+        expect { verifier.verify!(firebase_id_token(kid: "fake-kid-2")) }.to raise_error(described_class::InvalidToken)
+      end
+
+      # 最初の取得と、fake-kid-1 での取り直しの2回。fake-kid-2 では取り直さない
+      expect(described_class).to have_received(:download_jwks).twice
+    end
+
+    it "5分が過ぎたら、公開鍵を取得し直す" do
+      verifier.verify!(firebase_id_token)
+      expect { verifier.verify!(firebase_id_token(kid: "fake-kid-1")) }.to raise_error(described_class::InvalidToken)
+      travel(5.minutes + 1.second) do
+        expect { verifier.verify!(firebase_id_token(kid: "fake-kid-2")) }.to raise_error(described_class::InvalidToken)
+      end
+
+      expect(described_class).to have_received(:download_jwks).exactly(3).times
+    end
+  end
 end

@@ -61,6 +61,7 @@ API が、リクエストした会員を Firebase の ID トークンで特定�
 13. `api/app/controllers/api/me_controller.rb`:`GET /api/me`
 14. `api/config/routes.rb`:`/api/me` を足す
 15. `docs/architecture.md`:「API」と「データモデル」に書く
+16. `api/Gemfile.lock`:`bundle update rack crass --conservative` で、rack を 3.2.8 に、crass を 1.0.8 に上げる。PR の CI(AC-12)で、bundler-audit が、main にもとからある rack 3.2.7 と crass 1.0.7 の脆弱性を見つけたため。この Issue の機能とは関係ないが、CI を通してマージするために、この PR に含める。コマンド1回で1コミット
 
 ### 入出力
 

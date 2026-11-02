@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ID トークンの署名</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Layout: 1カラムの読み物。学習ページ firebase-public-key.html と同じ配色・書体。Google=青、Rails=赤、攻撃者=紫、一致=緑、不一致=橙を、図と本文で固定する */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --rails: #b0303d;    --rails-soft: #f8e2e4;
+  --google: #3f67a3;   --google-soft: #e3eaf5;
+  --atk: #7b3fa6;      --atk-soft: #efe4f6;
+  --ok: #1f7a5a;       --ok-soft: #e1f1ea;
+  --ng: #c2410c;       --ng-soft: #fbe6dc;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --rails: #ef7480; --rails-soft: #3a1b21;
+    --google: #8badde; --google-soft: #1a2538;
+    --atk: #c49bf0; --atk-soft: #2b1f3a;
+    --ok: #5ec796; --ok-soft: #16302a;
+    --ng: #f2875a; --ng-soft: #3a2116;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --rails: #ef7480; --rails-soft: #3a1b21;
+  --google: #8badde; --google-soft: #1a2538;
+  --atk: #c49bf0; --atk-soft: #2b1f3a;
+  --ok: #5ec796; --ok-soft: #16302a;
+  --ng: #f2875a; --ng-soft: #3a2116;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 760px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 0 0 10px; line-height: 1.5; text-wrap: balance; }
+
+.t-google { color: var(--google); font-weight: 700; }
+.t-rails { color: var(--rails); font-weight: 700; }
+.t-atk { color: var(--atk); font-weight: 700; }
+.t-ok { color: var(--ok); font-weight: 700; }
+.t-ng { color: var(--ng); font-weight: 700; }
+
+/* 結論の一文 */
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer .formula { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 15px; }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; font-weight: 700; font-size: 14px; line-height: 1.6; }
+.pill.r { color: var(--rails); background: var(--rails-soft); }
+.pill.o { color: var(--ok); background: var(--ok-soft); }
+
+/* 2つの道具 */
+.tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0 0; }
+.tool { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 16px 6px; min-width: 0; }
+.tool .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin: 0 0 2px; }
+.tool p, .tool li { font-size: 14.5px; line-height: 1.75; }
+.tool ul { margin: 0 0 12px; padding-left: 1.2em; display: grid; gap: 4px; }
+.hashrows { display: grid; gap: 8px; margin: 4px 0 12px; }
+.hashrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--code-bg); border-radius: 6px; padding: 6px 10px; font-size: 13px; line-height: 1.5; }
+.hashrow .out { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.hashrow .out.diff { color: var(--ng); }
+.keyrow { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.6; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.keyrow:last-of-type { border-bottom: 0; }
+.keyrow b { color: var(--google); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; min-width: 620px; height: auto; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .m { font-family: var(--font-mono); font-size: 12px; fill: var(--muted); }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .lab-google { fill: var(--google); font-weight: 700; font-size: 13px; }
+svg .lab-rails { fill: var(--rails); font-weight: 700; font-size: 13px; }
+svg .lab-ng { fill: var(--ng); font-weight: 700; }
+svg .fill-ng { fill: var(--ng); }
+svg .fill-ok { fill: var(--ok); }
+svg .fill-atk { fill: var(--atk); }
+svg .bx-plain { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+svg .bx-google { fill: var(--google-soft); stroke: var(--google); stroke-width: 1.5; }
+svg .bx-rails { fill: var(--rails-soft); stroke: var(--rails); stroke-width: 1.5; }
+svg .bx-ok { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
+svg .bx-ng { fill: var(--ng-soft); stroke: var(--ng); stroke-width: 1.5; }
+svg .bx-atk { fill: var(--atk-soft); stroke: var(--atk); stroke-width: 1.5; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .mk { fill: var(--muted); }
+svg .key-google { stroke: var(--google); stroke-width: 2; fill: none; stroke-linecap: round; }
+svg .key-atk { stroke: var(--atk); stroke-width: 2; fill: none; stroke-linecap: round; }
+svg .cmp-ok { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 2; }
+svg .cmp-ng { fill: var(--ng-soft); stroke: var(--ng); stroke-width: 2; }
+
+/* 手順 */
+ol.flow { margin: 14px 0 0; padding-left: 1.4em; display: grid; gap: 6px; }
+ol.flow li { padding-left: 4px; }
+
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 16px 0; }
+.note p:last-child { margin-bottom: 0; }
+
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .tools { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #8 · 学習メモ · <a href="firebase-public-key.html">firebase-public-key.html</a> の補足</p>
+    <h1>ID トークンの署名</h1>
+    <p class="lead">Rails は、Vue から届いた ID トークンが <span class="t-google">Google</span> の発行したもので、途中で書き換えられていないことを、署名で確かめます。このページでは、その確かめ方を図で順に追います。</p>
+    <div class="answer">
+      <p>先に結論です。<span class="t-rails">Rails</span> は、2つの道具で2つの値を作り、それを比べます。</p>
+      <div class="formula">
+        <span class="pill r">① ヘッダーとペイロードから計算したハッシュ</span>
+        <span>と</span>
+        <span class="pill r">② 署名を公開鍵で開いて出てきたハッシュ</span>
+        <span>が同じなら</span>
+        <span class="pill o">本物</span>
+      </div>
+    </div>
+  </header>
+
+  <section id="tools">
+    <h2><span class="num">1</span>先に知っておく2つの道具</h2>
+    <p>署名の仕組みは、<strong>ハッシュ</strong>と<strong>鍵のペア</strong>の2つの道具でできています。2つは役割が違います。ハッシュは鍵を使いません。鍵のペアは、ハッシュに署名するために使います。</p>
+    <div class="tools">
+      <div class="tool">
+        <p class="tag">道具1</p>
+        <h3>ハッシュ(SHA-256)</h3>
+        <p>どんなに長い文字列からでも、決まった長さの短い値を作る計算です。文字列の指紋のようなものです。</p>
+        <div class="hashrows">
+          <div class="hashrow"><span>ヘッダー.ペイロード<br>(sub が <code>Xk3p…</code>)</span><span class="out">275675c7…</span></div>
+          <div class="hashrow"><span>ヘッダー.ペイロード<br>(sub が <code>Xk3q…</code>、1文字だけ違う)</span><span class="out diff">f9977bc0…</span></div>
+        </div>
+        <ul>
+          <li>同じ文字列なら、誰が計算しても同じ値になる</li>
+          <li>1文字違うだけで、まったく違う値になる</li>
+          <li><strong>鍵は使わない</strong>。誰でも計算できる</li>
+        </ul>
+      </div>
+      <div class="tool">
+        <p class="tag">道具2</p>
+        <h3>鍵のペア(RSA)</h3>
+        <p>秘密鍵と公開鍵は、2つで1組です。kid は、この1組につけた名前です。</p>
+        <div class="keyrow"><b>秘密鍵</b><span><span class="t-google">Google</span> だけが持つ。ハッシュから署名を作る</span></div>
+        <div class="keyrow"><b>公開鍵</b><span>JWKS の URL から誰でも取れる。署名を開く</span></div>
+        <ul style="margin-top: 10px;">
+          <li>秘密鍵で作った署名を、対になる公開鍵で開くと、署名したときのハッシュが出てくる</li>
+          <li>別の秘密鍵で作った署名からは、正しいハッシュは出てこない</li>
+          <li>公開鍵から秘密鍵を割り出すことはできない</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top: 12px; font-size: 13.5px; color: var(--muted);">ハッシュの値は、このページの例のヘッダーとペイロードを実際に SHA-256 で計算した結果の、先頭8文字です。</p>
+  </section>
+
+  <section id="sign">
+    <h2><span class="num">2</span>Google が署名を作る</h2>
+    <p>ログインのとき、<span class="t-google">Google(Firebase Authentication)</span>が ID トークンを作ります。</p>
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 700 250" role="img" aria-label="Google は、ヘッダー.ペイロードの文字列から SHA-256 でハッシュを作り、そのハッシュに秘密鍵で署名し、署名を後ろにつないで ID トークンにする">
+          <defs>
+            <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <text x="20" y="26" class="lab-google">Google(Firebase Authentication)が行う</text>
+
+          <rect x="20" y="48" width="180" height="60" rx="8" class="bx-plain"/>
+          <text x="110" y="74" text-anchor="middle" class="b">ヘッダー.ペイロード</text>
+          <text x="110" y="95" text-anchor="middle" class="m">eyJhbGci….eyJzdWIi…</text>
+
+          <line x1="200" y1="78" x2="264" y2="78" class="ln" marker-end="url(#ar1)"/>
+          <text x="232" y="68" text-anchor="middle" class="m">SHA-256</text>
+
+          <rect x="268" y="48" width="150" height="60" rx="8" class="bx-google"/>
+          <text x="343" y="74" text-anchor="middle" class="b">ハッシュ</text>
+          <text x="343" y="95" text-anchor="middle" class="m">275675c7…</text>
+
+          <line x1="418" y1="78" x2="514" y2="78" class="ln" marker-end="url(#ar1)"/>
+          <text x="466" y="68" text-anchor="middle">秘密鍵で署名</text>
+          <g transform="translate(453 96)"><circle cx="6" cy="0" r="6" class="key-google"/><path d="M12 0 H27 M22 0 V5 M27 0 V5" class="key-google"/></g>
+          <text x="466" y="122" text-anchor="middle" class="s">Google だけが持つ鍵</text>
+
+          <rect x="518" y="48" width="160" height="60" rx="8" class="bx-google"/>
+          <text x="598" y="74" text-anchor="middle" class="b">署名</text>
+          <text x="598" y="95" text-anchor="middle" class="m">SflKxwRJ…</text>
+
+          <path d="M110 108 V142 H264 V166" class="ln" marker-end="url(#ar1)"/>
+          <text x="187" y="135" text-anchor="middle" class="m">そのまま</text>
+          <path d="M598 108 V142 H511 V166" class="ln" marker-end="url(#ar1)"/>
+          <text x="555" y="135" text-anchor="middle" class="m">後ろにつなぐ</text>
+
+          <rect x="100" y="172" width="150" height="40" rx="6" class="bx-plain"/>
+          <text x="175" y="197" text-anchor="middle">ヘッダー</text>
+          <text x="254" y="197" text-anchor="middle" class="b">.</text>
+          <rect x="258" y="172" width="170" height="40" rx="6" class="bx-plain"/>
+          <text x="343" y="197" text-anchor="middle">ペイロード</text>
+          <text x="432" y="197" text-anchor="middle" class="b">.</text>
+          <rect x="436" y="172" width="150" height="40" rx="6" class="bx-google"/>
+          <text x="511" y="197" text-anchor="middle">署名</text>
+          <text x="343" y="237" text-anchor="middle" class="s">ID トークン(このあと Vue が受け取り、Rails に送る)</text>
+        </svg>
+      </div>
+      <figcaption>図1:署名の材料はヘッダーとペイロードの2つです。秘密鍵が使われるのは、ハッシュに署名する1か所だけです。</figcaption>
+    </figure>
+    <ol class="flow">
+      <li><span class="t-google">Google</span> が、ヘッダーとペイロードを <code>.</code> でつないだ文字列を作る</li>
+      <li><span class="t-google">Google</span> が、その文字列から SHA-256 でハッシュを作る</li>
+      <li><span class="t-google">Google</span> が、そのハッシュに秘密鍵で署名する</li>
+      <li><span class="t-google">Google</span> が、署名を後ろにつなぎ、ID トークンとして Vue に渡す</li>
+    </ol>
+  </section>
+
+  <section id="verify">
+    <h2><span class="num">3</span>Rails が署名を確かめる</h2>
+    <p>Vue からトークンが届くと、<span class="t-rails">Rails(jwt gem)</span>はトークンを3つに分け、2つの道筋で値を作ります。</p>
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 720 320" role="img" aria-label="Rails は、ヘッダーとペイロードから SHA-256 でハッシュ①を作り、署名を kid で選んだ公開鍵で開いてハッシュ②を取り出す。2つが一致すれば本物">
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <text x="20" y="24" class="lab-rails">Rails(jwt gem)が行う</text>
+
+          <rect x="60" y="40" width="170" height="40" rx="6" class="bx-plain"/>
+          <text x="145" y="65" text-anchor="middle">ヘッダー</text>
+          <text x="234" y="65" text-anchor="middle" class="b">.</text>
+          <rect x="238" y="40" width="192" height="40" rx="6" class="bx-plain"/>
+          <text x="334" y="65" text-anchor="middle">ペイロード</text>
+          <text x="434" y="65" text-anchor="middle" class="b">.</text>
+          <rect x="438" y="40" width="190" height="40" rx="6" class="bx-google"/>
+          <text x="533" y="65" text-anchor="middle">署名</text>
+
+          <path d="M60 86 V92 H430 V86" class="ln"/>
+          <line x1="245" y1="92" x2="245" y2="142" class="ln" marker-end="url(#ar2)"/>
+          <text x="235" y="114" text-anchor="end">SHA-256 で計算</text>
+          <text x="235" y="132" text-anchor="end" class="s">鍵は使わない</text>
+
+          <line x1="533" y1="80" x2="533" y2="142" class="ln" marker-end="url(#ar2)"/>
+          <g transform="translate(543 106)"><circle cx="6" cy="0" r="6" class="key-google"/><path d="M12 0 H27 M22 0 V5 M27 0 V5" class="key-google"/></g>
+          <text x="578" y="111">公開鍵で開く</text>
+          <text x="578" y="129" class="s">kid が 9f2a1c7e の鍵</text>
+
+          <rect x="150" y="146" width="190" height="56" rx="8" class="bx-rails"/>
+          <text x="245" y="170" text-anchor="middle" class="b">ハッシュ ①</text>
+          <text x="245" y="190" text-anchor="middle" class="m">275675c7…</text>
+          <rect x="438" y="146" width="190" height="56" rx="8" class="bx-rails"/>
+          <text x="533" y="170" text-anchor="middle" class="b">ハッシュ ②</text>
+          <text x="533" y="190" text-anchor="middle" class="m">275675c7…</text>
+
+          <path d="M245 202 V226 H367" class="ln"/>
+          <path d="M533 202 V226 H411" class="ln"/>
+          <circle cx="389" cy="226" r="20" class="cmp-ok"/>
+          <text x="389" y="233" text-anchor="middle" class="b fill-ok" style="font-size: 20px;">=</text>
+
+          <line x1="389" y1="246" x2="389" y2="262" class="ln" marker-end="url(#ar2)"/>
+          <rect x="229" y="266" width="320" height="40" rx="8" class="bx-ok"/>
+          <text x="389" y="291" text-anchor="middle" class="b fill-ok">一致 → 本物で、書き換えられていない</text>
+        </svg>
+      </div>
+      <figcaption>図2:左の道筋は鍵を使わず、誰でも計算できます。右の道筋だけが鍵を使います。2つの道筋の結果を比べるのが「署名を確かめる」ということです。</figcaption>
+    </figure>
+    <ol class="flow">
+      <li><span class="t-rails">Rails</span> が、受け取ったヘッダーとペイロードから、Google と同じ手順(SHA-256)でハッシュ ① を計算する。ここでは鍵を使わない</li>
+      <li><span class="t-rails">Rails</span> が、ヘッダーの kid を見て、同じ kid の公開鍵を JWKS から選ぶ</li>
+      <li><span class="t-rails">Rails</span> が、その公開鍵で署名を開き、Google が署名したときのハッシュ ② を取り出す</li>
+      <li><span class="t-rails">Rails</span> が、① と ② を比べる。同じなら、このトークンは本物で、書き換えられていない</li>
+    </ol>
+    <div class="note">
+      <p>① は「今、手元にある中身」のハッシュです。② は「Google が署名したときの中身」のハッシュです。2つが同じなら、Google が署名してから中身が変わっていないと言えます。しかも ② を取り出せるのは、Google の秘密鍵で作った署名だけです。</p>
+    </div>
+  </section>
+
+  <section id="fail">
+    <h2><span class="num">4</span>確かめに失敗する2つの場合</h2>
+    <p>偽物を作ろうとする人には、主に2つのやり方があります。どちらも、① と ② が一致しなくなります。</p>
+
+    <h3>A. 本物のトークンのペイロードを書き換える</h3>
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 720 320" role="img" aria-label="ペイロードの sub を書き換えると、ハッシュ①が変わり、署名から出てくるハッシュ②と一致しないので 401 になる">
+          <defs>
+            <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <text x="20" y="24" class="lab-rails">Rails(jwt gem)が行う</text>
+
+          <rect x="60" y="40" width="170" height="40" rx="6" class="bx-plain"/>
+          <text x="145" y="65" text-anchor="middle">ヘッダー</text>
+          <text x="234" y="65" text-anchor="middle" class="b">.</text>
+          <rect x="238" y="40" width="192" height="40" rx="6" class="bx-ng"/>
+          <text x="334" y="65" text-anchor="middle" class="lab-ng">書き換えたペイロード</text>
+          <text x="434" y="65" text-anchor="middle" class="b">.</text>
+          <rect x="438" y="40" width="190" height="40" rx="6" class="bx-google"/>
+          <text x="533" y="65" text-anchor="middle">署名(本物のまま)</text>
+
+          <path d="M60 86 V92 H430 V86" class="ln"/>
+          <line x1="245" y1="92" x2="245" y2="142" class="ln" marker-end="url(#ar3)"/>
+          <text x="235" y="114" text-anchor="end">SHA-256 で計算</text>
+          <text x="235" y="132" text-anchor="end" class="s">中身が違うので値も違う</text>
+
+          <line x1="533" y1="80" x2="533" y2="142" class="ln" marker-end="url(#ar3)"/>
+          <g transform="translate(543 106)"><circle cx="6" cy="0" r="6" class="key-google"/><path d="M12 0 H27 M22 0 V5 M27 0 V5" class="key-google"/></g>
+          <text x="578" y="111">公開鍵で開く</text>
+          <text x="578" y="129" class="s">署名したときの値が出る</text>
+
+          <rect x="150" y="146" width="190" height="56" rx="8" class="bx-ng"/>
+          <text x="245" y="170" text-anchor="middle" class="b">ハッシュ ①</text>
+          <text x="245" y="190" text-anchor="middle" class="m fill-ng">f9977bc0…</text>
+          <rect x="438" y="146" width="190" height="56" rx="8" class="bx-rails"/>
+          <text x="533" y="170" text-anchor="middle" class="b">ハッシュ ②</text>
+          <text x="533" y="190" text-anchor="middle" class="m">275675c7…</text>
+
+          <path d="M245 202 V226 H367" class="ln"/>
+          <path d="M533 202 V226 H411" class="ln"/>
+          <circle cx="389" cy="226" r="20" class="cmp-ng"/>
+          <text x="389" y="233" text-anchor="middle" class="b fill-ng" style="font-size: 20px;">≠</text>
+
+          <line x1="389" y1="246" x2="389" y2="262" class="ln" marker-end="url(#ar3)"/>
+          <rect x="229" y="266" width="320" height="40" rx="8" class="bx-ng"/>
+          <text x="389" y="291" text-anchor="middle" class="lab-ng">不一致 → 401 を返す</text>
+        </svg>
+      </div>
+      <figcaption>図3:誰かが sub を <code>Xk3p…</code> から <code>Xk3q…</code> に1文字だけ書き換えた場合です。① は計算し直すと変わりますが、② は署名したときの値のままです。署名を作り直すには Google の秘密鍵が必要なので、書き換えた人には ② を合わせられません。</figcaption>
+    </figure>
+
+    <h3 style="margin-top: 30px;">B. 自分の秘密鍵で署名した偽物を作る</h3>
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 720 320" role="img" aria-label="攻撃者が自分の秘密鍵で署名すると、Google の公開鍵で開いても正しいハッシュが出てこないので 401 になる">
+          <defs>
+            <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <text x="20" y="24" class="lab-rails">Rails(jwt gem)が行う</text>
+
+          <rect x="60" y="40" width="170" height="40" rx="6" class="bx-plain"/>
+          <text x="145" y="65" text-anchor="middle">ヘッダー</text>
+          <text x="234" y="65" text-anchor="middle" class="b">.</text>
+          <rect x="238" y="40" width="192" height="40" rx="6" class="bx-plain"/>
+          <text x="334" y="65" text-anchor="middle">ペイロード</text>
+          <text x="434" y="65" text-anchor="middle" class="b">.</text>
+          <rect x="438" y="40" width="190" height="40" rx="6" class="bx-atk"/>
+          <text x="533" y="65" text-anchor="middle" class="b fill-atk">攻撃者が作った署名</text>
+
+          <path d="M60 86 V92 H430 V86" class="ln"/>
+          <line x1="245" y1="92" x2="245" y2="142" class="ln" marker-end="url(#ar4)"/>
+          <text x="235" y="114" text-anchor="end">SHA-256 で計算</text>
+          <text x="235" y="132" text-anchor="end" class="s">鍵は使わない</text>
+
+          <line x1="533" y1="80" x2="533" y2="142" class="ln" marker-end="url(#ar4)"/>
+          <g transform="translate(543 106)"><circle cx="6" cy="0" r="6" class="key-google"/><path d="M12 0 H27 M22 0 V5 M27 0 V5" class="key-google"/></g>
+          <text x="578" y="111">Google の鍵で開く</text>
+          <text x="578" y="129" class="s">対になる鍵ではない</text>
+
+          <rect x="150" y="146" width="190" height="56" rx="8" class="bx-rails"/>
+          <text x="245" y="170" text-anchor="middle" class="b">ハッシュ ①</text>
+          <text x="245" y="190" text-anchor="middle" class="m">275675c7…</text>
+          <rect x="438" y="146" width="190" height="56" rx="8" class="bx-ng"/>
+          <text x="533" y="170" text-anchor="middle" class="b">ハッシュにならない</text>
+          <text x="533" y="190" text-anchor="middle" class="m fill-ng">意味のない値</text>
+
+          <path d="M245 202 V226 H367" class="ln"/>
+          <path d="M533 202 V226 H411" class="ln"/>
+          <circle cx="389" cy="226" r="20" class="cmp-ng"/>
+          <text x="389" y="233" text-anchor="middle" class="b fill-ng" style="font-size: 20px;">≠</text>
+
+          <line x1="389" y1="246" x2="389" y2="262" class="ln" marker-end="url(#ar4)"/>
+          <rect x="229" y="266" width="320" height="40" rx="8" class="bx-ng"/>
+          <text x="389" y="291" text-anchor="middle" class="lab-ng">不一致 → 401 を返す</text>
+        </svg>
+      </div>
+      <figcaption>図4:<span class="t-atk">攻撃者</span>は、ヘッダーとペイロードを好きに書いたうえで、自分の秘密鍵で正しい手順どおりに署名できます。しかし Rails は Google の公開鍵で開くので、攻撃者の署名からは ① と同じ値が出てきません。kid を本物と同じにしても、選ばれるのは Google の公開鍵なので、結果は変わりません。</figcaption>
+    </figure>
+  </section>
+
+  <section id="code">
+    <h2><span class="num">5</span>このプロジェクトのコードとの対応</h2>
+    <p>図2の比較は、<code>JWT.decode</code> の中で jwt gem がまとめて行います。実際の計算は OpenSSL が担当します。私たちのコードで、ハッシュを計算することはありません。</p>
+<pre><code>payload, _header = JWT.decode(
+  token,
+  nil,
+  true,                                 <span class="c"># 署名を確かめる → jwt gem が図2の比較を行う</span>
+  algorithms: [ "RS256" ],              <span class="c"># ハッシュは SHA-256、署名は RSA の方式だけを認める</span>
+  jwks: self.class.method(:fetch_jwks), <span class="c"># kid に合う公開鍵を選ぶための一覧</span>
+  ...
+)</code></pre>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>図</th><th>対応するテスト(me_spec.rb)</th></tr></thead>
+        <tbody>
+          <tr><td>図2(一致)</td><td>「有効な ID トークンの場合」の3件</td></tr>
+          <tr><td>図3(書き換え)</td><td>専用のテストはありません。図4と同じ署名の確認で防いでいます</td></tr>
+          <tr><td>図4(別の鍵)</td><td>「別の鍵で署名されている場合」(55行目)</td></tr>
+          <tr><td>図2の比較そのものを飛ばす攻撃</td><td>「HS256」と「none」の2件。<code>algorithms: ["RS256"]</code> で防いでいる</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <p>「公開鍵で署名を開くとハッシュが出てくる」は、RS256(RSA の PKCS#1 v1.5 という方式)の確認の仕組みを、分かりやすく言い換えたものです。実際には、ハッシュの前に方式を示す決まった値もいっしょに出てきます。仕組みを理解するうえでは、この言い換えで十分です。</p>
+    </div>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">6</span>確認用の問い</h2>
+    <ol class="check">
+      <li>ハッシュ ① を計算するとき、Rails はどの鍵を使いますか。<span class="hint">図2の左の道筋です。</span></li>
+      <li>ペイロードを書き換えた人が、署名も作り直せないのはなぜですか。<span class="hint">図3の説明です。</span></li>
+      <li>攻撃者が kid を本物と同じにしても、確かめに失敗するのはなぜですか。<span class="hint">図4の説明です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

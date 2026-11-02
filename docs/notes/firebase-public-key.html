@@ -593,6 +593,7 @@ ol.plain li { margin-bottom: 6px; }
               <li><strong>合った場合</strong>:秘密鍵を持つ Google が作ったトークンで、署名のあとで書き換えられていない、と分かります。続けて、有効期限や宛先などの中身を確かめます(<a href="../specs/008-verify-id-token.md">仕様書</a>の「検証で確かめること」の表)。</li>
               <li><strong>合わなかった場合</strong>:偽物か、書き換えられたトークンです。Rails は 401 を返します。</li>
             </ul>
+            <p>「署名がトークンの中身と合うか」の計算は、<a href="id-token-signature.html">ID トークンの署名</a>のページで、図で順に追っています。</p>
           </div>
         </li>
 
@@ -719,6 +720,7 @@ ol.plain li { margin-bottom: 6px; }
             <tr><td>kid に合う鍵を選び、署名を確かめる(⑥)</td><td>jwt gem の <code>JWT.decode</code> に <code>jwks:</code> を渡す</td><td>11</td></tr>
             <tr><td>期限内は取り直さない、期限が来たら取り直す</td><td>AC-10 のテスト</td><td>6</td></tr>
             <tr><td>知らない kid で取り直す</td><td>AC-11 のテスト</td><td>6</td></tr>
+            <tr><td>知らない kid での取り直しは5分に1回まで(偽物を大量に送られても、Google への通信を増やさない)</td><td>AC-13 のテスト。間隔は <code>KID_NOT_FOUND_REFETCH_INTERVAL</code></td><td>6</td></tr>
             <tr><td>別の鍵、知らない kid、HS256、none の偽物を 401 にする</td><td>AC-5 のテスト</td><td>5</td></tr>
           </tbody>
         </table>
@@ -737,7 +739,7 @@ ol.plain li { margin-bottom: 6px; }
           </tbody>
         </table>
       </div>
-      <p>AC-10 と AC-11 のテスト(手順6)は、差し替えた <code>download_jwks</code> が<strong>何回呼ばれたか</strong>を数えます。呼ばれた回数が、Rails が Google に鍵を取りに行った回数にあたるからです。</p>
+      <p>AC-10、AC-11、AC-13 のテスト(手順6)は、差し替えた <code>download_jwks</code> が<strong>何回呼ばれたか</strong>を数えます。呼ばれた回数が、Rails が Google に鍵を取りに行った回数にあたるからです。</p>
     </section>
 
     <!-- 10 -->

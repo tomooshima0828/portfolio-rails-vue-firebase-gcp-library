@@ -62,6 +62,8 @@ API が、リクエストした会員を Firebase の ID トークンで特定�
 14. `api/config/routes.rb`:`/api/me` を足す
 15. `docs/architecture.md`:「API」と「データモデル」に書く
 16. `api/Gemfile.lock`:`bundle update rack crass --conservative` で、rack を 3.2.8 に、crass を 1.0.8 に上げる。PR の CI(AC-12)で、bundler-audit が、main にもとからある rack 3.2.7 と crass 1.0.7 の脆弱性を見つけたため。この Issue の機能とは関係ないが、CI を通してマージするために、この PR に含める。コマンド1回で1コミット
+17. `compose.yaml`:`db` に `ports: "127.0.0.1:5432:5432"` を足す。DBeaver など Mac 上のツールから開発用の DB を開き、7〜8 で作った `members` テーブルの中身を確かめるため。この Issue の機能とは関係ないが、変更が小さいので、この PR に含める。Mac の外から接続されないよう、`127.0.0.1` からの接続だけを受け付ける。反映するには `docker compose up -d db` で `db` コンテナを作り直す(データはボリュームに残る)
+18. `README.md`:ローカル環境の節に、DB クライアントからの接続情報(Host、Port、Database、Username、Password)を書く
 
 ### 入出力
 

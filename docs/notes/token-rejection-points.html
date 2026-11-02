@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>トークンを断る場所</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Layout: 1カラムの読み物。学習ページと同じ書体と地の色。判断する場所 A=concern(藍)、B=jwt gem(青緑)、C=verify!(琥珀)を図・表・コードで固定し、結果は 401=赤、200=緑、500=灰 */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a: #34459f;    --a-soft: #e6e9f6;
+  --b: #2d6f73;    --b-soft: #e0f0f0;
+  --c: #9a5b00;    --c-soft: #f8ecd8;
+  --ng: #b0303d;   --ng-soft: #f8e2e4;
+  --ok: #1f7a5a;   --ok-soft: #e1f1ea;
+  --err: #5b6474;  --err-soft: #eceef2;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a: #8f9ef0; --a-soft: #1d2340;
+    --b: #6cc3c8; --b-soft: #14302f;
+    --c: #e6a64a; --c-soft: #33270f;
+    --ng: #ef7480; --ng-soft: #3a1b21;
+    --ok: #5ec796; --ok-soft: #16302a;
+    --err: #a3acbb; --err-soft: #252a35;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a: #8f9ef0; --a-soft: #1d2340;
+  --b: #6cc3c8; --b-soft: #14302f;
+  --c: #e6a64a; --c-soft: #33270f;
+  --ng: #ef7480; --ng-soft: #3a1b21;
+  --ok: #5ec796; --ok-soft: #16302a;
+  --err: #a3acbb; --err-soft: #252a35;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 780px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 10px; line-height: 1.5; text-wrap: balance; }
+
+/* 場所の札 */
+.tag { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6em; height: 1.6em; padding: 0 .3em; border-radius: 5px; font-family: var(--font-mono); font-size: 13px; font-weight: 700; line-height: 1; border: 1.5px solid currentColor; vertical-align: .08em; }
+.tag.a { color: var(--a); background: var(--a-soft); }
+.tag.b { color: var(--b); background: var(--b-soft); }
+.tag.c { color: var(--c); background: var(--c-soft); }
+.res { display: inline-block; font-family: var(--font-mono); font-weight: 700; font-size: 13px; padding: 1px 8px; border-radius: 5px; }
+.res.ng { color: var(--ng); background: var(--ng-soft); }
+.res.ok { color: var(--ok); background: var(--ok-soft); }
+.res.err { color: var(--err); background: var(--err-soft); }
+
+/* 3つの場所 */
+.places { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0 0; }
+.place { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid; border-radius: 10px; padding: 14px 14px 10px; min-width: 0; }
+.place.a { border-top-color: var(--a); }
+.place.b { border-top-color: var(--b); }
+.place.c { border-top-color: var(--c); }
+.place h3 { margin: 6px 0 6px; font-size: 16px; }
+.place .where { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin: 0 0 8px; overflow-wrap: anywhere; }
+.place p { font-size: 14px; line-height: 1.7; margin: 0 0 8px; }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; min-width: 680px; height: auto; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .m { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .hd { font-family: var(--font-display); font-weight: 700; font-size: 13px; }
+svg .lane { stroke: none; }
+svg .lane-out { fill: var(--bg); }
+svg .lane-a { fill: var(--a-soft); opacity: .55; }
+svg .lane-c { fill: var(--c-soft); opacity: .55; }
+svg .lane-b { fill: var(--b-soft); opacity: .55; }
+svg .bx-a { fill: var(--surface); stroke: var(--a); stroke-width: 1.5; }
+svg .bx-b { fill: var(--surface); stroke: var(--b); stroke-width: 1.5; }
+svg .bx-c { fill: var(--surface); stroke: var(--c); stroke-width: 1.5; }
+svg .bx-ng { fill: var(--ng-soft); stroke: var(--ng); stroke-width: 1.5; }
+svg .bx-ok { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
+svg .bx-err { fill: var(--err-soft); stroke: var(--err); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .t-a { fill: var(--a); font-weight: 700; }
+svg .t-b { fill: var(--b); font-weight: 700; }
+svg .t-c { fill: var(--c); font-weight: 700; }
+svg .t-ng { fill: var(--ng); font-weight: 700; }
+svg .t-ok { fill: var(--ok); font-weight: 700; }
+svg .t-err { fill: var(--err); font-weight: 700; }
+svg .ln-ok { stroke: var(--ok); stroke-width: 1.6; fill: none; }
+svg .ln-ng { stroke: var(--ng); stroke-width: 1.6; fill: none; }
+svg .ln-call { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+svg .ln-err { stroke: var(--err); stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; }
+svg .mk-ok { fill: var(--ok); }
+svg .mk-ng { fill: var(--ng); }
+svg .mk-call { fill: var(--muted); }
+svg .mk-err { fill: var(--err); }
+
+/* 表 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 12.5px; color: var(--muted); font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+td code { white-space: nowrap; }
+tr.group td { background: var(--code-bg); font-family: var(--font-display); font-weight: 700; font-size: 13px; padding-block: 6px; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.75; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .k { color: var(--muted); }
+pre .mark-a, pre .mark-b, pre .mark-c { font-weight: 700; padding: 0 4px; border-radius: 4px; }
+pre .mark-a { color: var(--a); background: var(--a-soft); }
+pre .mark-b { color: var(--b); background: var(--b-soft); }
+pre .mark-c { color: var(--c); background: var(--c-soft); }
+pre .cm { color: var(--accent); }
+
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 16px 0; }
+.note p:last-child { margin-bottom: 0; }
+
+ol.flow { margin: 10px 0 0; padding-left: 1.4em; display: grid; gap: 6px; }
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 680px) {
+  .places { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #8 · 学習メモ · <a href="id-token-signature.html">id-token-signature.html</a> の続き</p>
+    <h1>トークンを断る場所</h1>
+    <p class="lead"><code>GET /api/me</code> に届いたトークンは、Rails の中の<strong>3つの場所</strong>のどこかで「だめだ」と判断されると、401 になります。このページでは、その3つの場所と、そこから 401 にたどり着くまでの道を整理します。</p>
+  </header>
+
+  <section id="places">
+    <h2><span class="num">1</span>断る場所は3つある</h2>
+    <p>3つの場所は、確かめる項目で分担しています。どの場所で断っても、Vue が受け取る返事は同じ <span class="res ng">401</span> と <code>{ "error": "unauthorized" }</code> です。<code>iss</code> や <code>aud</code> などの名前は、<a href="#terms">7章の用語</a>にまとめています。</p>
+    <div class="places">
+      <div class="place a">
+        <span class="tag a">A</span>
+        <h3>concern</h3>
+        <p class="where">authenticate_member! の 9〜10行目</p>
+        <p><strong>ヘッダーの形</strong>を見る。<code>Authorization: Bearer …</code> の形でなければ断る。</p>
+        <p>断るときは<strong>例外を使わず</strong>、その場で 401 を返して <code>return</code> する。</p>
+      </div>
+      <div class="place b">
+        <span class="tag b">B</span>
+        <h3>jwt gem</h3>
+        <p class="where">verify! の中の JWT.decode(55〜64行目)</p>
+        <p><strong>6項目</strong>を見る。署名(kid〈key ID、鍵の番号〉に合う鍵で確かめる)、alg(algorithm、署名の方式)、exp(expiration time、有効期限)、iat(issued at、発行時刻)、aud(audience、宛先)、iss(issuer、発行者)。</p>
+        <p>断るときは、jwt gem 自身の例外(<code>JWT::ExpiredSignature</code> など)を投げる。</p>
+      </div>
+      <div class="place c">
+        <span class="tag c">C</span>
+        <h3>verify!</h3>
+        <p class="where">verify! の 65〜66行目</p>
+        <p>jwt gem が見ない<strong>2項目</strong>を見る。sub(subject、誰についてのトークンか。Firebase の uid)が空でないこと、auth_time(authentication time、ログインした時刻)が未来でないこと。</p>
+        <p>断るときは、最初から <code>InvalidToken</code> を投げる。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">2</span>401 にたどり着くまでの道</h2>
+    <p>図の縦の帯は、コードの入れ子です。左の concern が verify! を呼び、verify! が jwt gem を呼びます。処理は上から下へ進みます。<span style="color: var(--ok); font-weight: 700;">緑の矢印</span>は確かめが通った道、<span style="color: var(--ng); font-weight: 700;">赤の矢印</span>は断られた道です。</p>
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 760 590" role="img" aria-label="concern、verify!、jwt gem の3つの帯。A で断ると concern がその場で 401。B で断ると jwt gem の例外が verify! の rescue で InvalidToken に変わり、concern の rescue で 401。C で断ると InvalidToken が verify! の rescue を通らずに concern の rescue へ届き 401。すべて通ると会員を決めて 200。鍵の取得に失敗すると、どの rescue にも当たらず 500">
+          <defs>
+            <marker id="m-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-ok"/></marker>
+            <marker id="m-ng" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-ng"/></marker>
+            <marker id="m-call" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-call"/></marker>
+            <marker id="m-err" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-err"/></marker>
+          </defs>
+
+          <!-- 帯 -->
+          <rect x="8" y="40" width="116" height="540" rx="8" class="lane lane-out"/>
+          <rect x="136" y="40" width="200" height="540" rx="8" class="lane lane-a"/>
+          <rect x="356" y="40" width="200" height="540" rx="8" class="lane lane-c"/>
+          <rect x="576" y="40" width="176" height="540" rx="8" class="lane lane-b"/>
+          <text x="66" y="26" text-anchor="middle" class="hd">結果</text>
+          <text x="236" y="20" text-anchor="middle" class="hd">concern</text>
+          <text x="236" y="34" text-anchor="middle" class="m">authenticate_member!</text>
+          <text x="456" y="20" text-anchor="middle" class="hd">verify!</text>
+          <text x="456" y="34" text-anchor="middle" class="m">FirebaseIdTokenVerifier</text>
+          <text x="664" y="20" text-anchor="middle" class="hd">jwt gem</text>
+          <text x="664" y="34" text-anchor="middle" class="m">JWT.decode の中</text>
+
+          <!-- リクエスト → A -->
+          <line x1="236" y1="46" x2="236" y2="68" class="ln-call" marker-end="url(#m-call)"/>
+          <text x="246" y="60" class="s">リクエスト</text>
+          <rect x="156" y="70" width="160" height="44" rx="7" class="bx-a"/>
+          <text x="236" y="89" text-anchor="middle"><tspan class="t-a">A</tspan> ヘッダーの形</text>
+          <text x="236" y="106" text-anchor="middle" class="m">9〜10行目</text>
+
+          <!-- A ✗ → 401 -->
+          <line x1="156" y1="92" x2="120" y2="92" class="ln-ng" marker-end="url(#m-ng)"/>
+          <rect x="16" y="72" width="100" height="40" rx="7" class="bx-ng"/>
+          <text x="66" y="90" text-anchor="middle" class="t-ng">401</text>
+          <text x="66" y="105" text-anchor="middle" class="s">例外なし</text>
+
+          <!-- A ✓ → verify! -->
+          <path d="M236 114 V150 H372" class="ln-ok" marker-end="url(#m-ok)"/>
+          <text x="246" y="142" class="m">verify!(token)</text>
+          <rect x="376" y="132" width="160" height="36" rx="7" class="bx-c"/>
+          <text x="456" y="155" text-anchor="middle">JWT.decode を呼ぶ</text>
+
+          <!-- verify! → B -->
+          <line x1="536" y1="150" x2="582" y2="150" class="ln-call" marker-end="url(#m-call)"/>
+          <rect x="586" y="122" width="156" height="88" rx="7" class="bx-b"/>
+          <text x="664" y="143" text-anchor="middle"><tspan class="t-b">B</tspan> 6項目</text>
+          <text x="664" y="162" text-anchor="middle" class="s">署名(kid の鍵)・alg</text>
+          <text x="664" y="179" text-anchor="middle" class="s">exp・iat・aud・iss</text>
+          <text x="664" y="199" text-anchor="middle" class="m">55〜64行目</text>
+
+          <!-- B ✓ → C -->
+          <path d="M650 210 V240 H540" class="ln-ok" marker-end="url(#m-ok)"/>
+          <text x="596" y="233" text-anchor="middle" class="s">payload</text>
+          <rect x="376" y="216" width="160" height="48" rx="7" class="bx-c"/>
+          <text x="456" y="237" text-anchor="middle"><tspan class="t-c">C</tspan> sub・auth_time</text>
+          <text x="456" y="255" text-anchor="middle" class="m">65〜66行目</text>
+
+          <!-- C ✓ → 会員 → 200 -->
+          <line x1="376" y1="232" x2="300" y2="232" class="ln-ok" marker-end="url(#m-ok)"/>
+          <rect x="156" y="210" width="140" height="44" rx="7" class="bx-a"/>
+          <text x="226" y="229" text-anchor="middle" class="b">会員を決める</text>
+          <text x="226" y="246" text-anchor="middle" class="m">13行目 → show</text>
+          <line x1="156" y1="232" x2="120" y2="232" class="ln-ok" marker-end="url(#m-ok)"/>
+          <rect x="16" y="212" width="100" height="40" rx="7" class="bx-ok"/>
+          <text x="66" y="237" text-anchor="middle" class="t-ok">200</text>
+
+          <!-- B ✗ → verify! の rescue -->
+          <path d="M722 210 V404 H540" class="ln-ng" marker-end="url(#m-ng)"/>
+          <text x="714" y="342" text-anchor="end" class="t-ng" style="font-size: 12px;">jwt gem の例外</text>
+          <text x="714" y="358" text-anchor="end" class="m">JWT::ExpiredSignature</text>
+          <text x="714" y="372" text-anchor="end" class="m">など</text>
+          <rect x="376" y="380" width="160" height="48" rx="7" class="bx-c"/>
+          <text x="456" y="399" text-anchor="middle" class="m" style="fill: var(--ink);">rescue JWT::DecodeError</text>
+          <text x="456" y="418" text-anchor="middle" class="s">InvalidToken に変える</text>
+
+          <!-- C ✗ → concern の rescue(verify! の rescue は通らない) -->
+          <path d="M456 264 V320 H300 V452" class="ln-ng" marker-end="url(#m-ng)"/>
+          <text x="466" y="292" class="t-ng" style="font-size: 12px;">InvalidToken</text>
+          <text x="466" y="308" class="s">verify! の rescue は通らない</text>
+
+          <!-- verify! の rescue → concern の rescue -->
+          <path d="M456 428 V480 H320" class="ln-ng" marker-end="url(#m-ng)"/>
+          <text x="388" y="472" text-anchor="middle" class="t-ng" style="font-size: 12px;">InvalidToken</text>
+
+          <!-- concern の rescue → 401 -->
+          <rect x="156" y="456" width="160" height="48" rx="7" class="bx-a"/>
+          <text x="236" y="476" text-anchor="middle" class="m" style="fill: var(--ink);">rescue InvalidToken</text>
+          <text x="236" y="494" text-anchor="middle" class="m">14〜15行目</text>
+          <line x1="156" y1="480" x2="120" y2="480" class="ln-ng" marker-end="url(#m-ng)"/>
+          <rect x="16" y="460" width="100" height="40" rx="7" class="bx-ng"/>
+          <text x="66" y="485" text-anchor="middle" class="t-ng">401</text>
+
+          <!-- 鍵の取得に失敗 → 500 -->
+          <rect x="586" y="522" width="156" height="44" rx="7" class="bx-err"/>
+          <text x="664" y="541" text-anchor="middle" class="t-err">鍵の取得に失敗</text>
+          <text x="664" y="558" text-anchor="middle" class="m">SocketError など</text>
+          <line x1="586" y1="544" x2="120" y2="544" class="ln-err" marker-end="url(#m-err)"/>
+          <text x="350" y="536" text-anchor="middle" class="s">どの rescue にも当たらない</text>
+          <rect x="16" y="524" width="100" height="40" rx="7" class="bx-err"/>
+          <text x="66" y="549" text-anchor="middle" class="t-err">500</text>
+        </svg>
+      </div>
+      <figcaption>図:3つの場所 <span class="tag a">A</span> <span class="tag b">B</span> <span class="tag c">C</span> のどこで断っても、最後は左の 401 にたどり着きます。ただし道は3通りあります。いちばん下の灰色の点線は、トークンのせいではない失敗で、401 ではなく 500 になります。</figcaption>
+    </figure>
+
+    <h3><span class="tag a">A</span> で断る道:例外を使わない</h3>
+    <ol class="flow">
+      <li><strong>concern</strong> が、ヘッダーからトークンを取り出せなかった(<code>token</code> が <code>nil</code>)</li>
+      <li><strong>concern</strong> が、<code>render_unauthorized</code> で 401 の返事を作り、<code>return</code> でメソッドを抜ける</li>
+    </ol>
+    <p>verify! を呼ぶ前なので、例外は登場しません。</p>
+
+    <h3><span class="tag b">B</span> で断る道:例外を2回受け渡す</h3>
+    <ol class="flow">
+      <li><strong>jwt gem</strong> が、6項目のどれかで断り、jwt gem 自身の例外(例:期限切れなら <code>JWT::ExpiredSignature</code>)を投げる</li>
+      <li><strong>verify!</strong> の <code>rescue JWT::DecodeError</code> が受け止める。jwt gem の例外は、どれも <code>JWT::DecodeError</code> の子孫だから</li>
+      <li><strong>verify!</strong> が、<code>InvalidToken</code> に変えて投げ直す</li>
+      <li><strong>concern</strong> の <code>rescue InvalidToken</code> が受け止め、401 を返す</li>
+    </ol>
+
+    <h3><span class="tag c">C</span> で断る道:verify! の rescue を素通りする</h3>
+    <ol class="flow">
+      <li><strong>verify!</strong> が、sub(subject、uid)か auth_time(authentication time、ログインした時刻)で断り、最初から <code>InvalidToken</code> を投げる</li>
+      <li><strong>verify!</strong> の <code>rescue JWT::DecodeError</code> は、これを受け止めない。<code>InvalidToken</code> は <code>JWT::DecodeError</code> の子孫ではないから</li>
+      <li><strong>concern</strong> の <code>rescue InvalidToken</code> が受け止め、401 を返す</li>
+    </ol>
+  </section>
+
+  <section id="table">
+    <h2><span class="num">3</span>確かめる項目ごとの一覧</h2>
+    <p>だめなトークンを1種類ずつ、実際に verify! に通して、どの例外が投げられるかを確かめた結果です(jwt 3.3.0)。concern に届くときは、どれも <code>InvalidToken</code> になっています。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>場所</th><th>だめなところ</th><th>最初に投げられる例外</th><th>結果</th><th>テスト(me_spec.rb)</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag a">A</span></td><td>Authorization ヘッダーがない</td><td>なし(その場で返す)</td><td><span class="res ng">401</span></td><td>ヘッダーがない場合</td></tr>
+          <tr><td><span class="tag a">A</span></td><td>Bearer の形でない</td><td>なし(その場で返す)</td><td><span class="res ng">401</span></td><td>Bearer の形でない場合</td></tr>
+          <tr><td><span class="tag b">B</span></td><td>別の鍵で署名されている</td><td><code>JWT::VerificationError</code></td><td><span class="res ng">401</span></td><td>別の鍵で署名されている場合</td></tr>
+          <tr><td><span class="tag b">B</span></td><td>公開鍵の一覧にない kid(key ID、鍵の番号)</td><td><code>JWT::SignatureError</code></td><td><span class="res ng">401</span></td><td>一覧にない kid の場合</td></tr>
+          <tr><td><span class="tag b">B</span></td><td>署名の方式(alg、algorithm)が HS256 / none</td><td><code>JWT::IncorrectAlgorithm</code></td><td><span class="res ng">401</span></td><td>HS256 の場合、none の場合</td></tr>
+          <tr><td><span class="tag b">B</span></td><td>exp(expiration time、有効期限)が切れている</td><td><code>JWT::ExpiredSignature</code></td><td><span class="res ng">401</span></td><td>exp が切れている場合</td></tr>
+          <tr><td><span class="tag b">B</span></td><td>iat(issued at、発行時刻)が未来</td><td><code>JWT::InvalidIatError</code></td><td><span class="res ng">401</span></td><td>iat が未来の場合</td></tr>
+          <tr><td><span class="tag b">B</span></td><td>aud(audience、宛先)が別のプロジェクト</td><td><code>JWT::InvalidAudError</code></td><td><span class="res ng">401</span></td><td>aud が別の場合</td></tr>
+          <tr><td><span class="tag b">B</span></td><td>iss(issuer、発行者)が別のプロジェクト</td><td><code>JWT::InvalidIssuerError</code></td><td><span class="res ng">401</span></td><td>iss が別の場合</td></tr>
+          <tr><td><span class="tag b">B</span></td><td>トークンの形が壊れている(<code>.</code> で3つに分かれない)</td><td><code>JWT::MalformedTokenError</code></td><td><span class="res ng">401</span></td><td>なし</td></tr>
+          <tr><td><span class="tag c">C</span></td><td>sub(subject、uid)が空</td><td><code>InvalidToken</code>(最初から)</td><td><span class="res ng">401</span></td><td>sub が空の場合</td></tr>
+          <tr><td><span class="tag c">C</span></td><td>auth_time(authentication time、ログインした時刻)が未来</td><td><code>InvalidToken</code>(最初から)</td><td><span class="res ng">401</span></td><td>auth_time が未来の場合</td></tr>
+          <tr class="group"><td colspan="5">トークンのせいではない失敗(どの rescue にも当たらない)</td></tr>
+          <tr><td>—</td><td>Google から鍵を取れない(通信の失敗)</td><td><code>SocketError</code> など</td><td><span class="res err">500</span></td><td>なし</td></tr>
+          <tr><td>—</td><td>Firebase のプロジェクト ID が設定されていない</td><td><code>RuntimeError</code></td><td><span class="res err">500</span></td><td>なし</td></tr>
+          <tr><td>—</td><td>データベースにつながらない</td><td><code>ActiveRecord</code> 系のエラー</td><td><span class="res err">500</span></td><td>なし</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <p>401 は「あなたのトークンがだめです」という意味です。Google が止まっているときに 401 を返すと、Vue は「ログインし直してください」と案内しかねません。でも、ログインし直しても直りません。そのため、トークンのせいではない失敗は、わざと捕まえずに 500 にしています。</p>
+    </div>
+  </section>
+
+  <section id="code">
+    <h2><span class="num">4</span>コードの中の位置</h2>
+    <p>図の箱が、コードのどの行にあたるかを示します。</p>
+    <h3>concern(firebase_authenticatable.rb)</h3>
+<pre><code><span class="k">def</span> authenticate_member!
+  token = request.authorization.to_s[/\ABearer (.+)\z/, 1]
+  <span class="mark-a">A</span> return render_unauthorized("…") if token.nil?   <span class="cm"># 例外を使わず、その場で 401</span>
+
+  payload = FirebaseIdTokenVerifier.new.verify!(token)   <span class="cm"># ここで B と C が起きる</span>
+  @current_member = Member.create_or_find_by!(firebase_uid: payload["sub"])
+<span class="k">rescue</span> FirebaseIdTokenVerifier::InvalidToken =&gt; e      <span class="cm"># B と C は、どちらもここに届く</span>
+  render_unauthorized(e.message)
+<span class="k">end</span></code></pre>
+    <h3>verify!(firebase_id_token_verifier.rb)</h3>
+<pre><code><span class="k">def</span> verify!(token)
+  <span class="mark-b">B</span> payload, _header = JWT.decode(token, nil, true, …)   <span class="cm"># jwt gem が6項目を確かめる</span>
+  <span class="mark-c">C</span> raise InvalidToken, "sub が空です" if payload["sub"].blank?
+  <span class="mark-c">C</span> raise InvalidToken, "auth_time が未来です" if payload["auth_time"].to_i &gt; Time.current.to_i
+
+  payload
+<span class="k">rescue</span> JWT::DecodeError =&gt; e      <span class="cm"># B の例外だけを受け止める。C の InvalidToken は素通り</span>
+  raise InvalidToken, e.message
+<span class="k">end</span></code></pre>
+    <p>A、B、C の文字は説明のために付けた印で、実際のコードには書かれていません。</p>
+  </section>
+
+  <section id="why">
+    <h2><span class="num">5</span>なぜこの形なのか</h2>
+    <ul>
+      <li><strong>concern は <code>InvalidToken</code> だけを知っていればよい</strong>:jwt gem の例外の種類は10以上あります。それを concern が全部知っていると、あとでライブラリを替えたときに concern まで直すことになります。verify! の中で <code>InvalidToken</code> にそろえているので、concern は jwt gem のことを知らずに済みます。</li>
+      <li><strong>C を verify! に置く理由</strong>:sub(subject、uid)と auth_time(authentication time、ログインした時刻)は、jwt gem が確かめてくれない項目です。でも Firebase の公式の手順では確かめることになっています。「Firebase のトークンとして正しいか」を確かめるのは verify! の役目なので、jwt gem のあとに verify! が自分で確かめます。</li>
+      <li><strong>A だけ例外を使わない理由</strong>:ヘッダーの形を見るのは concern 自身で、呼び出した先から結果を受け取る必要がありません。その場で返事を作って抜ければ済みます。</li>
+      <li><strong>本文はいつも同じ</strong>:どこで断っても、返事の本文は <code>{ "error": "unauthorized" }</code> です。偽物を作ろうとする人に、どの確認で落ちたかの手がかりを与えないためです。理由(<code>e.message</code>)は Rails のログにだけ残します。</li>
+    </ul>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">6</span>確認用の問い</h2>
+    <ol class="check">
+      <li>期限切れのトークンが届きました。図の上で、どの箱をどの順に通って 401 になりますか。<span class="hint">2章の「B で断る道」です。</span></li>
+      <li>sub(subject、uid)が空のトークンで投げられた <code>InvalidToken</code> を、verify! の <code>rescue</code> が受け止めないのはなぜですか。<span class="hint">2章の「C で断る道」の2番目です。</span></li>
+      <li>Google の鍵の配布元が止まっていたら、Vue が受け取るのは 401 と 500 のどちらですか。<span class="hint">3章の一覧の、灰色の行です。</span></li>
+    </ol>
+  </section>
+
+  <section id="terms">
+    <h2><span class="num">7</span>用語</h2>
+    <p>トークンの中の項目の名前は、JWT の標準(RFC 7519)が決めた英語の略です。トークンはリクエストのたびにヘッダーに載せて送るので、名前を短くしてトークンを小さくしています。</p>
+    <h3>トークンの header の項目</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>名前</th><th>元の英語</th><th>意味</th><th>Firebase の ID トークンでの中身</th><th>確かめる場所</th></tr></thead>
+        <tbody>
+          <tr><td><code>alg</code></td><td>algorithm</td><td>署名の方式</td><td><code>RS256</code></td><td><span class="tag b">B</span> RS256 か</td></tr>
+          <tr><td><code>kid</code></td><td>key ID</td><td>署名に使った鍵の番号</td><td>Google の公開鍵のどれか1つの番号</td><td><span class="tag b">B</span> この番号で公開鍵を選ぶ</td></tr>
+          <tr><td><code>typ</code></td><td>type</td><td>トークンの種類</td><td><code>JWT</code></td><td>確かめない</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>トークンの payload の項目</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>名前</th><th>元の英語</th><th>意味</th><th>Firebase の ID トークンでの中身</th><th>確かめる場所</th></tr></thead>
+        <tbody>
+          <tr><td><code>iss</code></td><td>issuer</td><td>発行者。誰がこのトークンを作ったか</td><td><code>https://securetoken.google.com/&lt;プロジェクト ID&gt;</code></td><td><span class="tag b">B</span> 自分のプロジェクトの URL か</td></tr>
+          <tr><td><code>aud</code></td><td>audience</td><td>宛先。誰に向けたトークンか</td><td>プロジェクト ID</td><td><span class="tag b">B</span> 自分のプロジェクト ID か</td></tr>
+          <tr><td><code>sub</code></td><td>subject</td><td>主体。誰についてのトークンか</td><td>Firebase の uid(会員を見分ける番号)</td><td><span class="tag c">C</span> 空でないか</td></tr>
+          <tr><td><code>iat</code></td><td>issued at</td><td>発行時刻</td><td>このトークンが作られた時刻</td><td><span class="tag b">B</span> 過去か</td></tr>
+          <tr><td><code>exp</code></td><td>expiration time</td><td>有効期限</td><td>発行時刻の1時間後</td><td><span class="tag b">B</span> 未来か</td></tr>
+          <tr><td><code>auth_time</code></td><td>authentication time(名前は略さない)</td><td>ログインした時刻</td><td>利用者が実際にログインした時刻</td><td><span class="tag c">C</span> 過去か</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>時刻の項目(<code>iat</code>、<code>exp</code>、<code>auth_time</code>)には、Unix 時間が入っています。1970年1月1日 0時(UTC)からの秒数で、たとえば <code>1793600000</code> のような数です。</p>
+    <div class="note">
+      <p><strong><code>iat</code> と <code>auth_time</code> の違い</strong>:Vue 側の Firebase SDK は、ID トークンの期限(1時間)が近づくと、トークンを自動で発行し直します。発行し直すと <code>iat</code> は新しい時刻に変わります。でも、利用者はログインし直していないので、<code>auth_time</code> は最初にログインした時刻のままです。</p>
+      <p><strong><code>iss</code> と <code>aud</code> の違い</strong>:<code>iss</code> は「Firebase のどのプロジェクトが作ったか」、<code>aud</code> は「どのプロジェクトのアプリが受け取るべきか」です。Firebase ではどちらにも同じプロジェクト ID が入りますが、Rails は、別のプロジェクト用のトークンを流用されないように、両方を確かめます。</p>
+    </div>
+    <h3>このページに出てくるほかの言葉</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>言葉</th><th>英語</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td>ID トークン</td><td>ID token</td><td>Vue がログインしたときに Firebase から受け取る文字列。Vue はこれを <code>Authorization: Bearer …</code> に載せて Rails に送る</td></tr>
+          <tr><td>JWT</td><td>JSON Web Token</td><td>ID トークンの形式。header、payload、署名の3つを <code>.</code> でつないだ文字列</td></tr>
+          <tr><td>header</td><td>header</td><td>JWT の1つ目の部分。署名の方式と鍵の番号(<code>alg</code>、<code>kid</code>)が入る</td></tr>
+          <tr><td>payload</td><td>payload</td><td>JWT の2つ目の部分。トークンの本体で、上の表の <code>iss</code> 〜 <code>auth_time</code> が入る</td></tr>
+          <tr><td>署名</td><td>signature</td><td>JWT の3つ目の部分。Google が秘密鍵で作る。Rails は公開鍵で確かめ、header と payload が書き換えられていないことを知る</td></tr>
+          <tr><td>クレーム</td><td>claim</td><td>payload の1つ1つの項目のこと(<code>iss</code> や <code>exp</code> など)。jwt gem の例外の名前(<code>ClaimValidationError</code>)にも出てくる</td></tr>
+          <tr><td>JWKS</td><td>JSON Web Key Set</td><td>Google が配っている公開鍵の一覧。1つ1つの鍵に <code>kid</code> が付いている</td></tr>
+          <tr><td>例外</td><td>exception</td><td><code>raise</code> で投げ、<code>rescue</code> で受け止める「失敗の知らせ」。受け止める <code>rescue</code> がなければ 500 になる</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+</body>
+</html>

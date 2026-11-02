@@ -53,7 +53,9 @@ class FirebaseIdTokenVerifier
 
   def verify!(token)
     payload, _header = JWT.decode(
-      token, nil, true,
+      token, # 確かめるトークン
+      nil, # 署名を確かめる鍵。下の jwks: で渡すので、ここでは渡さない
+      true, # 署名を確かめるか
       algorithms: [ "RS256" ],
       jwks: self.class.method(:fetch_jwks),
       aud: @project_id, verify_aud: true,

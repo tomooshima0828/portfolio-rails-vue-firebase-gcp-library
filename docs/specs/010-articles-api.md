@@ -22,7 +22,7 @@ Issue: #10
 - AC-1:ログイン済みの会員がタイトルと本文を送ったとき、`POST /api/articles` は、その会員の記事として保存し、201 と保存した記事を返す
 - AC-2:リクエストに `member_id` が含まれている場合も、`POST /api/articles` はそれを使わず、ログインしている会員の記事として保存する
 - AC-3:タイトルか本文が記事の決まりに合わない場合(空、またはタイトルが101文字)、`POST /api/articles` は 422 と項目ごとのエラーを返し、記事を保存しない
-- AC-4:リクエストに `article` がない場合、`POST /api/articles` は 400 を返し、記事を保存しない
+- AC-4:リクエストに記事の項目(`title`、`body` など)が1つもない場合、`POST /api/articles` は 400 を返し、記事を保存しない
 - AC-5:ID トークンがない、または確かめられない場合、`POST /api/articles` は 401 を返し、記事を保存しない
 - AC-6:`GET /api/articles` は、すべての会員の記事を新しい順に返す
 - AC-7:ログインしていなくても、`GET /api/articles` は 200 を返す
@@ -70,7 +70,7 @@ Issue: #10
   { "errors": { "title": ["can't be blank"] } }
   ```
 
-- 失敗:400(`article` がない)。本文は Rails の決まった形のまま
+- 失敗:400(記事の項目が1つもない)。本文は Rails の決まった形のまま
 - 失敗:401。`{ "error": "unauthorized" }`(#8 と同じ)
 
 `GET /api/articles`
@@ -100,7 +100,8 @@ Issue: #10
 - **一覧は `{ "articles": [...] }` で包んで返す**。フェーズ3でページネーションを足すとき、`articles` の横に総件数などを足せば、画面の側の読み方を変えずに済むため
 - **一覧の記事に本文を含める**。詳細の API はまだないので、フェーズ1の「一覧で表示」は、一覧の API だけで描くため。本文に上限がないので一覧が重くなりうるが、フェーズ3のページネーションと詳細の API で解決する
 - **書いた会員は、`current_member` から決める**。リクエストの `member_id` を使うと、別の会員になりすまして記事を作れてしまうため。Strong Parameters で受け取るのは `title` と `body` だけにする
-- **リクエストは `article` で包んだ形を正式な形にする**。Rails には、平らな JSON(`{ "title": ... }`)を自動で `article` の下に入れ直す仕組み(wrap_parameters)がある。ただ、その仕組みに頼るより、形を仕様書に書いておくほうが読み手に分かりやすい。受け取りは Rails 8 の `params.expect(article: [:title, :body])` で書く。`article` がなければ、Rails が 400 を返す
+- **リクエストは `article` で包んだ形を正式な形にする**。受け取りは Rails 8 の `params.expect(article: [:title, :body])` で書く。形を仕様書に書いておくほうが読み手に分かりやすいので、#12 の Vue は包んだ形で送る
+- **平らな形(`{ "title": ..., "body": ... }`)も受け付ける**。Rails の wrap_parameters が、デフォルトで有効なため。この仕組みは、`article` のない JSON が届いたとき、`Article` のカラム名に合うキー(`title`、`body` など)を拾って、`article` の下に入れ直す。止める設定(`wrap_parameters false`)は書かない。記事の項目が1つもない場合(`{}` など)は、`article` が空になり、Rails が 400 を返す(AC-4)
 - **返す項目は、コントローラーで1つずつ書き出す**(`as_json(only: ...)`)。今後 `articles` にカラムが増えても、勝手に API の外へ出ないようにするため。書き出すのは2か所だけなので、jbuilder やシリアライザの gem は入れない
 - **422 は `:unprocessable_content` で返す**。Rails 8.1 が使う rack 3.2 では、`:unprocessable_entity` は古い名前になっている
 - **401 の確かめは2つの場合に絞る**。トークンの細かい検証は、#8 の `GET /api/me` の request spec で確かめ済みのため。この Issue では、ヘッダーがない場合と、確かめられないトークンの場合に、401 を返し記事を保存しないことだけを確かめる

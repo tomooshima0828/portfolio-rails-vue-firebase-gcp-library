@@ -24,7 +24,7 @@ erDiagram
 | テーブル | 何を表すか | 状態 |
 |---|---|---|
 | `members` | 会員。Firebase の uid だけを持つ | 作った(Issue #8) |
-| `articles` | 記事。書いた会員を持つ | 作る(Issue #9) |
+| `articles` | 記事。書いた会員を持つ | 作った(Issue #9) |
 | `tags` | タグ | 予定(フェーズ3) |
 | `article_tags` | 記事とタグをつなぐ | 予定(フェーズ3) |
 | `bookmarks` | 会員が記事をブックマークしたこと | 予定(フェーズ3) |

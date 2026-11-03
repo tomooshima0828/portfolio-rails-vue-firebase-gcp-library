@@ -50,4 +50,7 @@ Rails.application.configure do
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
+
+  # テストでは、Firebase のプロジェクト ID を固定する。spec/support/firebase_id_token_helper.rb の FIREBASE_PROJECT_ID と同じ値
+  config.x.firebase.project_id = "test-project"
 end

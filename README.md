@@ -86,6 +86,21 @@ docker compose run --rm web npm install パッケージ名  # package.json、pac
 - gem と違い、イメージは作り直さなくてよい。`web/node_modules` はイメージではなく、Mac の `web/` の中にあり、コンテナからはバインドマウントで見えるため。Mac から見える場所に置くのは、VS Code が型を読めるようにするため([docs/specs/006-vue-new.md](docs/specs/006-vue-new.md))。
 - **npm は Mac で実行しない**。`web/node_modules` にはコンテナ(Linux)用のバイナリが入っているので、Mac で `npm install` すると中身が Mac 用に入れ替わり、コンテナの Vite が起動しなくなる。
 
+### DB をクライアントで開く
+
+DBeaver などの DB クライアントから、開発用の DB を開ける(`docker compose up -d` の後)。
+
+| 項目 | 値 |
+|---|---|
+| Host | `localhost` |
+| Port | `5432` |
+| Database | `api_development`(テスト用は `api_test`) |
+| Username | `postgres` |
+| Password | `postgres` |
+
+- Mac からだけ接続できる。`compose.yaml` で、`127.0.0.1` の 5432 番だけに開いているため。
+- `compose.yaml` の `ports` を変えたときは、`docker compose up -d db` で db のコンテナを作り直す。データはボリュームに残る。
+
 ### DB を最初から作り直す
 
 ```bash

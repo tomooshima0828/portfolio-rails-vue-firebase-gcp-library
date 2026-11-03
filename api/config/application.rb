@@ -40,5 +40,8 @@ module Api
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Firebase のプロジェクト ID。ID トークンの宛先(aud)と発行元(iss)が、このプロジェクトかを確かめるのに使う
+    config.x.firebase.project_id = ENV["FIREBASE_PROJECT_ID"]
   end
 end

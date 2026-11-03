@@ -9,7 +9,7 @@
 
 | 機能 | 内容 | データの置き場所 | 状態 |
 |---|---|---|---|
-| ログイン | Google アカウントでログインする。Rails は Firebase の ID トークンを検証して会員を特定する | Firebase Auth | 未実装 |
+| ログイン | Google アカウントでログインする。Rails は Firebase の ID トークンを検証して会員を特定する | Firebase Auth | Rails の検証のみ(#8) |
 | 記事の投稿・編集・削除 | ログインした会員が、自分の記事を投稿・編集・削除する | Rails(PostgreSQL) | 未実装 |
 | 記事の一覧・詳細 | 記事を一覧と詳細で表示する | Rails(PostgreSQL) | 未実装 |
 | 検索 | 記事をキーワードで検索する | Rails(PostgreSQL) | 未実装 |
@@ -46,8 +46,22 @@
 
 ## API
 
-各タスクの仕様書で決まった時点で追記する。
+Rails API のエンドポイント。ログインが必要なものは、`Authorization: Bearer <Firebase の ID トークン>` を付けて呼ぶ。トークンがない、または確かめられない場合は、401 と `{ "error": "unauthorized" }` を返す。
+
+| メソッドとパス | 内容 | ログイン | 仕様書 |
+|---|---|---|---|
+| `GET /api/me` | ログインしている会員の `id` と `firebase_uid` を返す。初めての uid なら会員を作る | 必要 | [#8](specs/008-verify-id-token.md) |
 
 ## データモデル
 
-各タスクの仕様書で決まった時点で追記する。
+Rails(PostgreSQL)のテーブル。
+
+### members
+
+会員。Firebase の uid だけを持ち、名前やメールアドレスは持たない。
+
+| カラム | 型 | 制約 |
+|---|---|---|
+| `id` | bigint | 主キー |
+| `firebase_uid` | string | 必須、一意 |
+| `created_at`、`updated_at` | datetime | 必須 |

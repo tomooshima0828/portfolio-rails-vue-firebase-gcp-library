@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>公開鍵で ID トークンを確かめる</title>
+<style>
+/* Layout: 左に目次(デスクトップのみ固定)、右に読み物の1カラム。登場人物ごとに色を固定し、図・本文・コードの見出しで同じ色を使う */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --vue: #23845a;      --vue-soft: #e2f2ea;
+  --fb: #b86d00;       --fb-soft: #fbefd8;
+  --rails: #b0303d;    --rails-soft: #f8e2e4;
+  --google: #3f67a3;   --google-soft: #e3eaf5;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --vue: #5ec796; --vue-soft: #16302a;
+    --fb: #f0a83c; --fb-soft: #33270f;
+    --rails: #ef7480; --rails-soft: #3a1b21;
+    --google: #8badde; --google-soft: #1a2538;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --vue: #5ec796; --vue-soft: #16302a;
+  --fb: #f0a83c; --fb-soft: #33270f;
+  --rails: #ef7480; --rails-soft: #3a1b21;
+  --google: #8badde; --google-soft: #1a2538;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-inline: 16px;
+  padding-block: 0 64px;
+}
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+strong { font-weight: 700; }
+
+.shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 48px;
+}
+.toc {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  align-self: start;
+  padding-top: 56px;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.toc p { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; color: var(--muted); letter-spacing: .08em; font-size: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; counter-reset: toc; }
+.toc li { counter-increment: toc; display: grid; grid-template-columns: 1.8em 1fr; }
+.toc li::before { content: counter(toc); color: var(--muted); font-family: var(--font-mono); font-size: 12px; padding-top: 1px; }
+.toc a { color: var(--ink); text-decoration: none; }
+.toc a:hover { color: var(--accent); text-decoration: underline; }
+
+main { min-width: 0; max-width: 740px; }
+
+header.top { padding-top: 56px; padding-bottom: 8px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(30px, 5vw, 42px);
+  line-height: 1.3;
+  margin: 0 0 20px;
+  text-wrap: balance;
+}
+.lead { font-size: 17px; margin: 0 0 16px; }
+.cast-line { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+
+section { padding-top: 56px; }
+h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 25px;
+  line-height: 1.4;
+  margin: 0 0 18px;
+  text-wrap: balance;
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 18px; margin: 32px 0 10px; line-height: 1.5; text-wrap: balance; }
+p { margin: 0 0 14px; }
+ul.plain { margin: 0 0 14px; padding-left: 1.3em; }
+ul.plain li { margin-bottom: 6px; }
+
+/* 登場人物の色チップ */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; line-height: 1.4; font-weight: 700;
+  padding: 3px 10px; border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.c-vue { color: var(--vue); background: var(--vue-soft); }
+.c-fb { color: var(--fb); background: var(--fb-soft); }
+.c-rails { color: var(--rails); background: var(--rails-soft); }
+.c-google { color: var(--google); background: var(--google-soft); }
+.t-vue { color: var(--vue); font-weight: 700; }
+.t-fb { color: var(--fb); font-weight: 700; }
+.t-rails { color: var(--rails); font-weight: 700; }
+.t-google { color: var(--google); font-weight: 700; }
+
+/* 2つのニーズ */
+.needs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.need { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 14px; min-width: 0; }
+.need .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+.need h3 { margin: 0 0 12px; font-size: 16.5px; }
+.need p { font-size: 14.5px; line-height: 1.75; }
+.mini { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin: 4px 0 14px; font-size: 13px; }
+.mini .arrow { color: var(--muted); font-family: var(--font-mono); font-size: 12px; padding-left: 12px; }
+.need.here { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.need.here .tag { color: var(--accent); font-weight: 600; }
+
+/* 製品マップ */
+.gcp {
+  border: 1.5px dashed var(--google);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 22px 0 10px;
+  background: var(--surface);
+}
+.gcp > .label { font-size: 13px; color: var(--google); font-weight: 700; margin: 0 0 10px; }
+.gcp > .label code { background: var(--google-soft); }
+.fbbox { border: 1.5px solid var(--fb); border-radius: 10px; padding: 12px; background: var(--fb-soft); }
+.fbbox > .label { font-size: 13px; color: var(--fb); font-weight: 700; margin: 0 0 10px; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.5; min-width: 0; }
+.tile b { display: block; font-size: 13.5px; }
+.tile span { color: var(--muted); font-size: 12px; }
+.tile.on { border: 2px solid var(--fb); }
+.tile .badge { display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 4px; background: var(--fb); color: var(--surface); }
+.tile .badge.next { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.gcp-other { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.caption { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
+/* 用語 */
+dl.terms { margin: 16px 0 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+dl.terms > div { display: grid; grid-template-columns: 11em minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+dl.terms dt { font-weight: 700; font-family: var(--font-display); line-height: 1.6; }
+dl.terms dd { margin: 0; font-size: 15px; line-height: 1.75; min-width: 0; }
+dl.terms dd .ex { display: block; color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+
+/* 登場人物 */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.actor { border-radius: 10px; padding: 14px 16px; border: 1px solid var(--line); background: var(--surface); border-top: 4px solid; min-width: 0; }
+.actor.vue { border-top-color: var(--vue); }
+.actor.fb { border-top-color: var(--fb); }
+.actor.rails { border-top-color: var(--rails); }
+.actor.google { border-top-color: var(--google); }
+.actor h3 { margin: 0 0 2px; font-size: 16px; }
+.actor .where { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin: 0 0 8px; overflow-wrap: anywhere; }
+.actor p { font-size: 14.5px; line-height: 1.7; margin: 0; }
+
+/* 図 */
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 18px 0 8px; overflow-x: auto; }
+.figure svg { display: block; width: 100%; min-width: 660px; height: auto; }
+svg text { font-family: var(--font-body); fill: var(--ink); }
+svg .mono { font-family: var(--font-mono); fill: var(--muted); font-size: 12px; }
+svg .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 5; }
+svg .hd-vue { fill: var(--vue-soft); stroke: var(--vue); }
+svg .hd-fb { fill: var(--fb-soft); stroke: var(--fb); }
+svg .hd-rails { fill: var(--rails-soft); stroke: var(--rails); }
+svg .hd-google { fill: var(--google-soft); stroke: var(--google); }
+svg .ar-vue { stroke: var(--vue); }
+svg .ar-fb { stroke: var(--fb); }
+svg .ar-rails { stroke: var(--rails); }
+svg .ar-google { stroke: var(--google); }
+svg .mk-vue { fill: var(--vue); }
+svg .mk-fb { fill: var(--fb); }
+svg .mk-rails { fill: var(--rails); }
+svg .mk-google { fill: var(--google); }
+svg .tx-vue { fill: var(--vue); }
+svg .tx-fb { fill: var(--fb); }
+svg .tx-rails { fill: var(--rails); }
+svg .tx-google { fill: var(--google); }
+
+/* 手順 */
+ol.steps { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 36px; counter-reset: step; }
+ol.steps > li { counter-increment: step; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 14px; }
+ol.steps > li::before {
+  content: counter(step);
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-weight: 600; font-size: 15px;
+  border: 1.5px solid var(--ink);
+}
+ol.steps > li.prep { counter-increment: none; }
+ol.steps > li.prep::before { content: "0"; border-style: dashed; color: var(--muted); border-color: var(--muted); }
+ol.steps .body { min-width: 0; }
+ol.steps h3 { margin: 4px 0 8px; }
+.route { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+
+.code { margin: 12px 0 14px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--code-bg); }
+.code .file { font-family: var(--font-mono); font-size: 12px; padding: 7px 12px; border-bottom: 1px solid var(--line); background: var(--surface); display: flex; gap: 8px; align-items: center; overflow-wrap: anywhere; }
+.code .file::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: currentColor; flex: none; }
+.code.vue .file { color: var(--vue); }
+.code.rails .file { color: var(--rails); }
+.code.env .file { color: var(--muted); }
+.code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; color: var(--ink); }
+.code .cm { color: var(--muted); font-style: italic; }
+.code .hl { background: var(--fb-soft); display: inline-block; min-width: 100%; }
+
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0; }
+.note p:last-child { margin-bottom: 0; }
+
+/* 表 */
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.65; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--font-display); font-weight: 700; font-size: 13.5px; color: var(--muted); background: var(--code-bg); white-space: nowrap; }
+td:first-child { font-weight: 700; white-space: nowrap; }
+table.check td:first-child { font-family: var(--font-mono); font-size: 13px; }
+table.analogy td:nth-child(2) { white-space: nowrap; }
+
+/* 理由 */
+.whys { display: grid; gap: 22px; margin-top: 8px; }
+.why h3 { margin: 0 0 6px; }
+.why p { margin-bottom: 8px; }
+.why .cost { font-size: 14px; color: var(--muted); }
+.why .cost b { color: var(--ink); }
+
+.qs { counter-reset: q; list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
+.qs li { counter-increment: q; display: grid; grid-template-columns: 2em minmax(0, 1fr); gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 15px; }
+.qs li::before { content: "Q" counter(q); font-family: var(--font-mono); color: var(--accent); font-weight: 600; font-size: 13px; padding-top: 2px; }
+.qs .hint { display: block; color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+
+footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .toc { display: none; }
+}
+@media (max-width: 620px) {
+  body { font-size: 15.5px; }
+  .needs, .cast { grid-template-columns: minmax(0, 1fr); }
+  .tiles, .gcp-other { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  dl.terms > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  ol.steps > li { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  td:first-child { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+ol.plain { margin: 0 0 14px; padding-left: 1.5em; }
+ol.plain li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <nav class="toc" aria-label="目次">
+    <p>目次</p>
+    <ol>
+      <li><a href="#start">何のためにあるのか</a></li>
+      <li><a href="#words">前提の言葉</a></li>
+      <li><a href="#cast">登場人物</a></li>
+      <li><a href="#flow">全体の流れ</a></li>
+      <li><a href="#steps">流れを手順で追う</a></li>
+      <li><a href="#cache">鍵を保存して使い回す</a></li>
+      <li><a href="#analogy">例え話</a></li>
+      <li><a href="#why">なぜこの形なのか</a></li>
+      <li><a href="#project">このプロジェクトでの対応</a></li>
+      <li><a href="#neighbors">似たものとの違い</a></li>
+      <li><a href="#glossary">用語集</a></li>
+      <li><a href="#questions">確かめる問い</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="top">
+      <p class="eyebrow">portfolio-rails-vue-firebase-gcp-library / Issue #8</p>
+      <h1>Rails が公開鍵で ID トークンを確かめるしくみ</h1>
+      <p class="lead">このページでは、Rails が Google の公開鍵を取りに行き、その鍵で Firebase の ID トークンが本物かを確かめるしくみを説明します。Issue #8(<a href="../specs/008-verify-id-token.md">仕様書</a>)で作る、ID トークンの検証の土台になる考え方です。</p>
+      <p>先に結論を書きます。<strong>誰かが Rails に公開鍵を渡すのではありません。Rails が自分で、誰でも見られる Google の URL に公開鍵を取りに行きます。</strong>そのとき Rails は、ID トークンを Google に送りません。Rails が Google から借りるのは「見分けるための道具」だけで、本物かどうかの判断は Rails が自分で行います。</p>
+      <ul class="cast-line" aria-label="登場人物の色">
+        <li class="chip c-vue">Vue アプリ</li>
+        <li class="chip c-fb">Firebase Authentication</li>
+        <li class="chip c-rails">Rails API</li>
+        <li class="chip c-google">Google の公開鍵配布元</li>
+      </ul>
+    </header>
+
+    <!-- 1 -->
+    <section id="start">
+      <h2><span class="num">01</span>何のためにあるのか</h2>
+      <p>ログインは、<span class="t-vue">Vue アプリ</span>と <span class="t-fb">Firebase Authentication</span> の間で行われます。ログインに成功すると、Firebase Authentication が ID トークンを発行し、Vue アプリに渡します。この時点で、<span class="t-rails">Rails</span> は何も知りません。</p>
+      <p>そのあと、Vue アプリが ID トークンを <code>Authorization: Bearer &lt;ID トークン&gt;</code> の形で Rails に送ります。ここで Rails には困りごとがあります。<strong>届いた文字列は、誰でも作れる</strong>からです。悪い人が、中身に <code>"sub": "他人の uid"</code> と書いた偽物を送ってくるかもしれません。</p>
+      <p>そこで Rails は、「この ID トークンは、本当に Firebase が発行したものか。発行のあとで書き換えられていないか」を確かめる必要があります。確かめ方には2つの考え方があります。</p>
+
+      <div class="needs">
+        <div class="need">
+          <p class="tag">A. 毎回、発行した人に聞く</p>
+          <h3>Rails が Firebase に問い合わせる</h3>
+          <div class="mini">
+            <span class="chip c-rails">Rails API</span>
+            <span class="arrow">↓ 「このトークンは本物ですか?」(毎回)</span>
+            <span class="chip c-fb">Firebase Authentication</span>
+          </div>
+          <p>リクエストのたびに通信が発生するので、遅くなります。Firebase が止まると、Rails も止まります。</p>
+        </div>
+        <div class="need here">
+          <p class="tag">B. このプロジェクトのやり方</p>
+          <h3>Rails が手元で見分ける</h3>
+          <div class="mini">
+            <span class="chip c-rails">Rails API</span>
+            <span class="arrow">↓ 「公開鍵をください」(ときどき)</span>
+            <span class="chip c-google">Google の公開鍵配布元</span>
+          </div>
+          <p>Rails は公開鍵という道具だけを取ってきて、本物かどうかを自分で計算して確かめます。取ってきた鍵はしばらく保存するので、通信はたまにしか起きません。</p>
+        </div>
+      </div>
+      <p>B を実現しているのが、電子署名と公開鍵のしくみです。このページは特に、<strong>Rails が公開鍵をどう手に入れ、いつ取り直すのか</strong>に焦点を当てます。</p>
+    </section>
+
+    <!-- 2 -->
+    <section id="words">
+      <h2><span class="num">02</span>前提の言葉</h2>
+      <dl class="terms">
+        <div>
+          <dt>署名</dt>
+          <dd>ID トークンの中身と秘密鍵から計算した値です。ID トークンの3つ目の部分(最後のドットのあと)に付いています。中身を1文字でも変えると、署名と合わなくなります。
+            <span class="ex">入館証に押された公印にあたります。</span></dd>
+        </div>
+        <div>
+          <dt>秘密鍵</dt>
+          <dd>署名を「作る」ための鍵です。Google だけが持っていて、外には出しません。</dd>
+        </div>
+        <div>
+          <dt>公開鍵</dt>
+          <dd>秘密鍵と対になる鍵です。署名が本物かを「確かめる」ことしかできず、署名を「作る」ことはできません。だから、誰に見られても困りません。Google は公開鍵を、誰でも見られる URL で配っています。
+            <span class="ex">公印の印影の見本にあたります。</span></dd>
+        </div>
+        <div>
+          <dt>JWKS</dt>
+          <dd>JSON Web Key Set の略で、公開鍵を JSON で並べたものです。Firebase の ID トークン用の JWKS は、次の URL で配られています。
+            <span class="ex"><code>https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com</code></span></dd>
+        </div>
+        <div>
+          <dt>kid</dt>
+          <dd>Key ID の略で、鍵の番号です。Google は鍵を複数持っていて、定期的に入れ替えます。ID トークンのヘッダー(1つ目の部分)には、「どの鍵で署名したか」が <code>kid</code> で書かれています。JWKS の中の鍵にも、それぞれ <code>kid</code> が付いています。</dd>
+        </div>
+        <div>
+          <dt>max-age</dt>
+          <dd>Google が JWKS を返すときに、HTTP のレスポンスヘッダー <code>Cache-Control: max-age=秒数</code> で示す値です。「この鍵のセットは、この秒数のあいだ保存して使い回してよい」という意味です。</dd>
+        </div>
+      </dl>
+    </section>
+
+    <!-- 3 -->
+    <section id="cast">
+      <h2><span class="num">03</span>登場人物</h2>
+      <p>鍵に注目すると、それぞれの登場人物が持っているものは次のとおりです。図と手順でも同じ色を使います。</p>
+      <div class="cast">
+        <div class="actor fb">
+          <h3 class="t-fb">Firebase Authentication</h3>
+          <p class="where">持っているもの:秘密鍵</p>
+          <p>ログインに成功した人の ID トークンを作り、秘密鍵で署名してから Vue アプリに渡します。</p>
+        </div>
+        <div class="actor google">
+          <h3 class="t-google">Google の公開鍵配布元</h3>
+          <p class="where">www.googleapis.com/service_accounts/v1/jwk/securetoken@…</p>
+          <p>秘密鍵と対になる公開鍵(JWKS)を、誰にでも配ります。誰が何のために取りに来たのかは知りません。</p>
+        </div>
+        <div class="actor vue">
+          <h3 class="t-vue">Vue アプリ</h3>
+          <p class="where">持っているもの:ID トークン</p>
+          <p>ID トークンを受け取り、Rails の API を呼ぶときに付けて送るだけです。鍵には関わりません。</p>
+        </div>
+        <div class="actor rails">
+          <h3 class="t-rails">Rails API</h3>
+          <p class="where">持っているもの:取ってきた公開鍵(メモリに保存)</p>
+          <p>公開鍵を取りに行き、しばらく保存します。届いた ID トークンの署名を、保存した公開鍵で確かめます。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="flow">
+      <h2><span class="num">04</span>全体の流れ</h2>
+      <p>矢印の色は、送る側の色です。番号は次の章の手順番号と対応しています。⓪ は、Vue がログインするより前に、Google の中で済んでいる準備です。</p>
+      <div class="figure">
+        <svg viewBox="0 0 760 680" role="img" aria-label="Google が前もって鍵のペアを用意し、Firebase が秘密鍵で署名し、Rails が Google から公開鍵を取ってきて、自分で署名を確かめるシーケンス図">
+          <defs>
+            <marker id="m-vue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-vue"/></marker>
+            <marker id="m-fb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-fb"/></marker>
+            <marker id="m-rails" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-rails"/></marker>
+            <marker id="m-google" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk-google"/></marker>
+          </defs>
+
+          <!-- lifelines -->
+          <line x1="100" y1="66" x2="100" y2="666" class="life"/>
+          <line x1="290" y1="66" x2="290" y2="666" class="life"/>
+          <line x1="480" y1="66" x2="480" y2="666" class="life"/>
+          <line x1="670" y1="66" x2="670" y2="666" class="life"/>
+
+          <!-- headers -->
+          <rect x="22" y="16" width="156" height="50" rx="8" class="hd-vue" stroke-width="1.5"/>
+          <text x="100" y="38" text-anchor="middle" font-size="14" font-weight="700" class="tx-vue">Vue アプリ</text>
+          <text x="100" y="56" text-anchor="middle" class="mono">web/</text>
+
+          <rect x="202" y="16" width="176" height="50" rx="8" class="hd-fb" stroke-width="1.5"/>
+          <text x="290" y="38" text-anchor="middle" font-size="14" font-weight="700" class="tx-fb">Firebase Auth</text>
+          <text x="290" y="56" text-anchor="middle" class="mono">秘密鍵を持つ</text>
+
+          <rect x="402" y="16" width="156" height="50" rx="8" class="hd-rails" stroke-width="1.5"/>
+          <text x="480" y="38" text-anchor="middle" font-size="14" font-weight="700" class="tx-rails">Rails API</text>
+          <text x="480" y="56" text-anchor="middle" class="mono">api/</text>
+
+          <rect x="582" y="16" width="166" height="50" rx="8" class="hd-google" stroke-width="1.5"/>
+          <text x="670" y="38" text-anchor="middle" font-size="14" font-weight="700" class="tx-google">公開鍵の配布元</text>
+          <text x="670" y="56" text-anchor="middle" class="mono">公開鍵を配る</text>
+
+          <!-- 0: ログインより前に Google が済ませている準備 -->
+          <rect x="196" y="84" width="558" height="76" rx="8" stroke-width="1.5" stroke-dasharray="6 4" style="fill: var(--surface); stroke: var(--google);"/>
+          <text x="475" y="108" text-anchor="middle" font-size="13.5" font-weight="700" class="tx-google">⓪ 前もって:Google が鍵のペアを用意する</text>
+          <text x="290" y="140" text-anchor="middle" font-size="13">秘密鍵 → Firebase にしまう</text>
+          <text x="660" y="140" text-anchor="middle" font-size="13">公開鍵 → URL に貼り出す</text>
+
+          <!-- 1 -->
+          <rect x="200" y="182" width="180" height="40" rx="6" class="hd-fb" stroke-width="1.5"/>
+          <text x="290" y="207" text-anchor="middle" font-size="13.5">① 秘密鍵で署名する</text>
+
+          <!-- 2 -->
+          <line x1="286" y1="266" x2="104" y2="266" class="ar-fb" stroke-width="2" marker-end="url(#m-fb)"/>
+          <text x="195" y="256" text-anchor="middle" font-size="13.5" class="halo">② ID トークン</text>
+          <text x="195" y="284" text-anchor="middle" class="mono halo">署名付き</text>
+
+          <!-- 3 -->
+          <line x1="104" y1="340" x2="476" y2="340" class="ar-vue" stroke-width="2" marker-end="url(#m-vue)"/>
+          <text x="370" y="330" text-anchor="middle" font-size="13.5" class="halo">③ GET /api/me</text>
+          <text x="370" y="358" text-anchor="middle" class="mono halo">Authorization: Bearer &lt;ID トークン&gt;</text>
+
+          <!-- 4 -->
+          <line x1="484" y1="420" x2="666" y2="420" class="ar-rails" stroke-width="2" marker-end="url(#m-rails)"/>
+          <text x="575" y="410" text-anchor="middle" font-size="13.5" class="halo">④ 公開鍵をください</text>
+          <text x="575" y="438" text-anchor="middle" class="mono halo">ID トークンは送らない</text>
+
+          <!-- 5 -->
+          <line x1="666" y1="484" x2="484" y2="484" class="ar-google" stroke-width="2" marker-end="url(#m-google)"/>
+          <text x="575" y="474" text-anchor="middle" font-size="13.5" class="halo">⑤ 公開鍵のセット</text>
+          <text x="575" y="502" text-anchor="middle" class="mono halo">+ 保存してよい秒数</text>
+
+          <!-- 6 -->
+          <rect x="378" y="526" width="204" height="72" rx="8" class="hd-rails" stroke-width="1.5"/>
+          <text x="480" y="554" text-anchor="middle" font-size="13.5">⑥ kid に合う鍵を選び</text>
+          <text x="480" y="580" text-anchor="middle" font-size="13.5">署名を計算で確かめる</text>
+
+          <!-- 7 -->
+          <line x1="476" y1="646" x2="104" y2="646" class="ar-rails" stroke-width="2" marker-end="url(#m-rails)"/>
+          <text x="290" y="636" text-anchor="middle" font-size="13.5" class="halo">⑦ 200(偽物なら 401)</text>
+        </svg>
+      </div>
+      <p class="caption">④⑤ は毎回は起きません。Rails は取ってきた公開鍵を保存し、保存がないとき、保存の期限が切れたとき、知らない kid のトークンが届いたときだけ取り直します(06 章)。</p>
+      <div class="note">
+        <p>図の中で、<span class="t-rails">Rails</span> から <span class="t-fb">Firebase</span> への矢印が1本もないことに注目してください。また、④ で <span class="t-rails">Rails</span> が <span class="t-google">公開鍵の配布元</span>に送るのは「公開鍵をください」だけで、ID トークンは送りません。Google は、Rails がどのトークンを確かめようとしているのかを知りません。</p>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section id="steps">
+      <h2><span class="num">05</span>流れを手順で追う</h2>
+      <p>図の番号に沿って、誰が誰に何をするのかを見ていきます。</p>
+
+      <ol class="steps">
+        <li class="prep">
+          <div class="body">
+            <h3>前もって:Google が、鍵のペアを用意する</h3>
+            <div class="route"><span class="chip c-fb">Firebase Auth</span>と<span class="chip c-google">公開鍵の配布元</span>Vue がログインするより前</div>
+            <p>Google が、秘密鍵と公開鍵の1組を作ります。秘密鍵は <span class="t-fb">Firebase Authentication</span> の中にしまい、外には出しません。公開鍵は <span class="t-google">公開鍵の配布元</span>の URL に貼り出し、誰でも見られるようにします。</p>
+            <p>Firebase Authentication と公開鍵の配布元は、同じ Google が運営する別の窓口です。<span class="t-vue">Vue アプリ</span>が話しかけるのは Firebase Authentication だけで、<span class="t-rails">Rails</span> が見に行くのは公開鍵の配布元だけです。2つの窓口をつないでいるのは、この1組の鍵です。ID トークンを1枚発行するたびに、2つの窓口がやり取りするわけではありません。</p>
+            <p>Google が鍵を入れ替えるときは、Firebase Authentication の秘密鍵と、配布元に貼り出す公開鍵の両方を、Google が新しくします(06 章)。</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="body">
+            <h3>Firebase が、ID トークンに秘密鍵で署名する</h3>
+            <div class="route"><span class="chip c-fb">Firebase Auth</span>内部の処理</div>
+            <p>ログインが成功すると、<span class="t-fb">Firebase Authentication</span> が ID トークンの中身(uid、有効期限、宛先など)を作ります。次に、中身と秘密鍵から署名を計算し、トークンの末尾に付けます。ヘッダーには、どの鍵で署名したかを <code>kid</code> で書きます。</p>
+            <div class="code env">
+              <div class="file">ID トークンのヘッダー(1つ目の部分を JSON に戻したもの)</div>
+<pre>{
+  "alg": "RS256",
+  "kid": "<span class="cm">Google の鍵の番号</span>",
+  "typ": "JWT"
+}</pre>
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="body">
+            <h3>Firebase が、ID トークンを Vue アプリに渡す</h3>
+            <div class="route"><span class="chip c-fb">Firebase Auth</span>→<span class="chip c-vue">Vue アプリ</span></div>
+            <p>この時点でログインは完了しています。<span class="t-rails">Rails</span> はまだ何も知りません。</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="body">
+            <h3>Vue アプリが、ID トークンを付けて Rails の API を呼ぶ</h3>
+            <div class="route"><span class="chip c-vue">Vue アプリ</span>→<span class="chip c-rails">Rails API</span></div>
+            <p><span class="t-vue">Vue アプリ</span>が、<code>Authorization: Bearer &lt;ID トークン&gt;</code> を付けて <code>GET /api/me</code> を送ります。<span class="t-rails">Rails</span> から見ると、これは「本物かどうか分からない文字列」です。</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="body">
+            <h3>Rails が、Google に公開鍵を取りに行く(必要なときだけ)</h3>
+            <div class="route"><span class="chip c-rails">Rails API</span>→<span class="chip c-google">公開鍵の配布元</span></div>
+            <p><span class="t-rails">Rails</span> が、JWKS の URL に HTTP の GET を送ります。送るのは「公開鍵をください」というリクエストだけで、ID トークンは送りません。</p>
+            <p>ただし、保存してある鍵がまだ使える場合、Rails はこの手順を飛ばします。いつ取りに行くかは 06 章で説明します。</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="body">
+            <h3>Google が、公開鍵のセットを返す</h3>
+            <div class="route"><span class="chip c-google">公開鍵の配布元</span>→<span class="chip c-rails">Rails API</span></div>
+            <p><span class="t-google">公開鍵の配布元</span>が、公開鍵を並べた JSON(JWKS)を返します。レスポンスヘッダーの <code>Cache-Control: max-age</code> で、保存してよい秒数も伝えます。<span class="t-rails">Rails</span> は、鍵のセットと期限をメモリに保存します。</p>
+            <div class="code env">
+              <div class="file">JWKS の形(値は省略)</div>
+<pre>{
+  "keys": [
+    { "kid": "<span class="cm">鍵の番号A</span>", "kty": "RSA", "alg": "RS256", "use": "sig", "n": "…", "e": "AQAB" },
+    { "kid": "<span class="cm">鍵の番号B</span>", "kty": "RSA", "alg": "RS256", "use": "sig", "n": "…", "e": "AQAB" }
+  ]
+}</pre>
+            </div>
+            <p><code>n</code> と <code>e</code> が、公開鍵の本体の数値です。鍵が複数並んでいるのは、Google が鍵を入れ替える途中で、古い鍵で署名したトークンと新しい鍵で署名したトークンの両方が出回るためです。</p>
+            <p>JWKS の URL は、ブラウザでも開けます。Rails がこの手順でしていることを、人が手で試すのと同じです。2026年11月1日に開いたときは、次の JSON が返りました(<code>n</code> は途中を省略しています)。</p>
+            <div class="code env">
+              <div class="file">ブラウザで JWKS の URL を開いた結果(2026-11-01)</div>
+<pre>{
+  "keys": [
+    { "alg": "RS256", "kid": "81805e76fd5fa2fd91c2bb39e4b7ef05469bddce", "e": "AQAB", "kty": "RSA", "n": "7E01XMLvsyIH…0tVZw", "use": "sig" },
+    { "e": "AQAB", "kty": "RSA", "n": "22q04PsB_qjo…KY7wxw", "use": "sig", "alg": "RS256", "kid": "904b0f91be6eb0867dabbaab587dfc2e33f00a24" }
+  ]
+}</pre>
+            </div>
+            <p>この一覧には、次の3つの性質があります。</p>
+            <div class="tablewrap">
+              <table>
+                <thead><tr><th>性質</th><th>意味</th><th>Rails がしていること</th></tr></thead>
+                <tbody>
+                  <tr><td>誰が開いても同じ</td><td>ログインも API キーも要らない。世界中の誰が開いても、同じ JSON が返る</td><td>一度取ってきたら、すべてのリクエストで使い回す(06 章)</td></tr>
+                  <tr><td>ときどき入れ替わる</td><td>Google が鍵を入れ替えると、並ぶ kid が変わる。しばらくたってから開くと、上とは違う kid になっている</td><td>期限(max-age)が来たら取り直す。知らない kid のトークンが届いたら取り直す(06 章)</td></tr>
+                  <tr><td>すべてのプロジェクトで共通</td><td>このアプリ専用の鍵ではない。Firebase Authentication を使うすべてのプロジェクトが、同じ鍵で署名している</td><td>署名が合うだけでは、他人のプロジェクトのトークンも通ってしまう。そのため、宛先(<code>aud</code>)と発行元(<code>iss</code>)が自分のプロジェクトかも確かめる</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="body">
+            <h3>Rails が、kid に合う鍵を選び、署名を自分で確かめる</h3>
+            <div class="route"><span class="chip c-rails">Rails API</span>内部の処理</div>
+            <p><span class="t-rails">Rails</span>(の中の jwt gem)が、ID トークンのヘッダーの <code>kid</code> を読み、JWKS の中から同じ <code>kid</code> の公開鍵を選びます。そして、その公開鍵を使って、署名がトークンの中身と合うかを計算します。この計算は Rails の中だけで終わり、どこにも問い合わせません。</p>
+            <ul class="plain">
+              <li><strong>合った場合</strong>:秘密鍵を持つ Google が作ったトークンで、署名のあとで書き換えられていない、と分かります。続けて、有効期限や宛先などの中身を確かめます(<a href="../specs/008-verify-id-token.md">仕様書</a>の「検証で確かめること」の表)。</li>
+              <li><strong>合わなかった場合</strong>:偽物か、書き換えられたトークンです。Rails は 401 を返します。</li>
+            </ul>
+            <p>「署名がトークンの中身と合うか」の計算は、<a href="id-token-signature.html">ID トークンの署名</a>のページで、図で順に追っています。</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="body">
+            <h3>Rails が、結果を Vue アプリに返す</h3>
+            <div class="route"><span class="chip c-rails">Rails API</span>→<span class="chip c-vue">Vue アプリ</span></div>
+            <p>本物なら、<span class="t-rails">Rails</span> は uid で会員を探して(いなければ作って)200 を返します。偽物なら 401 を返します。</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- 6 -->
+    <section id="cache">
+      <h2><span class="num">06</span>鍵を保存して使い回す</h2>
+      <p>公開鍵はめったに変わりません。そのため <span class="t-rails">Rails</span> は、一度取ってきた鍵のセットをメモリに保存し、次のリクエストからは保存した鍵で手順6だけを行います。Rails が鍵を取り直すのは、次の3つの場面だけです。</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>場面</th><th>Rails の動き</th><th>理由</th></tr></thead>
+          <tbody>
+            <tr><td>起動して最初のリクエスト</td><td>取りに行く</td><td>まだ何も保存していない</td></tr>
+            <tr><td>保存の期限(max-age)が過ぎた</td><td>取り直す</td><td>Google が「この時間までは使ってよい」と示した期限が過ぎた</td></tr>
+            <tr><td>保存した鍵の中に、トークンの kid がない</td><td>取り直す</td><td>Google が鍵を入れ替えた直後かもしれない</td></tr>
+            <tr><td>それ以外</td><td>取りに行かない</td><td>保存した鍵で確かめられる</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>時間の流れで見る</h3>
+      <p>Google は、鍵のペアを同時に何組か持っていて、それぞれに番号(kid)を付けています。Firebase は、そのうちの1組の秘密鍵で ID トークンに署名し、使った鍵の kid をトークンのヘッダーに書きます。下の表の A、B、C は、kid を仮に呼んだ名前です。本物の kid は、長い英数字の文字列です。</p>
+      <p>max-age が 6 時間だった場合の例です(実際の秒数と、鍵を入れ替える時期は Google が決めます)。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>時刻</th><th>Google 側</th><th>届いたトークンの kid</th><th>Rails の手元の鍵</th><th>Rails の動き</th></tr></thead>
+          <tbody>
+            <tr><td>前もって</td><td>鍵のペア A と B を持ち、公開鍵 A と B を配布元に貼り出している。いまは B で署名している</td><td>—</td><td>なし</td><td>—</td></tr>
+            <tr><td>9:00</td><td>秘密鍵 B で署名したトークンを発行する</td><td>B</td><td>なし</td><td>取りに行く。A と B を保存し、期限を 15:00 にする。B で確かめる</td></tr>
+            <tr><td>9:05</td><td>秘密鍵 B で署名したトークンを発行する</td><td>B</td><td>A、B(15:00 まで)</td><td>取りに行かない。保存した B で確かめる</td></tr>
+            <tr><td>12:00</td><td>新しい鍵のペア C を作り、配布元に公開鍵 C を貼り出す(A は外す)。ここから C で署名する</td><td>—</td><td>A、B(15:00 まで)</td><td>何も知らない</td></tr>
+            <tr><td>13:00</td><td>秘密鍵 C で署名したトークンを発行する</td><td>C</td><td>A、B(15:00 まで)</td><td>C がないので取り直す。B と C を保存し、期限を 19:00 にする。C で確かめる</td></tr>
+            <tr><td>13:30</td><td>秘密鍵 C で署名したトークンを発行する</td><td>C</td><td>B、C(19:00 まで)</td><td>取りに行かない。保存した C で確かめる</td></tr>
+            <tr><td>19:30</td><td>秘密鍵 C で署名したトークンを発行する</td><td>C</td><td>B、C(期限切れ)</td><td>期限が切れたので取り直す</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>12:00 に Google が鍵を入れ替えても、Google は Rails に知らせません。そのため 13:00 には、Rails の手元の鍵が古いまま、新しい鍵 C で署名したトークンが届きます。Rails は「鍵が入れ替わったのかもしれない」と考え、期限の前でも自分で取り直します。</p>
+      <p>取り直しても kid が見つからなければ、そのトークンは偽物です。悪い人が、適当な kid を書いて作ったトークンだからです。Rails は 401 を返します。</p>
+      <p>配布元に古い公開鍵 B が残っているのは、ID トークンの有効期限が1時間だからです。鍵を入れ替えた直後は、古い鍵 B で署名したトークンがまだ有効なまま出回っています。そのため Google は、入れ替えのあともしばらく、古い公開鍵も貼り出しておきます。</p>
+
+      <h3>取り直すかどうかを決めるのは誰か</h3>
+      <p>jwt gem の <code>JWT.decode</code> に、「鍵のセットを返す処理」を <code>jwks:</code> として渡します。jwt gem は、この処理を次のように呼び分けます。</p>
+      <ol class="plain">
+        <li>まず、<code>{ kid: "トークンの kid" }</code> を付けて呼びます。Rails 側の処理は、保存した鍵が期限内ならそれを返し、期限切れなら取り直して返します。</li>
+        <li>返ってきたセットに kid がなければ、jwt gem はもう一度、<code>{ invalidate: true, kid_not_found: true, kid: … }</code> を付けて呼びます。Rails 側の処理は、<code>invalidate</code> を見て、期限内でも取り直します。</li>
+      </ol>
+      <p>つまり、「kid が見つからない」と気づくのは jwt gem で、「期限が切れたかどうか」と「実際に取りに行くこと」を受け持つのは Rails 側のコードです。</p>
+    </section>
+
+    <!-- 7 -->
+    <section id="analogy">
+      <h2><span class="num">07</span>例え話:入館証と印影の見本</h2>
+      <p>会社のビルに入る場面に置き換えると、次のように対応します。</p>
+      <div class="tablewrap">
+        <table class="analogy">
+          <thead><tr><th>ビルでの役割</th><th>このプロジェクト</th><th>補足</th></tr></thead>
+          <tbody>
+            <tr><td>受付</td><td><span class="t-fb">Firebase Authentication</span></td><td>入館証を発行し、公印を押す</td></tr>
+            <tr><td>公印(はんこ本体)</td><td>秘密鍵</td><td>受付だけが持っている。外には出さない</td></tr>
+            <tr><td>入館証に押された印</td><td>署名</td><td>入館証の中身ごとに形が変わる。書き換えると合わなくなる</td></tr>
+            <tr><td>印影の見本</td><td>公開鍵</td><td>見比べるためだけのもの。見本からはんこは作れない</td></tr>
+            <tr><td>見本を配る窓口</td><td><span class="t-google">公開鍵の配布元</span></td><td>誰が来ても見本を渡す。入館証は見ない</td></tr>
+            <tr><td>はんこの番号</td><td>kid</td><td>受付ははんこを何本か持っていて、入館証に「何番で押したか」を書く</td></tr>
+            <tr><td>見本の有効期限</td><td>max-age</td><td>窓口が「この見本は○時まで使ってよい」と添えて渡す</td></tr>
+            <tr><td>警備員</td><td><span class="t-rails">Rails API</span></td><td>見本を手元に置き、入館証の印と見比べる。受付に電話はしない</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>警備員は、来る人ごとに窓口へ見本をもらいに行ったりしません。手元の見本を使い回し、見本の期限が切れたときや、手元にない番号のはんこが押された入館証が来たときだけ、窓口へ新しい見本をもらいに行きます。このとき警備員が窓口に見せるのは「見本をください」という依頼だけで、入館証は見せません。</p>
+    </section>
+
+    <!-- 8 -->
+    <section id="why">
+      <h2><span class="num">08</span>なぜこの形なのか</h2>
+      <div class="whys">
+        <div class="why">
+          <h3>公開鍵を誰でも見られる場所に置いて大丈夫なのはなぜか</h3>
+          <p>公開鍵でできるのは、署名を確かめることだけです。署名を作るには秘密鍵が必要です。悪い人が公開鍵を手に入れても、本物の ID トークンは作れません。</p>
+          <p class="cost"><b>引き換えに守るべきもの:</b>確かめる側は「どの方式で確かめるか」を自分で決めておく必要があります。公開鍵を共通の鍵として使う HS256 や、署名なしの <code>none</code> を受け付けると、公開鍵を知っている人が偽物を作れてしまいます。そのため Rails は RS256 だけを受け付けます。</p>
+        </div>
+        <div class="why">
+          <h3>Rails が ID トークンを Google に送らないのはなぜか</h3>
+          <p>送る必要がないからです。公開鍵さえあれば、本物かどうかは Rails の手元の計算で分かります。問い合わせがない分、速く、Google が一時的に応答しなくても、保存した鍵の期限内なら Rails は動き続けます。</p>
+          <p class="cost"><b>引き換えに失うもの:</b>Firebase 側でユーザーを無効にしても、Rails は気づきません。発行済みの ID トークンは期限(1時間)まで通ります。</p>
+        </div>
+        <div class="why">
+          <h3>鍵を毎回取りに行かないのはなぜか</h3>
+          <p>公開鍵はめったに変わらないので、毎回取りに行くのは無駄です。毎回取りに行くと、リクエストのたびに通信が増えて遅くなり、A の方式(毎回問い合わせる)と同じ弱さを抱えます。</p>
+          <p class="cost"><b>引き換えに必要になるもの:</b>保存した鍵が古くなったときに気づく仕組みです。それが max-age と、知らない kid での取り直しです。</p>
+        </div>
+        <div class="why">
+          <h3>保存の期限を Google の max-age に合わせるのはなぜか</h3>
+          <p>鍵をいつ入れ替えるかを知っているのは Google だけだからです。Rails が勝手に「1日保存する」と決めると、Google が鍵を入れ替えたあとも古いセットを使い続けるおそれがあります。</p>
+        </div>
+        <div class="why">
+          <h3>知らない kid で取り直すのはなぜか</h3>
+          <p>Google が新しい鍵で署名し始めた直後は、Rails の保存したセットに新しい鍵がまだありません。取り直さないと、本物のトークンを偽物として 401 にしてしまいます。期限を待たずに取り直すことで、鍵の入れ替えの直後でも正しく確かめられます。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section id="project">
+      <h2><span class="num">09</span>このプロジェクトでの対応</h2>
+      <p>Issue #8 の<a href="../specs/008-verify-id-token.md">仕様書</a>と、どこが対応するかをまとめます。「手順」は、仕様書の「変更するファイル」の番号です。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>このページの言葉</th><th>コード</th><th>手順</th></tr></thead>
+          <tbody>
+            <tr><td>公開鍵を取りに行く(④⑤)</td><td><code>FirebaseIdTokenVerifier.download_jwks</code>。鍵のセットと max-age を返す</td><td>11</td></tr>
+            <tr><td>鍵を保存して使い回す(06 章)</td><td>検証のクラスの中のメモリ。複数のスレッドが同時に取り直さないよう <code>Mutex</code> で守る</td><td>11</td></tr>
+            <tr><td>保存した鍵を消す</td><td><code>FirebaseIdTokenVerifier.clear_jwks_cache!</code>。テストごとに呼ぶ</td><td>11</td></tr>
+            <tr><td>kid に合う鍵を選び、署名を確かめる(⑥)</td><td>jwt gem の <code>JWT.decode</code> に <code>jwks:</code> を渡す</td><td>11</td></tr>
+            <tr><td>期限内は取り直さない、期限が来たら取り直す</td><td>AC-10 のテスト</td><td>6</td></tr>
+            <tr><td>知らない kid で取り直す</td><td>AC-11 のテスト</td><td>6</td></tr>
+            <tr><td>知らない kid での取り直しは5分に1回まで(偽物を大量に送られても、Google への通信を増やさない)</td><td>AC-13 のテスト。間隔は <code>KID_NOT_FOUND_REFETCH_INTERVAL</code></td><td>6</td></tr>
+            <tr><td>別の鍵、知らない kid、HS256、none の偽物を 401 にする</td><td>AC-5 のテスト</td><td>5</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>テストでは、誰が Google の役をするか</h3>
+      <p>テストでは、本物の Google の秘密鍵は使えません。そこで、テスト用の道具(<a href="../../api/spec/support/firebase_id_token_helper.rb"><code>api/spec/support/firebase_id_token_helper.rb</code></a>)が、自分で鍵のペアを作って Google の役をします。</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>役割</th><th>本番</th><th>テスト</th></tr></thead>
+          <tbody>
+            <tr><td>秘密鍵を持つ</td><td><span class="t-fb">Firebase</span></td><td>テスト用の道具(<code>SIGNING_KEY</code>。実行中にメモリで作る)</td></tr>
+            <tr><td>ID トークンを作って署名する</td><td><span class="t-fb">Firebase</span></td><td><code>firebase_id_token</code></td></tr>
+            <tr><td>公開鍵を配る</td><td><span class="t-google">公開鍵の配布元</span></td><td><code>stub_firebase_public_keys</code> が <code>download_jwks</code> を差し替え、テストの公開鍵を返させる</td></tr>
+            <tr><td>公開鍵を取りに行き、確かめる</td><td colspan="2"><span class="t-rails">Rails</span>(検証のクラス)。ここはテストでも本物を使う</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>AC-10、AC-11、AC-13 のテスト(手順6)は、差し替えた <code>download_jwks</code> が<strong>何回呼ばれたか</strong>を数えます。呼ばれた回数が、Rails が Google に鍵を取りに行った回数にあたるからです。</p>
+    </section>
+
+    <!-- 10 -->
+    <section id="neighbors">
+      <h2><span class="num">10</span>似たものとの違い</h2>
+      <h3>公開鍵を設定ファイルで持つ方式</h3>
+      <p>発行者と確かめる側が同じ会社なら、公開鍵をファイルや環境変数で Rails に持たせることもできます。この場合は「誰かが Rails に公開鍵を渡す」形になります。Firebase では、鍵を入れ替えるのが Google なので、その都度だれかが Rails の設定を書き換えるわけにはいきません。そのため、Rails が URL から取りに行く形になります。</p>
+      <h3>共通の鍵(HS256)で確かめる方式</h3>
+      <p>HS256 では、署名を作る側と確かめる側が同じ秘密の鍵を共有します。Google が Firebase の秘密の鍵を Rails に渡すことはできないので、Firebase の ID トークンは RS256(秘密鍵と公開鍵)です。</p>
+      <h3>Firebase に失効を問い合わせる方式</h3>
+      <p>Firebase の Admin SDK には、トークンが取り消されていないかを Firebase に問い合わせる <code>checkRevoked</code> があります。これは 01 章の A の方式です。ログアウトやアカウントの停止がすぐ反映される代わりに、毎回の通信が増えます。Issue #8 では作りません。</p>
+    </section>
+
+    <!-- 11 -->
+    <section id="glossary">
+      <h2><span class="num">11</span>用語集</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>日本語</th><th>英語</th><th>意味</th></tr></thead>
+          <tbody>
+            <tr><td>署名</td><td>Signature</td><td>中身と秘密鍵から計算した値。中身が変わると合わなくなる</td></tr>
+            <tr><td>秘密鍵</td><td>Private key</td><td>署名を作る鍵。発行者(Google)だけが持つ</td></tr>
+            <tr><td>公開鍵</td><td>Public key</td><td>署名を確かめる鍵。誰に見られてもよい</td></tr>
+            <tr><td>公開鍵のセット</td><td>JWKS (JSON Web Key Set)</td><td>公開鍵を JSON で並べたもの。URL で配られる</td></tr>
+            <tr><td>鍵の番号</td><td>kid (Key ID)</td><td>どの鍵で署名したかを示す、トークンのヘッダーの値</td></tr>
+            <tr><td>鍵の入れ替え</td><td>Key rotation</td><td>発行者が、使う鍵を定期的に新しくすること</td></tr>
+            <tr><td>保存してよい秒数</td><td>max-age (Cache-Control)</td><td>レスポンスを保存して使い回してよい時間。HTTP のレスポンスヘッダーで伝える</td></tr>
+            <tr><td>キャッシュ</td><td>Cache</td><td>取ってきたものを手元に保存して使い回すこと</td></tr>
+            <tr><td>RS256</td><td>RSA Signature with SHA-256</td><td>秘密鍵で署名し、公開鍵で確かめる方式</td></tr>
+            <tr><td>HS256</td><td>HMAC with SHA-256</td><td>同じ秘密の鍵で署名し、確かめる方式</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 12 -->
+    <section id="questions">
+      <h2><span class="num">12</span>確かめる問い</h2>
+      <ol class="qs">
+        <li><div>Rails が Google の公開鍵の配布元にリクエストを送るとき、ID トークンは含まれますか。<span class="hint">04 章の図の ④ と、その下の注記です。</span></div></li>
+        <li><div>悪い人が JWKS の URL から公開鍵を手に入れたら、本物の ID トークンを作れますか。<span class="hint">08 章「誰でも見られる場所に置いて大丈夫なのはなぜか」です。</span></div></li>
+        <li><div>保存の期限内に、保存した鍵の中にない kid のトークンが届きました。Rails はどう動きますか。取り直しても見つからなかったら、どうなりますか。<span class="hint">06 章の時間の流れの 13:00 の行です。</span></div></li>
+        <li><div>手順6のテストで、<code>download_jwks</code> が呼ばれた回数を数えるのはなぜですか。<span class="hint">09 章の最後の段落です。</span></div></li>
+        <li><div>JWKS の URL をブラウザで開くと、何が表示されますか。<code>kid</code> はいくつ並んでいますか。<span class="hint">05 章の手順5。誰でも見られる URL なので、実際に開いて確かめられます。</span></div></li>
+      </ol>
+    </section>
+
+    <footer>
+      このページは、Issue #8 の仕様書とテスト用の道具、jwt gem 3.3.0 の <code>JWT::JWK::KeyFinder</code> をもとに書いています。09 章のコードの名前は、仕様書を書いた時点の予定です。
+    </footer>
+  </main>
+</div>
+</body>
+</html>

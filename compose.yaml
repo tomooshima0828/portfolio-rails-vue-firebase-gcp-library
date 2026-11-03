@@ -4,6 +4,8 @@ services:
     environment:
       # 開発専用の値。本番の値は Secret Manager に入れる(フェーズ2)
       POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:

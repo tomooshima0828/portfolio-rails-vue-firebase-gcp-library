@@ -54,7 +54,7 @@ Rails API のエンドポイント。ログインが必要なものは、`Author
 
 ## データモデル
 
-Rails(PostgreSQL)のテーブル。
+Rails(PostgreSQL)のテーブル。テーブルどうしの関連の全体像(予定のテーブルを含む)は、[notes/erd.md](notes/erd.md) の ERD にある。
 
 ### members
 

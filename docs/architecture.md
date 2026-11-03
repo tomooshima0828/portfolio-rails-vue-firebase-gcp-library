@@ -10,7 +10,7 @@
 | 機能 | 内容 | データの置き場所 | 状態 |
 |---|---|---|---|
 | ログイン | Google アカウントでログインする。Rails は Firebase の ID トークンを検証して会員を特定する | Firebase Auth | Rails の検証のみ(#8) |
-| 記事の投稿・編集・削除 | ログインした会員が、自分の記事を投稿・編集・削除する | Rails(PostgreSQL) | 未実装 |
+| 記事の投稿・編集・削除 | ログインした会員が、自分の記事を投稿・編集・削除する | Rails(PostgreSQL) | モデルのみ(#9) |
 | 記事の一覧・詳細 | 記事を一覧と詳細で表示する | Rails(PostgreSQL) | 未実装 |
 | 検索 | 記事をキーワードで検索する | Rails(PostgreSQL) | 未実装 |
 | タグ | 記事にタグを付け、タグで絞り込む | Rails(PostgreSQL) | 未実装 |
@@ -65,3 +65,17 @@ Rails(PostgreSQL)のテーブル。テーブルどうしの関連の全体像(�
 | `id` | bigint | 主キー |
 | `firebase_uid` | string | 必須、一意 |
 | `created_at`、`updated_at` | datetime | 必須 |
+
+### articles
+
+記事。会員が書いたタイトルと本文を持つ。
+
+| カラム | 型 | 制約 |
+|---|---|---|
+| `id` | bigint | 主キー |
+| `member_id` | bigint | 必須、`members` への外部キー、インデックス |
+| `title` | string | 必須。100文字まで(モデルのバリデーション) |
+| `body` | text | 必須 |
+| `created_at`、`updated_at` | datetime | 必須 |
+
+関連:会員(`members`)1人が、記事(`articles`)を複数持つ。

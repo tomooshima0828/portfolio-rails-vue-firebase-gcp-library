@@ -10,9 +10,18 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_01_053853) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_105035) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "articles", force: :cascade do |t|
+    t.bigint "member_id", null: false
+    t.string "title", null: false
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["member_id"], name: "index_articles_on_member_id"
+  end
 
   create_table "members", force: :cascade do |t|
     t.string "firebase_uid", null: false
@@ -20,4 +29,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_053853) do
     t.datetime "updated_at", null: false
     t.index ["firebase_uid"], name: "index_members_on_firebase_uid", unique: true
   end
+
+  add_foreign_key "articles", "members"
 end

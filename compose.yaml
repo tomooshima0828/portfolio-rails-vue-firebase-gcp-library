@@ -26,6 +26,8 @@ services:
       DB_HOST: db
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
+      # ${...} には、リポジトリ直下の .env の値が入る(見本は .env.example)
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +40,12 @@ services:
       - "5173:5173"
     volumes:
       - ./web:/app
+    environment:
+      # Vite は、名前が VITE_ で始まる環境変数を import.meta.env に出す
+      VITE_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY}
+      VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN}
+      VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID}
 
 volumes:
   db-data:

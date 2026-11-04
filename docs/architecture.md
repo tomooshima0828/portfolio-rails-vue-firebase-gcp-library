@@ -10,8 +10,8 @@
 | 機能 | 内容 | データの置き場所 | 状態 |
 |---|---|---|---|
 | ログイン | Google アカウントでログインする。Rails は Firebase の ID トークンを検証して会員を特定する | Firebase Auth | Rails の検証のみ(#8) |
-| 記事の投稿・編集・削除 | ログインした会員が、自分の記事を投稿・編集・削除する | Rails(PostgreSQL) | モデルのみ(#9) |
-| 記事の一覧・詳細 | 記事を一覧と詳細で表示する | Rails(PostgreSQL) | 未実装 |
+| 記事の投稿・編集・削除 | ログインした会員が、自分の記事を投稿・編集・削除する | Rails(PostgreSQL) | 投稿の API のみ(#10) |
+| 記事の一覧・詳細 | 記事を一覧と詳細で表示する | Rails(PostgreSQL) | 一覧の API のみ(#10) |
 | 検索 | 記事をキーワードで検索する | Rails(PostgreSQL) | 未実装 |
 | タグ | 記事にタグを付け、タグで絞り込む | Rails(PostgreSQL) | 未実装 |
 | ブックマーク | 会員が記事をブックマークし、一覧で見る | Rails(PostgreSQL) | 未実装 |
@@ -51,6 +51,8 @@ Rails API のエンドポイント。ログインが必要なものは、`Author
 | メソッドとパス | 内容 | ログイン | 仕様書 |
 |---|---|---|---|
 | `GET /api/me` | ログインしている会員の `id` と `firebase_uid` を返す。初めての uid なら会員を作る | 必要 | [#8](specs/008-verify-id-token.md) |
+| `GET /api/articles` | すべての会員の記事を、新しい順に返す | 不要 | [#10](specs/010-articles-api.md) |
+| `POST /api/articles` | ログインしている会員の記事として、記事を作る | 必要 | [#10](specs/010-articles-api.md) |
 
 ## データモデル
 

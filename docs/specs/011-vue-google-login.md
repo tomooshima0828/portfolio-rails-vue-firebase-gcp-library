@@ -95,7 +95,7 @@ API を呼ぶ関数
 - **`.env` は、リポジトリ直下に1つだけ置く**。Docker Compose は、`compose.yaml` と同じ場所の `.env` を自動で読み、`${FIREBASE_PROJECT_ID}` のように書いた箇所に値を入れる。プロジェクト ID を1か所に書けば、api と web の値がずれない。Vite は、名前が `VITE_` で始まる環境変数だけを `import.meta.env` に出すので、web には `VITE_` を付けた名前で渡す
 - **`.env` はオーナーが書く**。`.env` は Claude Code の deny の設定で読めないため(ai-guideline.md)
 - **Vue から Rails へは、Vite の proxy で転送する**。ブラウザから見ると、相手は `localhost:5173` だけになり、オリジンが1つなので CORS は起きない。本番で Firebase Hosting が `/api` を Cloud Run へ転送する案(notes/vue-production-hosting.html の案A)と同じ形になる。転送先は、Docker Compose のネットワークの中の名前 `api` を使う(web のコンテナから見た `localhost` は、web のコンテナ自身のため)
-- **proxy の `changeOrigin` は `false`(初期値)のままにする**。`true` にすると、Rails に届く Host ヘッダーが `api:3000` になり、Rails の開発環境の Host の確認(`config.hosts`)で弾かれる。`false` なら Host は `localhost:5173` のままで、Rails の開発環境が初めから許可している `localhost` に当たる
+- **proxy の `changeOrigin` は、明示して `false` にする**。`true` にすると、Rails に届く Host ヘッダーが `api:3000` になり、Rails の開発環境の Host の確認(`config.hosts`)で弾かれる。転送先を文字列だけで書く形(`'/api': 'http://api:3000'`)では、Vite が `true` にするため、`false` を書いておく必要がある。`false` なら Host は `localhost:5173` のままで、Rails の開発環境が初めから許可している `localhost` に当たる
 - **ログインはポップアップ(`signInWithPopup`)で行う**。リダイレクト(`signInWithRedirect`)は、画面のオリジンと `authDomain` が違うと、ブラウザのサードパーティの保存領域の制限で失敗することがある。ローカルの `localhost:5173` と `authDomain`(`<プロジェクト ID>.firebaseapp.com`)は違うオリジンなので、ポップアップを使う
 - **ログイン状態の保存は、Firebase の初期設定に任せる**。Firebase JS SDK は、ログイン状態をブラウザ(IndexedDB)に保存し、再読み込みのときに戻す(AC-5)。Pinia のストアは、`onAuthStateChanged` の知らせを受けて、自分の状態を更新するだけにする
 - **ストアは「確認中」の状態を持つ**。ページを開いた直後は、Firebase が保存したログイン状態を読み込む前なので、ログインしているかどうかがまだ分からない。この間にログインのボタンを出すと、ログインしている会員にも一瞬ボタンが見えるため、最初の `onAuthStateChanged` の知らせまでは何も出さない

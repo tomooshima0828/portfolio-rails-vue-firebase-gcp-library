@@ -629,9 +629,9 @@ td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; 
         <tbody>
           <tr><td>設定値</td><td>どの Firebase のプロジェクトかを表す4つの値(<code>apiKey</code>、<code>authDomain</code>、<code>projectId</code>、<code>appId</code>)。オーナーが <code>.env</code> に書く</td><td>図2 場面 0 で SDK に伝えるもの</td></tr>
           <tr><td><code>import.meta.env</code></td><td><span class="t-ours">Vue のコード</span> から環境変数を読む書き方。Rails の <code>ENV["..."]</code> にあたる。名前が <code>VITE_</code> で始まるものだけが読める</td><td>図2 場面 0 で、設定値を読むところ</td></tr>
-          <tr><td>Pinia のストア(<code>stores/auth.ts</code>)</td><td>複数の画面や部品が共有するデータを置く場所。データが変わると、それを使う画面が自動で表示を変える。このアプリでは、次の <code>user</code> と <code>ready</code> を持つ</td><td>図2 で「未ログイン」「ログイン中」の知らせを受け取る <span class="t-ours">Vue のコード</span></td></tr>
+          <tr><td>Pinia のストア(<code>stores/auth.ts</code>)</td><td>複数の画面や部品が共有するデータを置く場所。データが変わると、それを使う画面が自動で表示を変える。このアプリでは、次の <code>user</code> と <code>authStateReady</code> を持つ</td><td>図2 で「未ログイン」「ログイン中」の知らせを受け取る <span class="t-ours">Vue のコード</span></td></tr>
           <tr><td><code>user</code></td><td>ストアが持つ、ログインしている会員(または <code>null</code>)。SDK から知らせを受けて書き換える</td><td>図2 場面 1・2・4・5 の知らせの中身</td></tr>
-          <tr><td><code>ready</code></td><td>ストアが持つ、「ログイン状態の確認が終わったか」。最初の知らせが来るまで <code>false</code> で、その間、画面は何も出さない</td><td>図2 場面 1・5 の「探す」から「知らせる」までの間</td></tr>
+          <tr><td><code>authStateReady</code></td><td>ストアが持つ、「ログインしているかどうかの判定が終わったか」。最初の知らせが来るまで <code>false</code> で、その間、画面は何も出さない</td><td>図2 場面 1・5 の「探す」から「知らせる」までの間</td></tr>
           <tr><td><code>apiFetch</code>(<code>api/client.ts</code>)</td><td>SDK から ID トークンをもらい、<code>Authorization</code> の欄に入れて Rails を呼ぶ関数</td><td>図3 ③ と ④</td></tr>
           <tr><td><code>Authorization: Bearer …</code></td><td>Rails への依頼(リクエスト)の中の、ID トークンを書く決まった欄</td><td>図3 ④「リクエストに付けて送る」</td></tr>
         </tbody>

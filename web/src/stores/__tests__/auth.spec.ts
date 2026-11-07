@@ -33,7 +33,7 @@ describe('useAuthStore', () => {
   it('Firebase からログイン状態が知らされるまでは、確認中で、未ログインとして扱う', () => {
     const store = useAuthStore()
 
-    expect(store.ready).toBe(false)
+    expect(store.authStateReady).toBe(false)
     expect(store.user).toBeNull()
   })
 
@@ -43,7 +43,7 @@ describe('useAuthStore', () => {
     notifyAuthState(member)
 
     expect(store.user).toEqual(member)
-    expect(store.ready).toBe(true)
+    expect(store.authStateReady).toBe(true)
   })
 
   it('未ログインが知らされたとき、未ログインのまま、確認を終える', () => {
@@ -52,7 +52,7 @@ describe('useAuthStore', () => {
     notifyAuthState(null)
 
     expect(store.user).toBeNull()
-    expect(store.ready).toBe(true)
+    expect(store.authStateReady).toBe(true)
   })
 
   it('ログインするとき、Google のプロバイダーで signInWithPopup を呼ぶ', async () => {

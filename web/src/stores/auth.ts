@@ -14,13 +14,13 @@ import { auth } from '@/firebase'
 export const useAuthStore = defineStore('auth', () => {
   // SDK が作った会員のオブジェクトを入れるので、入れ替わりだけを見張る shallowRef にする
   const user = shallowRef<User | null>(null)
-  // 最初の知らせが来るまでは、ログインしているかどうかがまだ分からない
-  const ready = shallowRef(false)
+  // ログインしているかどうかの判定が終わったか。最初の知らせが来るまでは false(確認中)
+  const authStateReady = shallowRef(false)
 
   // SDK からの「未ログイン」「ログイン中」の知らせを受けて、ログイン状態を写す。user を書き換えるのはここだけ
   onAuthStateChanged(auth, (currentUser) => {
     user.value = currentUser
-    ready.value = true
+    authStateReady.value = true
   })
 
   // SDK にログインを頼む。失敗(ポップアップを閉じた、など)は、呼んだ画面に伝わる
@@ -33,5 +33,5 @@ export const useAuthStore = defineStore('auth', () => {
     await firebaseSignOut(auth)
   }
 
-  return { user, ready, signIn, signOut }
+  return { user, authStateReady, signIn, signOut }
 })

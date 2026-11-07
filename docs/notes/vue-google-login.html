@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vue の Google ログインの全体像</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Layout: 1カラムの読み物。id-token-signature.html と同じ書体。
+   登場人物の色を図と本文で固定する:会員=墨、Vue のコード=紫、Firebase の SDK=青、ブラウザの保存領域=茶、Google=青緑、Rails=赤 */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --person: #1a2130;
+  --ours: #7b3fa6;     --ours-soft: #efe4f6;
+  --sdk: #3f67a3;      --sdk-soft: #e3eaf5;
+  --db: #8a5a14;       --db-soft: #f6ecd9;
+  --goog: #0f766e;     --goog-soft: #dcf1ee;
+  --rails: #b0303d;    --rails-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --person: #e5e8ee;
+    --ours: #c49bf0;  --ours-soft: #2b1f3a;
+    --sdk: #8badde;   --sdk-soft: #1a2538;
+    --db: #e0b46a;    --db-soft: #33281a;
+    --goog: #4fd1c5;  --goog-soft: #12302d;
+    --rails: #ef7480; --rails-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --person: #e5e8ee;
+  --ours: #c49bf0;  --ours-soft: #2b1f3a;
+  --sdk: #8badde;   --sdk-soft: #1a2538;
+  --db: #e0b46a;    --db-soft: #33281a;
+  --goog: #4fd1c5;  --goog-soft: #12302d;
+  --rails: #ef7480; --rails-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+.t-person { color: var(--person); font-weight: 700; }
+.t-ours { color: var(--ours); font-weight: 700; }
+.t-sdk { color: var(--sdk); font-weight: 700; }
+.t-db { color: var(--db); font-weight: 700; }
+.t-goog { color: var(--goog); font-weight: 700; }
+.t-rails { color: var(--rails); font-weight: 700; }
+
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.person { border-left-color: var(--person); }
+.card.ours { border-left-color: var(--ours); }
+.card.sdk { border-left-color: var(--sdk); }
+.card.db { border-left-color: var(--db); }
+.card.goog { border-left-color: var(--goog); }
+.card.rails { border-left-color: var(--rails); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .b { font-weight: 700; }
+svg .lab-ours { fill: var(--ours); font-weight: 700; font-size: 11.5px; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-person { fill: var(--surface); stroke: var(--person); stroke-width: 1.5; }
+svg .bx-ours { fill: var(--ours-soft); stroke: var(--ours); stroke-width: 1.5; }
+svg .bx-sdk { fill: var(--sdk-soft); stroke: var(--sdk); stroke-width: 1.5; }
+svg .bx-db { fill: var(--db-soft); stroke: var(--db); stroke-width: 1.5; }
+svg .bx-goog { fill: var(--goog-soft); stroke: var(--goog); stroke-width: 1.5; }
+svg .bx-rails { fill: var(--rails-soft); stroke: var(--rails); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-ours { fill: var(--ours-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-person { stroke: var(--person); stroke-width: 1.6; fill: none; }
+svg .ln-ours { stroke: var(--ours); stroke-width: 1.8; fill: none; }
+svg .ln-sdk { stroke: var(--sdk); stroke-width: 1.8; fill: none; }
+svg .ln-goog { stroke: var(--goog); stroke-width: 1.8; fill: none; }
+svg .ln-rails { stroke: var(--rails); stroke-width: 1.8; fill: none; }
+svg .mk { fill: var(--muted); }
+svg .mk-person { fill: var(--person); }
+svg .mk-ours { fill: var(--ours); }
+svg .mk-sdk { fill: var(--sdk); }
+svg .mk-goog { fill: var(--goog); }
+svg .mk-rails { fill: var(--rails); }
+
+/* 場面ごとの手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.here { border-left-color: var(--ours); }
+
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--ours-soft); }
+
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+
+/* ID トークンの居場所 */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.hand { color: var(--sdk); background: var(--sdk-soft); }
+.loc.db { color: var(--db); background: var(--db-soft); }
+.loc.vue { color: var(--ours); background: var(--ours-soft); }
+.loc.rails { color: var(--rails); background: var(--rails-soft); }
+.loc.goog { color: var(--goog); background: var(--goog-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #11 · 学習メモ</p>
+    <h1>Vue の Google ログインの全体像</h1>
+    <p class="lead">Issue #11 では、会員が Vue の画面から Google アカウントでログインし、Rails がその会員を知るところまでを作ります。このページでは、細かい仕組みに入る前に、全体で何が起きるのかを見渡します。</p>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>誰が登場するか(2章)</li>
+        <li>ページを開いてから、ログインして Rails を呼ぶまでに、何が起きるか(3章)</li>
+        <li>ID トークンを、誰が、どこに持ち、どう Rails まで届けるか(4章)</li>
+        <li>コードに出てくる名前が、図のどこにあたるか(5章)</li>
+        <li>今書いている手順 11 の <code>firebase.ts</code> が何をするか(6章)と、全体のどこにあたるか(7章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:なぜこういう形になるのか</h2>
+    <p>このアプリでは、<span class="t-rails">Rails</span> は会員のパスワードを持ちません。ログインそのものは <span class="t-goog">Google</span> に任せます。</p>
+    <p>ただ、そうすると <span class="t-rails">Rails</span> は「今リクエストしてきたのは誰か」を自分では分かりません。そこで、<span class="t-goog">Google</span> がログインした人に <strong>ID トークン</strong>(ログインした証明書)を発行し、<span class="t-ours">Vue</span> がそれを <span class="t-rails">Rails</span> に見せます。<span class="t-rails">Rails</span> は、ID トークンが本物かを確かめて、会員を特定します。この「確かめる」部分は、Issue #8 で作りました。</p>
+    <p>Issue #11 で作るのは、残りの <strong>Vue の部分</strong>です。ログインのボタンを出し、Google でログインさせ、受け取った ID トークンを Rails に見せるところまでです。</p>
+  </section>
+
+  <section id="cast">
+    <h2><span class="num">2</span>登場人物</h2>
+    <p>登場人物は6人です。3人はブラウザの中にいて、2人はインターネットの先にいます。色は、このページの図と本文で共通です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 800 290" role="img" aria-label="会員がブラウザを操作する。ブラウザの中に、Vue のコード、Firebase の SDK、ブラウザの保存領域がある。インターネットの先に、Google と Rails がある。Vue のコードは Firebase の SDK を使う。Firebase の SDK は保存領域に保存し、Google とログインのやりとりをする。Vue のコードは Rails の API を呼ぶ">
+          <defs>
+            <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <!-- person -->
+          <rect x="20" y="75" width="110" height="60" rx="8" class="bx-person"/>
+          <text x="75" y="101" text-anchor="middle" class="b">会員</text>
+          <text x="75" y="121" text-anchor="middle" class="s">あなた</text>
+
+          <!-- browser -->
+          <rect x="160" y="20" width="370" height="260" rx="12" class="bx-frame"/>
+          <text x="176" y="44" class="s">ブラウザの中</text>
+
+          <rect x="180" y="70" width="140" height="70" rx="8" class="bx-ours"/>
+          <text x="250" y="99" text-anchor="middle" class="b">Vue のコード</text>
+          <text x="250" y="121" text-anchor="middle" class="s">私たちが書く</text>
+
+          <rect x="360" y="70" width="150" height="70" rx="8" class="bx-sdk"/>
+          <text x="435" y="99" text-anchor="middle" class="b">Firebase の SDK</text>
+          <text x="435" y="121" text-anchor="middle" class="s">Google が配るライブラリ</text>
+
+          <rect x="360" y="175" width="150" height="60" rx="8" class="bx-db"/>
+          <text x="435" y="201" text-anchor="middle" class="b">保存領域</text>
+          <text x="435" y="221" text-anchor="middle" class="s">ブラウザが持つ</text>
+
+          <!-- internet -->
+          <rect x="560" y="20" width="225" height="260" rx="12" class="bx-frame"/>
+          <text x="576" y="44" class="s">インターネットの先</text>
+
+          <rect x="590" y="70" width="170" height="70" rx="8" class="bx-goog"/>
+          <text x="675" y="99" text-anchor="middle" class="b">Google</text>
+          <text x="675" y="121" text-anchor="middle" class="s">ログイン画面と Firebase</text>
+
+          <rect x="590" y="175" width="170" height="60" rx="8" class="bx-rails"/>
+          <text x="675" y="201" text-anchor="middle" class="b">Rails</text>
+          <text x="675" y="221" text-anchor="middle" class="s">私たちが書く(Issue #8)</text>
+
+          <!-- lines -->
+          <line x1="130" y1="105" x2="176" y2="105" class="ln" marker-end="url(#c1)"/>
+          <text x="153" y="97" text-anchor="middle" class="s">操作</text>
+
+          <line x1="320" y1="105" x2="356" y2="105" class="ln" marker-end="url(#c1)"/>
+          <text x="338" y="97" text-anchor="middle" class="s">使う</text>
+
+          <line x1="435" y1="140" x2="435" y2="171" class="ln" marker-start="url(#c1)" marker-end="url(#c1)"/>
+          <text x="443" y="161" class="s">保存・読み出し</text>
+
+          <line x1="510" y1="92" x2="586" y2="92" class="ln" marker-start="url(#c1)" marker-end="url(#c1)"/>
+          <text x="548" y="84" text-anchor="middle" class="s">ログイン</text>
+
+          <path d="M250 140 V258 H545 V205 H586" class="ln" marker-end="url(#c1)"/>
+          <text x="398" y="252" text-anchor="middle" class="s">API を呼ぶ(ID トークンを付けて)</text>
+        </svg>
+      </div>
+      <figcaption>図1:<span class="t-ours">Vue のコード</span> は、Google とは直接やりとりしません。Google とのやりとりは、<span class="t-sdk">Firebase の SDK</span> に任せます。<span class="t-rails">Rails</span> とは、<span class="t-ours">Vue のコード</span> が直接やりとりします。</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card person"><p><span class="who t-person">会員(あなた)</span><span class="kind">人</span>ブラウザで画面を見て、ボタンを押す人</p></div>
+      <div class="card ours"><p><span class="who t-ours">Vue のコード</span><span class="kind">ブラウザの中 · 私たちが書く</span>画面を出すプログラム。Issue #11 では4つのファイルに分けて書く(4章)</p></div>
+      <div class="card sdk"><p><span class="who t-sdk">Firebase の SDK</span><span class="kind">ブラウザの中 · Google が配るライブラリ</span>Vue のコードの中で動く。Google とのログインの手続きを代わりに行い、受け取った ID トークンを持っておく</p></div>
+      <div class="card db"><p><span class="who t-db">ブラウザの保存領域</span><span class="kind">ブラウザの中 · ブラウザが持つ</span>タブを閉じても消えない場所。Firebase の SDK が、ここにログイン状態(ID トークンなど)を保存する。私たちのコードは直接触らない</p></div>
+      <div class="card goog"><p><span class="who t-goog">Google</span><span class="kind">インターネットの先</span>ログイン画面を出す。ログインした会員に、ID トークンを発行する(Firebase のサーバーもここに含める)</p></div>
+      <div class="card rails"><p><span class="who t-rails">Rails</span><span class="kind">インターネットの先 · 私たちが書いた</span>ID トークンが本物かを確かめ、会員を特定して、会員の id を返す(Issue #8)</p></div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">3</span>全体の流れ</h2>
+    <p>Issue #11 で起きることを、6つの場面に分けました。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 820 960" role="img" aria-label="場面0から5までの流れ。0 準備で Vue のコードが窓口を作る。1 初めて開くと、SDK が保存領域を探し、なければ未ログインと知らせ、ボタンを出す。2 ログインでは、ボタンを押すと SDK がポップアップを開き、会員が Google でログインし、Google が ID トークンを SDK に渡し、SDK が保存してログイン中と知らせる。3 Vue のコードが SDK から ID トークンをもらい、Rails の /api/me を呼び、会員の id を画面に出す。4 ログアウトでは SDK が保存を消し、未ログインと知らせる。5 開き直すと SDK が保存領域からログイン状態を見つけ、ログイン中と知らせ、場面3がもう一度起きる">
+          <defs>
+            <marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-person"/></marker>
+            <marker id="mo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-ours"/></marker>
+            <marker id="ms" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-sdk"/></marker>
+            <marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-goog"/></marker>
+            <marker id="mr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-rails"/></marker>
+          </defs>
+
+          <!-- scene bands -->
+          <rect x="0" y="96" width="820" height="60" class="band-ours"/>
+          <rect x="0" y="160" width="820" height="104" class="band"/>
+          <rect x="0" y="268" width="820" height="228" class="band"/>
+          <rect x="0" y="500" width="820" height="194" class="band"/>
+          <rect x="0" y="698" width="820" height="132" class="band"/>
+          <rect x="0" y="834" width="820" height="116" class="band"/>
+
+          <!-- scene labels -->
+          <text x="12" y="120" class="scene">場面 0</text>
+          <text x="12" y="138" class="a">準備</text>
+          <text x="12" y="151" class="lab-ours">今ここ(手順 11)</text>
+          <text x="12" y="184" class="scene">場面 1</text>
+          <text x="12" y="202" class="a">初めて開く</text>
+          <text x="12" y="292" class="scene">場面 2</text>
+          <text x="12" y="310" class="a">ログインする</text>
+          <text x="12" y="524" class="scene">場面 3</text>
+          <text x="12" y="542" class="a">Rails を呼ぶ</text>
+          <text x="12" y="722" class="scene">場面 4</text>
+          <text x="12" y="740" class="a">ログアウト</text>
+          <text x="12" y="858" class="scene">場面 5</text>
+          <text x="12" y="876" class="a">開き直す</text>
+
+          <!-- group brackets -->
+          <path d="M238 38 V30 H562 V38" class="ln"/>
+          <text x="400" y="22" text-anchor="middle" class="s">ブラウザの中</text>
+          <path d="M578 38 V30 H806 V38" class="ln"/>
+          <text x="692" y="22" text-anchor="middle" class="s">インターネットの先</text>
+
+          <!-- lifelines -->
+          <line x1="180" y1="88" x2="180" y2="950" class="life"/>
+          <line x1="290" y1="88" x2="290" y2="950" class="life"/>
+          <line x1="400" y1="88" x2="400" y2="950" class="life"/>
+          <line x1="510" y1="88" x2="510" y2="950" class="life"/>
+          <line x1="630" y1="88" x2="630" y2="950" class="life"/>
+          <line x1="750" y1="88" x2="750" y2="950" class="life"/>
+
+          <!-- headers -->
+          <rect x="132" y="44" width="96" height="44" rx="7" class="bx-person"/>
+          <text x="180" y="71" text-anchor="middle" class="b a">会員</text>
+          <rect x="242" y="44" width="96" height="44" rx="7" class="bx-ours"/>
+          <text x="290" y="63" text-anchor="middle" class="b a">Vue の</text>
+          <text x="290" y="80" text-anchor="middle" class="b a">コード</text>
+          <rect x="352" y="44" width="96" height="44" rx="7" class="bx-sdk"/>
+          <text x="400" y="63" text-anchor="middle" class="b a">Firebase</text>
+          <text x="400" y="80" text-anchor="middle" class="b a">の SDK</text>
+          <rect x="462" y="44" width="96" height="44" rx="7" class="bx-db"/>
+          <text x="510" y="71" text-anchor="middle" class="b a">保存領域</text>
+          <rect x="582" y="44" width="96" height="44" rx="7" class="bx-goog"/>
+          <text x="630" y="71" text-anchor="middle" class="b a">Google</text>
+          <rect x="702" y="44" width="96" height="44" rx="7" class="bx-rails"/>
+          <text x="750" y="71" text-anchor="middle" class="b a">Rails</text>
+
+          <!-- 場面 0 -->
+          <line x1="290" y1="128" x2="396" y2="128" class="ln-ours" marker-end="url(#mo)"/>
+          <text x="345" y="120" text-anchor="middle" class="a">窓口を作る</text>
+
+          <!-- 場面 1 -->
+          <line x1="400" y1="190" x2="506" y2="190" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="455" y="182" text-anchor="middle" class="a">探す(なし)</text>
+          <line x1="400" y1="220" x2="294" y2="220" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="345" y="212" text-anchor="middle" class="a">未ログイン</text>
+          <line x1="290" y1="250" x2="184" y2="250" class="ln-ours" marker-end="url(#mo)"/>
+          <text x="235" y="242" text-anchor="middle" class="a">ボタンを出す</text>
+
+          <!-- 場面 2 -->
+          <line x1="180" y1="300" x2="286" y2="300" class="ln-person" marker-end="url(#mp)"/>
+          <text x="235" y="292" text-anchor="middle" class="a">ボタンを押す</text>
+          <line x1="290" y1="330" x2="396" y2="330" class="ln-ours" marker-end="url(#mo)"/>
+          <text x="345" y="322" text-anchor="middle" class="a">ログインを頼む</text>
+          <line x1="400" y1="360" x2="626" y2="360" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="515" y="352" text-anchor="middle" class="a">ポップアップを開く</text>
+          <line x1="180" y1="390" x2="626" y2="390" class="ln-person" marker-end="url(#mp)"/>
+          <text x="405" y="382" text-anchor="middle" class="a">Google の画面でログインする</text>
+          <line x1="630" y1="420" x2="404" y2="420" class="ln-goog" marker-end="url(#mg)"/>
+          <text x="515" y="412" text-anchor="middle" class="a">ID トークンを渡す</text>
+          <line x1="400" y1="450" x2="506" y2="450" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="455" y="442" text-anchor="middle" class="a">ID トークンを保存</text>
+          <line x1="400" y1="480" x2="294" y2="480" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="345" y="472" text-anchor="middle" class="a">ログイン中</text>
+
+          <!-- 場面 3 -->
+          <line x1="290" y1="530" x2="396" y2="530" class="ln-ours" marker-end="url(#mo)"/>
+          <text x="345" y="522" text-anchor="middle" class="a">トークンを頼む</text>
+          <line x1="400" y1="560" x2="294" y2="560" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="345" y="552" text-anchor="middle" class="a">ID トークン</text>
+          <text x="408" y="564" class="s">手元から渡す</text>
+          <line x1="290" y1="590" x2="746" y2="590" class="ln-ours" marker-end="url(#mo)"/>
+          <text x="518" y="582" text-anchor="middle" class="a">GET /api/me(ID トークンを付けて)</text>
+          <rect x="696" y="604" width="108" height="26" rx="5" class="bx-rails"/>
+          <text x="750" y="621" text-anchor="middle" class="a">トークンを検証</text>
+          <line x1="750" y1="650" x2="294" y2="650" class="ln-rails" marker-end="url(#mr)"/>
+          <text x="518" y="642" text-anchor="middle" class="a">会員の id</text>
+          <line x1="290" y1="680" x2="184" y2="680" class="ln-ours" marker-end="url(#mo)"/>
+          <text x="235" y="672" text-anchor="middle" class="a">会員 ID を出す</text>
+
+          <!-- 場面 4 -->
+          <line x1="180" y1="728" x2="286" y2="728" class="ln-person" marker-end="url(#mp)"/>
+          <text x="235" y="720" text-anchor="middle" class="a">ボタンを押す</text>
+          <line x1="290" y1="758" x2="396" y2="758" class="ln-ours" marker-end="url(#mo)"/>
+          <text x="345" y="750" text-anchor="middle" class="a">ログアウトを頼む</text>
+          <line x1="400" y1="788" x2="506" y2="788" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="455" y="780" text-anchor="middle" class="a">消す</text>
+          <line x1="400" y1="818" x2="294" y2="818" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="345" y="810" text-anchor="middle" class="a">未ログイン</text>
+
+          <!-- 場面 5 -->
+          <line x1="400" y1="864" x2="506" y2="864" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="455" y="856" text-anchor="middle" class="a">探す(あり)</text>
+          <line x1="400" y1="894" x2="294" y2="894" class="ln-sdk" marker-end="url(#ms)"/>
+          <text x="345" y="886" text-anchor="middle" class="a">ログイン中</text>
+          <text x="520" y="932" text-anchor="middle" class="s">このあと、場面 3 と同じことが起きる</text>
+        </svg>
+      </div>
+      <figcaption>図2:場面 0 は、ページを開くたびに最初に起きます(場面 1 と 5 の前にも起きています)。<span class="t-ours">Vue のコード</span> が <span class="t-rails">Rails</span> を呼ぶのは場面 3 だけで、それ以外は <span class="t-sdk">Firebase の SDK</span> とのやりとりです。</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 0:準備<span class="tag">ページを開くたび、最初に</span></h3>
+    <ol class="flow">
+      <li><span class="t-ours">Vue のコード</span> が、<span class="t-sdk">Firebase の SDK</span> に、どの Firebase のプロジェクトとやりとりするかを伝える。<span class="t-sdk">Firebase の SDK</span> は、そのプロジェクトとやりとりするための窓口を作る</li>
+    </ol>
+    <div class="note here"><p>今書こうとしている手順 11 の <code>firebase.ts</code> は、この1行だけを受け持ちます。場面 1〜5 で <span class="t-ours">Vue のコード</span> が <span class="t-sdk">Firebase の SDK</span> に何かを頼むときは、必ずこの窓口を通します。</p></div>
+
+    <h3 class="scene-h">場面 1:初めて開く<span class="tag">未ログイン</span></h3>
+    <ol class="flow">
+      <li><span class="t-sdk">Firebase の SDK</span> が、<span class="t-db">ブラウザの保存領域</span> に、前回のログイン状態があるか探す。初めてなので、ない</li>
+      <li><span class="t-sdk">Firebase の SDK</span> が、<span class="t-ours">Vue のコード</span> に「未ログイン」と知らせる</li>
+      <li><span class="t-ours">Vue のコード</span> が、画面にログインのボタンを出す</li>
+    </ol>
+    <div class="note"><p>完成したアプリでは、未ログインでも記事の一覧が見られます(記事の一覧の API はログインが要りません)。ただ、記事の画面は Issue #12 で作ります。Issue #11 の画面にあるのは、ログインのボタンと会員の id だけです。</p></div>
+
+    <h3 class="scene-h">場面 2:ログインする</h3>
+    <ol class="flow">
+      <li><span class="t-person">会員</span> が、ログインのボタンを押す</li>
+      <li><span class="t-ours">Vue のコード</span> が、<span class="t-sdk">Firebase の SDK</span> にログインを頼む</li>
+      <li><span class="t-sdk">Firebase の SDK</span> が、ポップアップ(小さな別ウィンドウ)を開き、<span class="t-goog">Google</span> のログイン画面を出す</li>
+      <li><span class="t-person">会員</span> が、ポップアップの中で Google アカウントを選び、ログインする</li>
+      <li><span class="t-goog">Google</span> が、ID トークンを発行して、<span class="t-sdk">Firebase の SDK</span> に渡す。ポップアップは閉じる</li>
+      <li><span class="t-sdk">Firebase の SDK</span> が、ID トークンを手元に持っておく。同じものを、<span class="t-db">ブラウザの保存領域</span> にも保存する</li>
+      <li><span class="t-sdk">Firebase の SDK</span> が、<span class="t-ours">Vue のコード</span> に「ログイン中」と知らせる</li>
+    </ol>
+    <div class="note">
+      <p><span class="t-sdk">Firebase の SDK</span> は、ID トークンを2か所に持ちます。</p>
+      <div class="tablewrap" style="margin: 4px 0 8px;">
+        <table>
+          <thead><tr><th>置き場所</th><th>性質</th><th>何に使うか</th></tr></thead>
+          <tbody>
+            <tr><td>SDK の手元(メモリ)</td><td>ページを閉じると消える</td><td>場面 3 で、<span class="t-ours">Vue のコード</span> に渡す</td></tr>
+            <tr><td><span class="t-db">ブラウザの保存領域</span></td><td>ページを閉じても残る</td><td>場面 5 で、ページを開き直したときに手元へ読み戻す</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><span class="t-ours">Vue のコード</span> は、保存領域を直接読みません。ID トークンが欲しいときは、いつも <span class="t-sdk">Firebase の SDK</span> に頼みます(場面 3)。</p>
+    </div>
+
+    <h3 class="scene-h">場面 3:Rails を呼ぶ<span class="tag">「ログイン中」と知らされたら</span></h3>
+    <ol class="flow">
+      <li><span class="t-ours">Vue のコード</span> が、<span class="t-sdk">Firebase の SDK</span> に ID トークンを頼む</li>
+      <li><span class="t-sdk">Firebase の SDK</span> が、手元に持っている ID トークンを、<span class="t-ours">Vue のコード</span> に渡す。ID トークンの期限(1時間)が近いときは、先に <span class="t-goog">Google</span> から新しい ID トークンを取り直してから渡す</li>
+      <li><span class="t-ours">Vue のコード</span> が、ID トークンを付けて、<span class="t-rails">Rails</span> の <code>GET /api/me</code> を呼ぶ</li>
+      <li><span class="t-rails">Rails</span> が、ID トークンが本物かを確かめ、会員を特定する。初めての会員なら、会員を作る(Issue #8)</li>
+      <li><span class="t-rails">Rails</span> が、<span class="t-ours">Vue のコード</span> に会員の id を返す</li>
+      <li><span class="t-ours">Vue のコード</span> が、画面に「会員 ID:1」とログアウトのボタンを出す</li>
+    </ol>
+
+    <h3 class="scene-h">場面 4:ログアウトする</h3>
+    <ol class="flow">
+      <li><span class="t-person">会員</span> が、ログアウトのボタンを押す</li>
+      <li><span class="t-ours">Vue のコード</span> が、<span class="t-sdk">Firebase の SDK</span> にログアウトを頼む</li>
+      <li><span class="t-sdk">Firebase の SDK</span> が、手元と <span class="t-db">ブラウザの保存領域</span> の両方から、ID トークンなどのログイン状態を消す</li>
+      <li><span class="t-sdk">Firebase の SDK</span> が、<span class="t-ours">Vue のコード</span> に「未ログイン」と知らせる。<span class="t-ours">Vue のコード</span> は、画面をログインのボタンに戻す</li>
+    </ol>
+
+    <h3 class="scene-h">場面 5:開き直す<span class="tag">ログインしたまま、再読み込みする・開き直す</span></h3>
+    <ol class="flow">
+      <li><span class="t-sdk">Firebase の SDK</span> が、<span class="t-db">ブラウザの保存領域</span> に、前回のログイン状態があるか探す。場面 2 で保存したので、ある。SDK は、見つけた ID トークンなどを手元に読み戻す</li>
+      <li><span class="t-sdk">Firebase の SDK</span> が、<span class="t-ours">Vue のコード</span> に「ログイン中」と知らせる</li>
+      <li>このあと、場面 3 と同じことが起きる</li>
+    </ol>
+    <div class="note"><p>場面 1 と場面 5 は、同じ仕組みです。違うのは、<span class="t-db">ブラウザの保存領域</span> にログイン状態があるかどうかだけです。</p></div>
+  </section>
+
+  <section id="token">
+    <h2><span class="num">4</span>ID トークンを追う</h2>
+    <p>3章の場面のうち、いちばん大事なのは「ID トークンを、誰が、どこに持ち、どう Rails まで届けるか」です。この章では、ID トークンだけに注目して、生まれてから消えるまでを追います。</p>
+
+    <h3>たとえ話:入館証</h3>
+    <p>ID トークンを、会社の<strong>入館証</strong>にたとえます。入館証には、発行所の印鑑が押してあり、「この人は誰か」と「有効期限(1時間)」が書いてあります。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>たとえ話</th><th>このアプリでは</th></tr></thead>
+        <tbody>
+          <tr><td>入館証(印鑑つき、期限1時間)</td><td>ID トークン</td></tr>
+          <tr><td>入館証の発行所</td><td><span class="t-goog">Google</span></td></tr>
+          <tr><td>入館証の管理係。あなたの代わりに入館証を預かる</td><td><span class="t-sdk">Firebase の SDK</span></td></tr>
+          <tr><td>管理係の机の上。すぐ取り出せるが、退勤すると片付けられる</td><td>SDK の手元(ページを閉じると消える)</td></tr>
+          <tr><td>管理係のロッカー。退勤しても中身が残る</td><td><span class="t-db">ブラウザの保存領域</span></td></tr>
+          <tr><td>届け係。窓口に用事を頼みに行くとき、管理係から入館証を借りて見せる</td><td><span class="t-ours">Vue のコード</span></td></tr>
+          <tr><td>用事を受け付ける窓口。入館証の印鑑が本物かを確かめてから受け付ける</td><td><span class="t-rails">Rails</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 460" role="img" aria-label="ID トークンの動き。1 Google が発行して SDK に渡す。2 SDK が写しを保存領域にしまう。3 SDK が Vue のコードに渡す。4 Vue のコードがリクエストに付けて Rails に送る。5 Rails が確かめる。6 期限が近いと Google が新しいものを SDK に渡す。7 ページを閉じると手元のものは消える。8 開き直すと保存領域から手元に読み戻す。9 ログアウトすると両方から消える">
+          <defs>
+            <marker id="t1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-goog"/></marker>
+            <marker id="t2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-sdk"/></marker>
+            <marker id="t3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-ours"/></marker>
+          </defs>
+
+          <text x="380" y="54" text-anchor="middle" class="s">インターネットの先</text>
+          <rect x="40" y="20" width="200" height="60" rx="8" class="bx-goog"/>
+          <text x="140" y="46" text-anchor="middle" class="b">Google</text>
+          <text x="140" y="66" text-anchor="middle" class="s">発行所</text>
+          <rect x="500" y="20" width="220" height="60" rx="8" class="bx-rails"/>
+          <text x="610" y="44" text-anchor="middle" class="b">Rails</text>
+          <text x="610" y="65" text-anchor="middle" class="s">⑤ 印鑑を確かめて、会員を特定</text>
+
+          <rect x="20" y="120" width="720" height="325" rx="12" class="bx-frame"/>
+          <text x="36" y="144" class="s">ブラウザの中</text>
+
+          <rect x="60" y="170" width="220" height="90" rx="8" class="bx-sdk"/>
+          <text x="170" y="198" text-anchor="middle" class="b">Firebase の SDK</text>
+          <text x="170" y="220" text-anchor="middle" class="s">管理係</text>
+          <text x="170" y="240" text-anchor="middle" class="s">ID トークンを手元に持つ</text>
+
+          <rect x="480" y="170" width="220" height="90" rx="8" class="bx-ours"/>
+          <text x="590" y="198" text-anchor="middle" class="b">Vue のコード</text>
+          <text x="590" y="220" text-anchor="middle" class="s">届け係</text>
+          <text x="590" y="240" text-anchor="middle" class="s">自分では持っておかない</text>
+
+          <rect x="60" y="340" width="220" height="70" rx="8" class="bx-db"/>
+          <text x="170" y="368" text-anchor="middle" class="b">保存領域</text>
+          <text x="170" y="390" text-anchor="middle" class="s">ページを閉じても残る</text>
+
+          <!-- ① 発行 -->
+          <line x1="110" y1="80" x2="110" y2="166" class="ln-goog" marker-end="url(#t1)"/>
+          <text x="102" y="100" text-anchor="end" class="a">①</text>
+          <text x="102" y="116" text-anchor="end" class="s">ログイン</text>
+
+          <!-- ⑥ 取り直し -->
+          <line x1="210" y1="80" x2="210" y2="166" class="ln-goog dash" marker-end="url(#t1)" style="stroke-dasharray:6 4"/>
+          <text x="218" y="100" class="a">⑥</text>
+          <text x="218" y="116" class="s">期限が近いとき</text>
+
+          <!-- ② 写し -->
+          <line x1="130" y1="260" x2="130" y2="336" class="ln-sdk" marker-end="url(#t2)"/>
+          <text x="122" y="296" text-anchor="end" class="a">②</text>
+          <text x="122" y="312" text-anchor="end" class="s">写しをしまう</text>
+
+          <!-- ⑧ 読み戻す -->
+          <line x1="210" y1="336" x2="210" y2="264" class="ln-sdk" marker-end="url(#t2)" style="stroke-dasharray:6 4"/>
+          <text x="218" y="296" class="a">⑧</text>
+          <text x="218" y="312" class="s">開き直したとき</text>
+
+          <!-- ③ 渡す -->
+          <line x1="280" y1="215" x2="476" y2="215" class="ln-sdk" marker-end="url(#t2)"/>
+          <text x="378" y="205" text-anchor="middle" class="a">③ 頼まれたら渡す</text>
+
+          <!-- ④ 送る -->
+          <line x1="610" y1="170" x2="610" y2="84" class="ln-ours" marker-end="url(#t3)"/>
+          <text x="618" y="136" class="a">④ リクエストに</text>
+          <text x="618" y="154" class="a">付けて送る</text>
+
+          <!-- ⑦ ⑨ -->
+          <text x="310" y="368" class="s">⑦ ページを閉じると、手元の ID トークンは消える</text>
+          <text x="328" y="386" class="s">(保存領域の写しは残る)</text>
+          <text x="310" y="412" class="s">⑨ ログアウトすると、手元と保存領域の両方から消える</text>
+        </svg>
+      </div>
+      <figcaption>図3:矢印は、ID トークンが動く向きです。実線はログインして Rails を呼ぶまでの流れ(①〜④)、破線はときどき起きること(⑥、⑧)です。<span class="t-ours">Vue のコード</span> と <span class="t-goog">Google</span> の間には矢印がありません。Google とのやりとりは、すべて <span class="t-sdk">Firebase の SDK</span> が行います。</figcaption>
+    </figure>
+
+    <h3>ID トークンの一生</h3>
+    <p>右の列は、その時点で ID トークンがどこにあるかです。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>誰が、何をするか</th><th>ID トークンがある場所</th></tr></thead>
+        <tbody>
+          <tr><td class="step">①</td><td><span class="t-person">会員</span> がポップアップの中で Google にログインすると、<span class="t-goog">Google</span> が ID トークンを作り、<span class="t-sdk">Firebase の SDK</span> に渡す。ID トークンには、Google の印鑑(署名)、会員が誰か、期限(1時間後)が書いてある</td><td><span class="loc hand">SDK の手元</span></td></tr>
+          <tr><td class="step">②</td><td><span class="t-sdk">Firebase の SDK</span> が、ID トークンを手元に置いたまま、写しを <span class="t-db">保存領域</span> にしまう。ID トークンを取り直すための情報も、いっしょにしまう</td><td><span class="loc hand">SDK の手元</span><span class="loc db">保存領域</span></td></tr>
+          <tr><td class="step">③</td><td><span class="t-ours">Vue のコード</span> が、Rails に用事を頼む前に、<span class="t-sdk">Firebase の SDK</span> に「ID トークンをください」と頼む。<span class="t-sdk">Firebase の SDK</span> は、手元の ID トークンを渡す</td><td><span class="loc hand">SDK の手元</span><span class="loc db">保存領域</span><span class="loc vue">Vue のコード</span></td></tr>
+          <tr><td class="step">④</td><td><span class="t-ours">Vue のコード</span> が、Rails への依頼(リクエスト)の決まった欄(<code>Authorization</code> という欄)に ID トークンを書き込み、<span class="t-rails">Rails</span> に送る。<span class="t-ours">Vue のコード</span> は、送ったら ID トークンを手放す</td><td><span class="loc hand">SDK の手元</span><span class="loc db">保存領域</span><span class="loc rails">Rails に届いた依頼の中</span></td></tr>
+          <tr><td class="step">⑤</td><td><span class="t-rails">Rails</span> が、ID トークンの印鑑が Google の本物か、期限が切れていないかを確かめ、会員を特定する(Issue #8)。<span class="t-rails">Rails</span> は ID トークンを保存しない。依頼が来るたびに、届いたものを確かめる</td><td><span class="loc hand">SDK の手元</span><span class="loc db">保存領域</span></td></tr>
+          <tr><td class="step">⑥</td><td>期限が近づいたあとに ③ で頼まれると、<span class="t-sdk">Firebase の SDK</span> は、② でしまった「取り直すための情報」を <span class="t-goog">Google</span> に見せて、新しい ID トークンをもらう。手元と保存領域の ID トークンを、新しいものに入れ替えてから、<span class="t-ours">Vue のコード</span> に渡す</td><td><span class="loc hand">SDK の手元</span><span class="loc db">保存領域</span>(どちらも新しいもの)</td></tr>
+          <tr><td class="step">⑦</td><td><span class="t-person">会員</span> がページを閉じると、SDK の手元にあった ID トークンは消える</td><td><span class="loc db">保存領域</span></td></tr>
+          <tr><td class="step">⑧</td><td><span class="t-person">会員</span> がページを開き直すと、<span class="t-sdk">Firebase の SDK</span> が、保存領域の写しを手元に読み戻す。このあとは ③ からと同じ</td><td><span class="loc hand">SDK の手元</span><span class="loc db">保存領域</span></td></tr>
+          <tr><td class="step">⑨</td><td><span class="t-person">会員</span> がログアウトのボタンを押すと、<span class="t-ours">Vue のコード</span> が <span class="t-sdk">Firebase の SDK</span> にログアウトを頼み、<span class="t-sdk">Firebase の SDK</span> が手元と保存領域の両方から ID トークンを消す</td><td><span class="loc none">どこにもない</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Vue のコードが、ID トークンを自分で持っておかない理由</h3>
+    <p>結論から言うと、<strong>期限内の新しい ID トークンを持っているのは、いつも <span class="t-sdk">Firebase の SDK</span> の手元だけ</strong>だからです。<span class="t-ours">Vue のコード</span> が取っておいた写しは、すぐに古くなります。理由は3つあります。</p>
+    <ol class="flow">
+      <li><strong>取り直すのは SDK なので、Vue のコードの写しは取り残される。</strong>ID トークンの期限は1時間です。期限が近づくと、<span class="t-sdk">Firebase の SDK</span> が Google から新しい ID トークンを取り直し、自分の手元と保存領域を入れ替えます(⑥)。このとき、<span class="t-ours">Vue のコード</span> が取っておいた写しは入れ替わりません。その古い写しを Rails に送ると、期限が切れていれば <span class="t-rails">Rails</span> は 401 を返します。
+        <span style="display:block;color:var(--muted);font-size:14px">入館証で言うと、管理係は期限の前に新しい入館証に取り替えますが、届け係がコピーを持っていると、そのコピーは古いままです。</span></li>
+      <li><strong>Vue のコードには、取り直す手段がない。</strong>取り直すための情報(② でいっしょにしまったもの)を持っているのも、Google とやりとりするのも、<span class="t-sdk">Firebase の SDK</span> です。<span class="t-ours">Vue のコード</span> で期限を見張って取り直す仕組みを作ると、SDK がすでに持っている仕組みを、もう1つ作ることになります。</li>
+      <li><strong>毎回頼んでも、手間はほとんどかからない。</strong>期限内なら、<span class="t-sdk">Firebase の SDK</span> は手元の ID トークンをすぐに返し、Google とは通信しません。Google と通信するのは、期限が近いときだけです。</li>
+    </ol>
+    <p>つまり、<span class="t-ours">Vue のコード</span> が ID トークンを持っておいても得はなく、古くなる損だけがあります。そこで、<span class="t-ours">Vue のコード</span> は、Rails に用事を頼むたびに ③ から始め、そのとき SDK の手元にある ID トークンを使います。仕様書の「ID トークンは、API を呼ぶたびに <code>getIdToken()</code> で取り出す」は、このことです。</p>
+
+    <h3>Issue #11 で私たちが書くのは、③ と ④ だけ</h3>
+    <p>①②⑥⑦⑧⑨ は、<span class="t-sdk">Firebase の SDK</span>(とブラウザ)が行います。⑤ は Issue #8 で書いた <span class="t-rails">Rails</span> のコードです。Issue #11 で ID トークンに触るのは ③ と ④ だけで、手順 13 の <code>api/client.ts</code> にまとめて書きます。手順 9 のテスト(<a href="../../web/src/api/__tests__/client.spec.ts">client.spec.ts</a>)は、この ③ と ④ を確かめています。</p>
+  </section>
+
+  <section id="words">
+    <h2><span class="num">5</span>言葉:コードの中の名前</h2>
+    <p>ここまでの図に出てきた動きが、コードの中ではどういう名前で呼ばれるかの対応です。どれも、図のどこか1か所にあたります。</p>
+
+    <h3>Firebase の SDK とブラウザの側の名前</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>名前</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td><code>initializeApp</code></td><td><span class="t-sdk">Firebase の SDK</span> の関数。設定値を受け取って、「どのプロジェクトとやりとりするか」を覚えたオブジェクト(<code>app</code>)を作る</td><td>図2 場面 0「窓口を作る」の前半</td></tr>
+          <tr><td><code>getAuth</code></td><td><span class="t-sdk">Firebase の SDK</span> の関数。<code>app</code> から、ログインを扱う窓口のオブジェクト(<code>auth</code>)を作る</td><td>図2 場面 0「窓口を作る」の後半</td></tr>
+          <tr><td><code>auth</code></td><td><code>getAuth</code> が作った窓口。<span class="t-ours">Vue のコード</span> は、SDK に何かを頼むとき、必ずこれを渡す</td><td>図2 場面 0 で作られるもの</td></tr>
+          <tr><td><code>auth.currentUser</code></td><td>窓口が持っている、今ログインしている会員。ID トークンは、この中にある。未ログインなら <code>null</code></td><td>図3 の「SDK の手元」の正体</td></tr>
+          <tr><td>IndexedDB</td><td>ブラウザが持つ保存領域の名前。<span class="t-sdk">Firebase の SDK</span> だけが読み書きする</td><td>図1〜3 の「保存領域」の正体</td></tr>
+          <tr><td><code>signInWithPopup</code></td><td><span class="t-sdk">Firebase の SDK</span> の関数。ポップアップで Google にログインさせる</td><td>図2 場面 2「ログインを頼む」</td></tr>
+          <tr><td><code>signOut</code></td><td><span class="t-sdk">Firebase の SDK</span> の関数。ログアウトする</td><td>図2 場面 4「ログアウトを頼む」、図3 ⑨</td></tr>
+          <tr><td><code>onAuthStateChanged</code></td><td><span class="t-sdk">Firebase の SDK</span> の関数。「ログイン状態が分かったら・変わったら、この関数を呼んで知らせて」と登録する。ボタンの <code>addEventListener('click', 関数)</code> と同じ考え方</td><td>図2 の「未ログイン」「ログイン中」と知らせる矢印(場面 1・2・4・5)</td></tr>
+          <tr><td><code>getIdToken</code></td><td><code>auth.currentUser</code> が持つ関数。ID トークンを返す。期限が近ければ、先に取り直す</td><td>図3 ③「頼まれたら渡す」と ⑥</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>私たちが書く Vue のコードの側の名前</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>名前</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td>設定値</td><td>どの Firebase のプロジェクトかを表す4つの値(<code>apiKey</code>、<code>authDomain</code>、<code>projectId</code>、<code>appId</code>)。オーナーが <code>.env</code> に書く</td><td>図2 場面 0 で SDK に伝えるもの</td></tr>
+          <tr><td><code>import.meta.env</code></td><td><span class="t-ours">Vue のコード</span> から環境変数を読む書き方。Rails の <code>ENV["..."]</code> にあたる。名前が <code>VITE_</code> で始まるものだけが読める</td><td>図2 場面 0 で、設定値を読むところ</td></tr>
+          <tr><td>Pinia のストア(<code>stores/auth.ts</code>)</td><td>複数の画面や部品が共有するデータを置く場所。データが変わると、それを使う画面が自動で表示を変える。このアプリでは、次の <code>user</code> と <code>authStateReady</code> を持つ</td><td>図2 で「未ログイン」「ログイン中」の知らせを受け取る <span class="t-ours">Vue のコード</span></td></tr>
+          <tr><td><code>user</code></td><td>ストアが持つ、ログインしている会員(または <code>null</code>)。SDK から知らせを受けて書き換える</td><td>図2 場面 1・2・4・5 の知らせの中身</td></tr>
+          <tr><td><code>authStateReady</code></td><td>ストアが持つ、「ログインしているかどうかの判定が終わったか」。最初の知らせが来るまで <code>false</code> で、その間、画面は何も出さない</td><td>図2 場面 1・5 の「探す」から「知らせる」までの間</td></tr>
+          <tr><td><code>apiFetch</code>(<code>api/client.ts</code>)</td><td>SDK から ID トークンをもらい、<code>Authorization</code> の欄に入れて Rails を呼ぶ関数</td><td>図3 ③ と ④</td></tr>
+          <tr><td><code>Authorization: Bearer …</code></td><td>Rails への依頼(リクエスト)の中の、ID トークンを書く決まった欄</td><td>図3 ④「リクエストに付けて送る」</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="scene0">
+    <h2><span class="num">6</span>場面 0 の詳細:firebase.ts</h2>
+    <p>ここからが、今書こうとしている手順 11 の話です。<code>firebase.ts</code> が受け持つのは、図2 の場面 0「窓口を作る」の1か所だけです。</p>
+
+    <h3>書くコード</h3>
+<pre><code>import { initializeApp } from 'firebase/app'
+import { getAuth } from 'firebase/auth'
+
+<span class="c">// 設定値を渡して、どのプロジェクトとやりとりするかを覚えた app を作る</span>
+const app = initializeApp({
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+})
+
+<span class="c">// app から窓口の auth を作り、ストアと apiFetch が使えるように書き出す</span>
+export const auth = getAuth(app)</code></pre>
+
+    <h3>流れ</h3>
+    <ol class="flow">
+      <li><span class="t-ours">firebase.ts</span> が、<code>import.meta.env</code> で、オーナーが <code>.env</code> に書いた4つの設定値を読む</li>
+      <li><span class="t-ours">firebase.ts</span> が、<span class="t-sdk">Firebase の SDK</span> の <code>initializeApp</code> に設定値を渡す。SDK は、設定値を覚えた <code>app</code> を返す</li>
+      <li><span class="t-ours">firebase.ts</span> が、<span class="t-sdk">Firebase の SDK</span> の <code>getAuth</code> に <code>app</code> を渡す。SDK は、窓口の <code>auth</code> を返す。このとき <code>auth.currentUser</code> は <code>null</code>(SDK の手元は、まだ空)</li>
+      <li><span class="t-ours">firebase.ts</span> が、<code>auth</code> を書き出す(<code>export</code>)。<code>firebase.ts</code> の仕事はここで終わり</li>
+      <li>このあと、<span class="t-sdk">Firebase の SDK</span> が、自分で保存領域を探し始める(図2 場面 1・5)。ここから先は、<code>firebase.ts</code> は関わらない</li>
+    </ol>
+    <p>2 と 3 では、まだ Google と通信しません。ブラウザの中でオブジェクトを作るだけです。</p>
+
+    <h3>auth の中身の移り変わり</h3>
+    <p>図3 の「SDK の手元」は、コードの中では <code>auth.currentUser</code> です。中身を簡単にすると、次のように移り変わります。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>いつ</th><th><code>auth.currentUser</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>firebase.ts</code> が作った直後</td><td><code>null</code></td></tr>
+          <tr><td>図3 ① ログインしたあと、または ⑧ 読み戻したあと</td><td>会員(<code>uid</code> と、ID トークンを返す <code>getIdToken</code> を持つ)</td></tr>
+          <tr><td>図3 ⑦ ページを閉じたとき</td><td><code>auth</code> ごと消える(次に開いたら、また <code>firebase.ts</code> が作る)</td></tr>
+          <tr><td>図3 ⑨ ログアウトしたあと</td><td><code>null</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>窓口を1か所で作る理由</h3>
+    <p><code>auth</code> は、ストア(手順 12)と <code>apiFetch</code>(手順 13)の2か所で使います。</p>
+    <ul>
+      <li>ストアが <code>signInWithPopup(auth, …)</code> でログインすると、<span class="t-sdk">Firebase の SDK</span> が、その <code>auth</code> の <code>currentUser</code> に会員を入れる(図3 ①)</li>
+      <li><code>apiFetch</code> は、<code>auth.currentUser.getIdToken()</code> で ID トークンをもらう(図3 ③)</li>
+    </ul>
+    <p>2か所が別々の <code>auth</code> を見ていると、ログインした結果を <code>apiFetch</code> が見つけられません。同じ1つの <code>auth</code> を見るように、<code>firebase.ts</code> で作って、両方から <code>import</code> します。JavaScript のファイル(モジュール)は、何か所から <code>import</code> されても、中身は最初の1回しか実行されないので、<code>auth</code> は1つだけになります。</p>
+
+    <h3>テストでの扱い</h3>
+    <p>手順 8〜10 のテストは、どれも <code>vi.mock('@/firebase', …)</code> で、このファイルを偽物の <code>auth</code> に差し替えています。テストでは本物の Firebase に通信しないためです。<code>firebase.ts</code> 自体にはテストを付けず、型チェック(<code>vue-tsc</code>)が通ることと、最後の手動確認(AC-9:本物の Google アカウントでログインできる)で確かめます。</p>
+  </section>
+
+  <section id="files">
+    <h2><span class="num">7</span>Issue #11 の手順との対応</h2>
+    <p><span class="t-ours">Vue のコード</span> は、次の4つのファイルに分けて書きます。紫の行が、今いる場所です。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>場面</th><th>受け持つ Vue のコード</th><th>手順</th><th>完了条件</th></tr></thead>
+        <tbody>
+          <tr class="now"><td>0 準備</td><td><code>firebase.ts</code>:窓口を作る</td><td>11</td><td>―</td></tr>
+          <tr><td>1 初めて開く</td><td><code>stores/auth.ts</code>:ログイン状態を持つ<br><code>App.vue</code>:画面</td><td>12、14</td><td>AC-1</td></tr>
+          <tr><td>2 ログインする</td><td><code>stores/auth.ts</code></td><td>12</td><td>AC-2</td></tr>
+          <tr><td>3 Rails を呼ぶ</td><td><code>api/client.ts</code>:ID トークンを付けて Rails を呼ぶ<br><code>App.vue</code></td><td>13、14</td><td>AC-3、AC-6、AC-7、AC-8、AC-9</td></tr>
+          <tr><td>4 ログアウトする</td><td><code>stores/auth.ts</code></td><td>12</td><td>AC-4</td></tr>
+          <tr><td>5 開き直す</td><td><code>stores/auth.ts</code>(SDK の知らせを受けるだけ)</td><td>12</td><td>AC-5</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>保存領域を探す・保存する・消す、Google とやりとりする、といった仕事は、すべて <span class="t-sdk">Firebase の SDK</span> が行います。私たちが書く <span class="t-ours">Vue のコード</span> は、SDK に頼むことと、SDK からの知らせを受けて画面を変えることだけをします。</p>
+  </section>
+
+  <section id="next">
+    <h2><span class="num">8</span>確認用の問い</h2>
+    <ol class="flow">
+      <li>ID トークンを Google から受け取るのは誰ですか。Rails に届けるのは誰ですか。<span style="display:block;color:var(--muted);font-size:13.5px">4章の図3 ① と ④ です。</span></li>
+      <li>Vue のコードが、ID トークンを自分で取っておかないのはなぜですか。<span style="display:block;color:var(--muted);font-size:13.5px">4章の最後から2つ目の見出しです。</span></li>
+      <li>図3 の「SDK の手元」は、コードの中では何という名前ですか。<span style="display:block;color:var(--muted);font-size:13.5px">5章の表です。</span></li>
+      <li><code>firebase.ts</code> が作った直後の <code>auth.currentUser</code> は何ですか。<span style="display:block;color:var(--muted);font-size:13.5px">6章の流れの 3 です。</span></li>
+      <li>ストアと <code>apiFetch</code> が、それぞれ自分で <code>auth</code> を作ってはいけないのはなぜですか。<span style="display:block;color:var(--muted);font-size:13.5px">6章の「窓口を1か所で作る理由」です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

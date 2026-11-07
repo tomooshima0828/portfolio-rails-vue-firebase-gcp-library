@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ログインのファイルの関係</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* 学習ノートのひな形(layered-tech-explanation スキル)。
+   使い方は references/html-note.md。【】の中を書き換え、使わない部品は消す。
+   登場人物の色:1人に1色(a1〜a6)を割り当て、図と本文で同じ色を使う。
+   a2 は「私たちが書くコード」と「今ここ」に使う。ここに割り当てを書いておく:
+   a1=もとからあるファイル、a2=Vue のコード(この PR で書いた)、a3=Firebase の SDK と Google、a4=設定のファイル、a5=Pinia、a6=Rails のコード */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #11 · 学習メモ · <a href="vue-google-login.html">vue-google-login.html</a> の補足</p>
+    <h1>ログインのファイルの関係</h1>
+    <p class="lead">PR #24 で書いたファイルが、どうつながっているかを図にします。流れそのもの(誰が誰に何を頼むか)は <a href="vue-google-login.html">vue-google-login.html</a> の図2・図3 にあります。このページは、それを「ファイル」の目で見直したものです。</p>
+    <div class="answer">
+      <p>先に結論です。ファイルどうしのつながりは、3種類あります。</p>
+      <ul>
+        <li>コードの読み込み:どのファイルが、どのファイルの道具を使うか(1章)</li>
+        <li>設定値の通り道:<code>.env</code> に書いた値が、どのファイルに届くか(2章)</li>
+        <li>リクエストの通り道:画面から Rails まで、どのファイルを通るか(3章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="import">
+    <h2><span class="num">1</span>コードの読み込み(Vue)</h2>
+    <p>上にあるものが道具を作り、下のファイルへ渡します。矢印は、道具が渡る向き(上から下)です。矢印の先のファイルは、その道具を <code>import</code> して受け取り、使います。線の横の小さな文字が、渡る道具の名前です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 450" role="img" aria-label="上から下へ道具が渡る図。Firebase の SDK が firebase.ts と stores/auth.ts に道具を渡す。firebase.ts が同じ1つの auth を stores/auth.ts と api/client.ts に渡す。Pinia が stores/auth.ts と main.ts に渡す。stores/auth.ts が useAuthStore を、api/client.ts が apiFetch を App.vue に渡す。App.vue が main.ts に渡る">
+          <defs>
+            <marker id="f1-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <rect x="190" y="20" width="380" height="46" rx="8" class="bx-a3"/>
+          <text x="380" y="41" text-anchor="middle" class="b">Firebase の SDK</text>
+          <text x="380" y="58" text-anchor="middle" class="s">firebase/app、firebase/auth(npm で入れたライブラリ)</text>
+
+          <rect x="20" y="110" width="120" height="50" rx="8" class="bx-a5"/>
+          <text x="80" y="132" text-anchor="middle" class="b">Pinia</text>
+          <text x="80" y="150" text-anchor="middle" class="s">ストアのライブラリ</text>
+
+          <rect x="300" y="110" width="160" height="50" rx="8" class="bx-a2"/>
+          <text x="380" y="132" text-anchor="middle" class="b">firebase.ts</text>
+          <text x="380" y="150" text-anchor="middle" class="s">ログインの窓口(auth)</text>
+
+          <rect x="120" y="200" width="200" height="50" rx="8" class="bx-a2"/>
+          <text x="220" y="222" text-anchor="middle" class="b">stores/auth.ts</text>
+          <text x="220" y="240" text-anchor="middle" class="s">ログイン状態のストア</text>
+
+          <rect x="440" y="200" width="200" height="50" rx="8" class="bx-a2"/>
+          <text x="540" y="222" text-anchor="middle" class="b">api/client.ts</text>
+          <text x="540" y="240" text-anchor="middle" class="s">Rails を呼ぶ関数</text>
+
+          <rect x="300" y="290" width="160" height="50" rx="8" class="bx-a2"/>
+          <text x="380" y="312" text-anchor="middle" class="b">App.vue</text>
+          <text x="380" y="330" text-anchor="middle" class="s">画面</text>
+
+          <rect x="300" y="380" width="160" height="50" rx="8" class="bx-a1"/>
+          <text x="380" y="402" text-anchor="middle" class="b">main.ts</text>
+          <text x="380" y="420" text-anchor="middle" class="s">アプリを起動する(もとから)</text>
+
+          <!-- Firebase の SDK から -->
+          <line x1="380" y1="66" x2="380" y2="106" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="388" y="92" class="m">initializeApp、getAuth</text>
+          <line x1="240" y1="66" x2="240" y2="196" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="232" y="92" text-anchor="end" class="m">signInWithPopup など</text>
+
+          <!-- firebase.ts から(同じ1つの auth) -->
+          <path d="M300 140 H270 V196" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="285" y="132" text-anchor="middle" class="m">auth</text>
+          <path d="M460 140 H520 V196" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="490" y="132" text-anchor="middle" class="m">auth</text>
+
+          <!-- Pinia から -->
+          <path d="M100 160 V225 H116" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="108" y="192" class="m">defineStore</text>
+          <path d="M50 160 V405 H296" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="175" y="399" text-anchor="middle" class="m">createPinia</text>
+
+          <!-- stores/auth.ts と api/client.ts から -->
+          <path d="M220 250 V270 H340 V286" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="280" y="264" text-anchor="middle" class="m">useAuthStore</text>
+          <path d="M540 250 V270 H420 V286" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="480" y="264" text-anchor="middle" class="m">apiFetch</text>
+
+          <!-- App.vue から -->
+          <line x1="380" y1="340" x2="380" y2="376" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="388" y="362" class="m">App</text>
+        </svg>
+      </div>
+      <figcaption>図1:<code>firebase.ts</code> から下へ出る2本の <code>auth</code> の矢印は、どちらも同じ1つの窓口です。<code>firebase.ts</code> が1つだけ作った <code>auth</code> を、<code>stores/auth.ts</code> と <code>api/client.ts</code> が受け取ります。<code>App.vue</code> には、Firebase の SDK から直接の矢印がありません。</figcaption>
+    </figure>
+    <ol class="flow">
+      <li><span class="t-a3">Firebase の SDK</span> が、<span class="t-a2">firebase.ts</span> に <code>initializeApp</code> と <code>getAuth</code> を渡す。<span class="t-a2">firebase.ts</span> は、それでログインの窓口(<code>auth</code>)を1つ作る</li>
+      <li><span class="t-a2">firebase.ts</span> が、その1つの <code>auth</code> を、<span class="t-a2">stores/auth.ts</span> と <span class="t-a2">api/client.ts</span> の両方に渡す</li>
+      <li><span class="t-a2">stores/auth.ts</span> は、Firebase の SDK から <code>signInWithPopup</code>、<code>onAuthStateChanged</code> などの道具を、<span class="t-a5">Pinia</span> から <code>defineStore</code> を受け取り、ストアを作る</li>
+      <li><span class="t-a2">stores/auth.ts</span> がストア(<code>useAuthStore</code>)を、<span class="t-a2">api/client.ts</span> が Rails を呼ぶ関数(<code>apiFetch</code>)を、<span class="t-a2">App.vue</span> に渡す</li>
+      <li><span class="t-a2">App.vue</span> と <span class="t-a5">Pinia</span>(<code>createPinia</code>)が <span class="t-a1">main.ts</span> に渡り、<span class="t-a1">main.ts</span> がアプリを起動する</li>
+    </ol>
+  </section>
+
+  <section id="config">
+    <h2><span class="num">2</span>設定値の通り道</h2>
+    <p>Firebase のプロジェクトの設定値は、オーナーが <code>.env</code> に書いたところから、Vue と Rails の両方に届きます。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 800 300" role="img" aria-label=".env を compose.yaml が読み、web と api のコンテナに渡す。web では import.meta.env を firebase.ts が読む。api では config/application.rb が環境変数を読み、firebase_id_token_verifier.rb が使う">
+          <defs>
+            <marker id="f2-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <rect x="20" y="120" width="110" height="56" rx="8" class="bx-a4"/>
+          <text x="75" y="144" text-anchor="middle" class="b">.env</text>
+          <text x="75" y="164" text-anchor="middle" class="s">オーナーが書く</text>
+          <rect x="20" y="214" width="110" height="46" rx="8" class="bx-frame"/>
+          <text x="75" y="234" text-anchor="middle" class="b">.env.example</text>
+          <text x="75" y="251" text-anchor="middle" class="s">見本(コミットする)</text>
+          <line x1="75" y1="214" x2="75" y2="180" class="ln dash" marker-end="url(#f2-mk)"/>
+          <text x="83" y="202" class="s">写して作る</text>
+
+          <rect x="170" y="120" width="120" height="56" rx="8" class="bx-a4"/>
+          <text x="230" y="144" text-anchor="middle" class="b">compose.yaml</text>
+          <text x="230" y="164" text-anchor="middle" class="s">コンテナに配る</text>
+
+          <rect x="330" y="40" width="200" height="56" rx="8" class="bx-a2"/>
+          <text x="430" y="62" text-anchor="middle" class="b">import.meta.env</text>
+          <text x="430" y="82" text-anchor="middle" class="s">VITE_ の値。型は env.d.ts</text>
+
+          <rect x="570" y="40" width="210" height="56" rx="8" class="bx-a2"/>
+          <text x="675" y="62" text-anchor="middle" class="b">firebase.ts</text>
+          <text x="675" y="82" text-anchor="middle" class="s">SDK に渡して窓口を作る</text>
+
+          <rect x="330" y="200" width="200" height="56" rx="8" class="bx-a6"/>
+          <text x="430" y="222" text-anchor="middle" class="b">config/application.rb</text>
+          <text x="430" y="242" text-anchor="middle" class="s">ENV の値を設定に入れる</text>
+
+          <rect x="570" y="200" width="210" height="56" rx="8" class="bx-a6"/>
+          <text x="675" y="222" text-anchor="middle" class="b">トークンを検証するクラス</text>
+          <text x="675" y="242" text-anchor="middle" class="m">firebase_id_token_verifier.rb</text>
+
+          <line x1="130" y1="148" x2="166" y2="148" class="ln" marker-end="url(#f2-mk)"/>
+          <text x="148" y="140" text-anchor="middle" class="s">読む</text>
+          <path d="M230 120 V68 H326" class="ln" marker-end="url(#f2-mk)"/>
+          <text x="238" y="94" class="s">web に配る</text>
+          <path d="M230 176 V228 H326" class="ln" marker-end="url(#f2-mk)"/>
+          <text x="238" y="206" class="s">api に配る</text>
+          <line x1="530" y1="68" x2="566" y2="68" class="ln" marker-end="url(#f2-mk)"/>
+          <text x="548" y="60" text-anchor="middle" class="s">読む</text>
+          <line x1="530" y1="228" x2="566" y2="228" class="ln" marker-end="url(#f2-mk)"/>
+          <text x="548" y="220" text-anchor="middle" class="s">使う</text>
+        </svg>
+      </div>
+      <figcaption>図2:プロジェクト ID は、<code>.env</code> の1か所から、Vue(上の道)と Rails(下の道)の両方に届きます。だから2つの値がずれません。</figcaption>
+    </figure>
+    <ol class="flow">
+      <li><span class="t-a1">オーナー</span>が、<span class="t-a4">.env.example</span> を写して <span class="t-a4">.env</span> を作り、Firebase のコンソールで見た4つの値を書く</li>
+      <li><span class="t-a4">compose.yaml</span>(Docker Compose)が、<code>.env</code> を読み、web と api のコンテナの環境変数にする</li>
+      <li>上の道:Vite が <code>VITE_</code> で始まる値を <code>import.meta.env</code> に出し、<span class="t-a2">firebase.ts</span> が読んで SDK に渡す。<code>env.d.ts</code> は、その名前の書き間違いを型で見つける</li>
+      <li>下の道:<span class="t-a6">config/application.rb</span> が <code>ENV["FIREBASE_PROJECT_ID"]</code> を設定に入れ、<span class="t-a6">トークンを検証するクラス</span>が、ID トークンの宛先のプロジェクトと比べる(Issue #8)</li>
+    </ol>
+  </section>
+
+  <section id="request">
+    <h2><span class="num">3</span>リクエストの通り道</h2>
+    <p>ログインしたあと、画面が会員の id を受け取るまでに通るファイルです。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 820 330" role="img" aria-label="App.vue が apiFetch を呼び、api/client.ts が ID トークンを付けて送る。Vite の開発サーバーが Rails に転送する。Rails では me_controller.rb、firebase_authenticatable.rb、firebase_id_token_verifier.rb の順に通り、検証のために Google から公開鍵を取る。会員の id が App.vue に返る">
+          <defs>
+            <marker id="f3-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f3-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+            <marker id="f3-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <rect x="10" y="30" width="250" height="200" rx="12" class="bx-frame"/>
+          <text x="26" y="52" class="s">ブラウザ</text>
+          <rect x="30" y="60" width="200" height="50" rx="8" class="bx-a2"/>
+          <text x="130" y="82" text-anchor="middle" class="b">App.vue</text>
+          <text x="130" y="100" text-anchor="middle" class="s">user が会員になったら呼ぶ</text>
+          <rect x="30" y="150" width="200" height="50" rx="8" class="bx-a2"/>
+          <text x="130" y="172" text-anchor="middle" class="b">api/client.ts</text>
+          <text x="130" y="190" text-anchor="middle" class="s">ID トークンを付ける</text>
+
+          <rect x="280" y="30" width="180" height="200" rx="12" class="bx-frame"/>
+          <text x="296" y="52" class="s">web コンテナ</text>
+          <rect x="295" y="150" width="150" height="50" rx="8" class="bx-a1"/>
+          <text x="370" y="172" text-anchor="middle" class="b">Vite の開発サーバー</text>
+          <text x="370" y="190" text-anchor="middle" class="m">vite.config.ts</text>
+
+          <rect x="480" y="30" width="330" height="200" rx="12" class="bx-frame"/>
+          <text x="496" y="52" class="s">api コンテナ(Rails)</text>
+          <rect x="500" y="60" width="290" height="36" rx="8" class="bx-a6"/>
+          <text x="645" y="83" text-anchor="middle" class="m">api/me_controller.rb</text>
+          <rect x="500" y="118" width="290" height="36" rx="8" class="bx-a6"/>
+          <text x="645" y="141" text-anchor="middle" class="m">concerns/firebase_authenticatable.rb</text>
+          <rect x="500" y="176" width="290" height="36" rx="8" class="bx-a6"/>
+          <text x="645" y="199" text-anchor="middle" class="m">lib/firebase_id_token_verifier.rb</text>
+
+          <rect x="560" y="268" width="230" height="46" rx="8" class="bx-a3"/>
+          <text x="675" y="289" text-anchor="middle" class="b">Google</text>
+          <text x="675" y="306" text-anchor="middle" class="s">ID トークンを確かめる公開鍵</text>
+
+          <line x1="130" y1="110" x2="130" y2="146" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="138" y="132" class="m">apiFetch</text>
+          <line x1="230" y1="175" x2="291" y2="175" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="260" y="167" text-anchor="middle" class="s">送る</text>
+          <path d="M445 175 H470 V78 H496" class="ln" marker-end="url(#f3-mk)"/>
+          <text x="464" y="128" text-anchor="end" class="s">転送</text>
+          <line x1="645" y1="96" x2="645" y2="114" class="ln-a6" marker-end="url(#f3-a6)"/>
+          <text x="653" y="110" class="m">before_action</text>
+          <line x1="645" y1="154" x2="645" y2="172" class="ln-a6" marker-end="url(#f3-a6)"/>
+          <text x="653" y="168" class="m">verify!</text>
+          <line x1="720" y1="212" x2="720" y2="264" class="ln-a6" marker-end="url(#f3-a6)"/>
+          <text x="728" y="244" class="s">公開鍵を取る</text>
+
+          <path d="M600 60 V16 H130 V56" class="ln-a6 dash" marker-end="url(#f3-a6)"/>
+          <text x="365" y="11" text-anchor="middle" class="s">会員の id(JSON)</text>
+        </svg>
+      </div>
+      <figcaption>図3:実線が行き、破線が帰りです。帰りも、実際には Vite の開発サーバーと <code>apiFetch</code> を通って <code>App.vue</code> に戻りますが、図では省いて1本にしています。</figcaption>
+    </figure>
+    <div class="note"><p><span class="t-a2">App.vue</span> と <span class="t-a2">api/client.ts</span> の間の矢印は、図1 と図3 で向きが逆です。図1 は道具(<code>apiFetch</code> という関数)が渡る向きで、アプリを開いたときに1回だけ、<span class="t-a2">api/client.ts</span> から <span class="t-a2">App.vue</span> へ渡ります。図3 は頼みごと(リクエスト)が進む向きで、<span class="t-a2">App.vue</span> が受け取った <code>apiFetch</code> を使うたびに、<span class="t-a2">App.vue</span> から <span class="t-a2">api/client.ts</span> へ進みます。電話機を受け取るのが図1、その電話機で電話をかけるのが図3 です。</p></div>
+    <ol class="flow">
+      <li><span class="t-a2">App.vue</span> が、ストアの <code>user</code> が会員に変わったのに気づき、<code>apiFetch('/api/me')</code> を呼ぶ</li>
+      <li><span class="t-a2">api/client.ts</span> が、SDK から ID トークンをもらって <code>Authorization</code> の欄に入れ、ブラウザから <code>localhost:5173/api/me</code> に送る</li>
+      <li><span class="t-a1">Vite の開発サーバー</span>が、<code>vite.config.ts</code> の設定どおり、<code>/api</code> で始まるリクエストを Rails(<code>api:3000</code>)に転送する</li>
+      <li><span class="t-a6">me_controller.rb</span> が、<code>before_action</code> で <span class="t-a6">firebase_authenticatable.rb</span> の確認を先に動かす</li>
+      <li><span class="t-a6">firebase_authenticatable.rb</span> が、<code>Authorization</code> の欄から ID トークンを取り出し、<span class="t-a6">firebase_id_token_verifier.rb</span> に確かめさせる(<code>verify!</code>)</li>
+      <li><span class="t-a6">firebase_id_token_verifier.rb</span> が、Google から公開鍵を取り(ここで <code>net/http</code> を使う)、署名と宛先を確かめる</li>
+      <li><span class="t-a6">firebase_authenticatable.rb</span> が会員を特定し(初めてなら作り)、<span class="t-a6">me_controller.rb</span> が会員の id を JSON で返す</li>
+      <li><span class="t-a2">App.vue</span> が、受け取った id を「会員 ID:1」として画面に出す</li>
+    </ol>
+  </section>
+
+  <section id="list">
+    <h2><span class="num">4</span>ファイルの一覧</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>ファイル</th><th>何をするか</th><th>出てくる図</th></tr></thead>
+        <tbody>
+          <tr><td><code>.env.example</code></td><td><code>.env</code> の見本。キーだけを書く</td><td>図2</td></tr>
+          <tr><td><code>compose.yaml</code></td><td><code>.env</code> の値を、web と api のコンテナに配る</td><td>図2</td></tr>
+          <tr><td><code>web/env.d.ts</code></td><td><code>import.meta.env</code> の設定値に型を付ける</td><td>図2</td></tr>
+          <tr><td><code>web/vite.config.ts</code></td><td><code>/api</code> へのリクエストを Rails に転送する</td><td>図3</td></tr>
+          <tr><td><code>web/src/firebase.ts</code></td><td>SDK に設定値を渡し、ログインの窓口(<code>auth</code>)を作る</td><td>図1、図2</td></tr>
+          <tr><td><code>web/src/stores/auth.ts</code></td><td>SDK にログイン・ログアウトを頼み、知らせを受けて <code>user</code> と <code>authStateReady</code> を写す</td><td>図1</td></tr>
+          <tr><td><code>web/src/api/client.ts</code></td><td>ID トークンを付けて Rails を呼ぶ</td><td>図1、図3</td></tr>
+          <tr><td><code>web/src/App.vue</code></td><td>ストアを見て画面を出し、ログイン中なら <code>/api/me</code> を呼ぶ</td><td>図1、図3</td></tr>
+          <tr><td><code>api/app/lib/firebase_id_token_verifier.rb</code></td><td>ID トークンを確かめる(この PR では <code>require "net/http"</code> を足しただけ)</td><td>図2、図3</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><p><code>main.ts</code>、<code>config/application.rb</code>、<code>me_controller.rb</code>、<code>firebase_authenticatable.rb</code> は、この PR より前からあるファイルです。つながりが分かるように、図に入れています。</p></div>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">5</span>確認用の問い</h2>
+    <ol class="check">
+      <li><code>firebase.ts</code> の窓口(<code>auth</code>)を使うファイルは、どれとどれですか。<span class="hint">図1 です。</span></li>
+      <li>プロジェクト ID が Vue と Rails でずれないのは、なぜですか。<span class="hint">図2 です。</span></li>
+      <li>ブラウザが <code>localhost:5173</code> に送ったリクエストを、Rails に届けるのはどのファイルの設定ですか。<span class="hint">図3 の手順 3 です。</span></li>
+      <li>今回の手動確認で 500 が出たのは、図3 のどの手順でしたか。<span class="hint">図3 の手順 6 です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

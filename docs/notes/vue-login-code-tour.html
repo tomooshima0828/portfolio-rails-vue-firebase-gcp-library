@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>コードで追うログイン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* 学習ノートのひな形(layered-tech-explanation スキル)。
+   使い方は references/html-note.md。【】の中を書き換え、使わない部品は消す。
+   登場人物の色:1人に1色(a1〜a6)を割り当て、図と本文で同じ色を使う。
+   a2 は「私たちが書くコード」と「今ここ」に使う。ここに割り当てを書いておく:
+   a1=会員と Vite、a2=Vue のコード(順1〜4)、a3=Firebase の SDK、a6=Rails(順6) */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+
+/* コードを読むノート用 */
+.route { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0 0 14px; }
+.route li { font-size: 12.5px; line-height: 1.7; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); white-space: nowrap; }
+.route li.on { border-color: var(--a2); color: var(--a2); background: var(--a2-soft); font-weight: 700; }
+.route li.on.rails { border-color: var(--a6); color: var(--a6); background: var(--a6-soft); }
+.io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.io > div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.7; min-width: 0; }
+.io .k { display: block; font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+.role { font-size: 15.5px; }
+.file { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin: 18px 0 -6px; }
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+pre.code { padding: 12px 0; }
+pre.code code { display: inline-block; min-width: 100%; }
+pre.code .l { display: block; padding-right: 16px; }
+pre.code .n { display: inline-block; width: 3.4em; padding-right: 1em; text-align: right; color: var(--muted); user-select: none; }
+pre.code .l.hl { background: var(--a2-soft); }
+pre.code.rails .l.hl { background: var(--a6-soft); }
+table.lines td:first-child { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; color: var(--a2); }
+table.lines.rails td:first-child { color: var(--a6); }
+table.lines td:last-child { font-size: 13px; color: var(--muted); min-width: 8.5em; }
+table.lines th, table.story th:first-child { white-space: nowrap; }
+table.routes td:first-child { white-space: nowrap; font-weight: 700; }
+.goto { margin: 18px 0 0; padding: 10px 14px; border: 1px dashed var(--a2); border-radius: 8px; font-size: 14.5px; line-height: 1.75; }
+.goto.rails { border-color: var(--a6); }
+.note.warn { border-left-color: var(--a6); }
+@media (max-width: 640px) {
+  .io { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #11 · 学習メモ · <a href="vue-google-login.html">全体のノート</a>と<a href="vue-login-files.html">ファイルのノート</a>の続き</p>
+    <h1>コードで追うログイン</h1>
+    <p class="lead"><a href="vue-google-login.html">全体のノート</a>(vue-google-login.html)で、ログインの流れを見ました。<a href="vue-login-files.html">ファイルのノート</a>(vue-login-files.html)で、ファイルどうしのつながりを見ました。このページでは、実際のコードを、ものが渡る順番に6か所読みます。どの行が、ノートの図のどの矢印にあたるかを、1行ずつ対応させます。</p>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>なぜこの順番で読むのか(1章)</li>
+        <li>6か所の道順と、それぞれで受け取るもの・渡すもの(2章)</li>
+        <li>6つの場所のコードの1行ずつの意味と、ノートの図との対応(3〜8章)</li>
+        <li>ボタンを押してから「会員 ID:1」が出るまでを、コードの行でたどる(9章)</li>
+        <li>手を動かして確かめる方法(10章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>なぜこの順番で読むのか</h2>
+    <p>コードは、ファイルごとに分かれています。1つのファイルを上から読んでも、ファイルとファイルの間で何が渡っているかは書いてありません。ノートの図で流れが分かっていても、「その矢印は、コードのどの行か」が分からないと、Issue #12 で記事の画面を書き足すときに、どこを手本にすればよいかが分かりません。</p>
+    <p>そこで、このページでは、ものが渡る順番にコードを読みます。</p>
+    <h3>この順番にする理由</h3>
+    <p>結論:読む順番を「ものが渡る順番」にそろえると、どのファイルも、入ってくるものと出ていくものが分かった状態で読めます。</p>
+    <ol class="flow">
+      <li><strong>画面から読む方法だと、中身を知らない名前が先に出てくる。</strong>画面の <code>App.vue</code> から読む方法もよく使われます。ただ、<code>App.vue</code> の最初の数行で <code>useAuthStore</code> と <code>apiFetch</code> が出てきて、その中で何が起きるかを知らないまま読み進めることになります。</li>
+      <li><strong>フォルダーや名前の順だと、つながりを自分で組み直すことになる。</strong>ファイルの並びは流れと関係がないからです。</li>
+      <li><strong>ものが渡る順番なら、前の順の出口が、次の順の入口になる。</strong>各章の最後で「次に渡すもの」を確かめれば、それがそのまま次の章の入口です。損は、最初の順1 ではまだ画面が出てこないことくらいで、全体のノートの場面 0 に戻れば位置が分かります。</li>
+    </ol>
+    <p>この順番は、全体のノートの図2・図3 と、ファイルのノートの図1・図3 の流れと同じです。</p>
+
+    <h3>3〜8章の読み方</h3>
+    <p>3〜8章は、どれも同じ形で書いてあります。VS Code でそのファイルを開き、このページと横に並べて読むのがおすすめです。載せているコードと行番号は、PR #24(ブランチ <code>feature/11-vue-google-login</code>)の時点のものです。あとでコードが変わると、行番号がずれることがあります。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>部分</th><th>書いてあること</th></tr></thead>
+        <tbody>
+          <tr><td>今ここ</td><td>6か所のうち、どこを読んでいるか(色の付いた札)</td></tr>
+          <tr><td>受け取るもの・渡すもの</td><td>前の順から何が来て、次の順へ何を渡すか</td></tr>
+          <tr><td>コード</td><td>ファイルの中身。色の付いた行が、特に大事な行</td></tr>
+          <tr><td>1行ずつ</td><td>行ごとの意味と、ノートの図との対応</td></tr>
+          <tr><td>なぜこう書くか</td><td>書き方の理由。結論から書く</td></tr>
+          <tr><td>確かめ方</td><td>動きを自分の目で見る方法</td></tr>
+          <tr><td>次へ</td><td>次の順への受け渡し</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="route">
+    <h2><span class="num">2</span>読む道順</h2>
+    <p>6か所は、動く場所で3つに分かれます。順1〜4 はブラウザの中で動くコード、順5 は web コンテナの Vite の開発サーバーが読む設定、順6 は api コンテナの Rails のコードです。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 820 360" role="img" aria-label="読む道順の図。ブラウザの中で、順1 firebase.ts が auth を順2 stores/auth.ts に渡し、順2 の user が変わると順3 App.vue が動き、順3 が順4 api/client.ts の apiFetch を呼ぶ。順4 がリクエストを web コンテナの順5 vite.config.ts に送り、順5 が api コンテナの順6 Rails に転送する。会員の id が順3 に戻る">
+          <defs>
+            <marker id="f1-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f1-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f1-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+          </defs>
+
+          <rect x="10" y="20" width="300" height="330" rx="12" class="bx-frame"/>
+          <text x="26" y="42" class="s">ブラウザの中で動く(web/src)</text>
+          <rect x="350" y="20" width="180" height="330" rx="12" class="bx-frame"/>
+          <text x="366" y="42" class="s">web コンテナで動く</text>
+          <rect x="570" y="20" width="240" height="330" rx="12" class="bx-frame"/>
+          <text x="586" y="42" class="s">api コンテナで動く(Rails)</text>
+
+          <rect x="40" y="58" width="230" height="46" rx="8" class="bx-a2"/>
+          <text x="155" y="77" text-anchor="middle" class="b">順1 firebase.ts</text>
+          <text x="155" y="95" text-anchor="middle" class="s">ログインの窓口を作る</text>
+          <rect x="40" y="134" width="230" height="46" rx="8" class="bx-a2"/>
+          <text x="155" y="153" text-anchor="middle" class="b">順2 stores/auth.ts</text>
+          <text x="155" y="171" text-anchor="middle" class="s">ログイン状態を写す</text>
+          <rect x="40" y="210" width="230" height="46" rx="8" class="bx-a2"/>
+          <text x="155" y="229" text-anchor="middle" class="b">順3 App.vue</text>
+          <text x="155" y="247" text-anchor="middle" class="s">画面を出し分ける</text>
+          <rect x="40" y="286" width="230" height="46" rx="8" class="bx-a2"/>
+          <text x="155" y="305" text-anchor="middle" class="b">順4 api/client.ts</text>
+          <text x="155" y="323" text-anchor="middle" class="s">ID トークンを付けて送る</text>
+
+          <rect x="365" y="286" width="150" height="46" rx="8" class="bx-a1"/>
+          <text x="440" y="305" text-anchor="middle" class="b">順5 vite.config.ts</text>
+          <text x="440" y="323" text-anchor="middle" class="s">/api を転送する</text>
+
+          <rect x="590" y="210" width="210" height="122" rx="8" class="bx-a6"/>
+          <text x="695" y="232" text-anchor="middle" class="b">順6 Rails の3つのファイル</text>
+          <text x="695" y="256" text-anchor="middle" class="m">me_controller.rb</text>
+          <text x="695" y="278" text-anchor="middle" class="m">firebase_authenticatable.rb</text>
+          <text x="695" y="300" text-anchor="middle" class="m">firebase_id_token_verifier.rb</text>
+          <text x="695" y="322" text-anchor="middle" class="s">トークンを確かめて会員を特定</text>
+
+          <line x1="155" y1="104" x2="155" y2="130" class="ln-a2" marker-end="url(#f1-a2)"/>
+          <text x="163" y="122" class="s">auth を渡す</text>
+          <line x1="155" y1="180" x2="155" y2="206" class="ln-a2" marker-end="url(#f1-a2)"/>
+          <text x="163" y="198" class="s">user が変わる</text>
+          <line x1="155" y1="256" x2="155" y2="282" class="ln-a2" marker-end="url(#f1-a2)"/>
+          <text x="163" y="274" class="s">apiFetch を呼ぶ</text>
+          <line x1="270" y1="309" x2="361" y2="309" class="ln-a2" marker-end="url(#f1-a2)"/>
+          <text x="330" y="301" text-anchor="middle" class="s">送る</text>
+          <line x1="515" y1="309" x2="586" y2="309" class="ln-a1" marker-end="url(#f1-a1)"/>
+          <text x="550" y="301" text-anchor="middle" class="s">転送</text>
+
+          <line x1="590" y1="233" x2="274" y2="233" class="ln-a6 dash" marker-end="url(#f1-a6)"/>
+          <text x="440" y="227" text-anchor="middle" class="s">会員の id(JSON)</text>
+        </svg>
+      </div>
+      <figcaption>図1:実線の矢印は、読む順番であり、ものが渡る順番でもあります。破線は帰り道で、会員の id が順3 に戻ります(実際には順5 と順4 を通りますが、1本にまとめています)。順4 は、順1 の <code>auth</code> も受け取ります(順2 と同じもの。図では省いています)。</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table class="routes">
+        <thead><tr><th>順</th><th>ファイル</th><th>受け取るもの</th><th>渡すもの</th><th>全体のノートの場所</th></tr></thead>
+        <tbody>
+          <tr><td>順1</td><td><code>web/src/firebase.ts</code></td><td><code>.env</code> の4つの設定値</td><td>ログインの窓口 <code>auth</code>(順2 と順4 へ)</td><td>図2 場面 0</td></tr>
+          <tr><td>順2</td><td><code>web/src/stores/auth.ts</code></td><td>順1 の <code>auth</code>、SDK の道具、Pinia の <code>defineStore</code></td><td>ストア(<code>user</code>、<code>authStateReady</code>、<code>signIn</code>、<code>signOut</code>)を順3 へ</td><td>図2 場面 1・2・4・5</td></tr>
+          <tr><td>順3</td><td><code>web/src/App.vue</code></td><td>順2 のストア、順4 の <code>apiFetch</code></td><td>画面。順4 への「<code>/api/me</code> を呼んで」</td><td>図2 の画面と、場面 3 の始まりと終わり</td></tr>
+          <tr><td>順4</td><td><code>web/src/api/client.ts</code></td><td>順3 からの頼みごと、順1 の <code>auth</code></td><td>ID トークンを付けたリクエスト(順5 へ)</td><td>図3 の ③ と ④</td></tr>
+          <tr><td>順5</td><td><code>web/vite.config.ts</code></td><td>ブラウザからのリクエスト</td><td>同じリクエストを Rails へ</td><td>図2 場面 3 の通り道</td></tr>
+          <tr><td>順6</td><td><code>api/</code> の3つのファイル</td><td>転送されたリクエスト</td><td>会員の id(順3 へ戻る)</td><td>図2 場面 3「トークンを検証」</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="stop1">
+    <h2><span class="num">3</span>順1 firebase.ts:ログインの窓口を作る</h2>
+    <ol class="route" aria-label="今ここ"><li class="on">順1 firebase.ts</li><li>順2 stores/auth.ts</li><li>順3 App.vue</li><li>順4 api/client.ts</li><li>順5 vite.config.ts</li><li>順6 Rails</li></ol>
+    <div class="io"><div><span class="k">前の順から受け取るもの</span><code>.env</code> に書いた4つの設定値。Docker Compose がコンテナの環境変数にし、Vite が <code>import.meta.env</code> に入れたもの(<a href="vue-login-files.html#config">ファイルのノートの図2</a>)</div><div><span class="k">次の順へ渡すもの</span>ログインの窓口 <code>auth</code>。順2 の <code>stores/auth.ts</code> と、順4 の <code>api/client.ts</code> が受け取る。どちらも同じ1つ</div></div>
+    <p class="role"><span class="t-a2">firebase.ts</span> は、Firebase の SDK に「どのプロジェクトとやりとりするか」を伝え、ログインの窓口を1つ作って書き出します。Rails でいうと、<code>config/initializers/</code> に置く初期化のファイルに近いものです。</p>
+    <p class="file">web/src/firebase.ts</p>
+<pre class="code"><code><span class="l"><span class="n">1</span>import { initializeApp } from 'firebase/app'</span><span class="l"><span class="n">2</span>import { getAuth } from 'firebase/auth'</span><span class="l"><span class="n">3</span></span><span class="l"><span class="n">4</span>// .env の設定値を渡して、どの Firebase のプロジェクトとやりとりするかを覚えた app を作る</span><span class="l hl"><span class="n">5</span>const app = initializeApp({</span><span class="l hl"><span class="n">6</span>  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,</span><span class="l hl"><span class="n">7</span>  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,</span><span class="l hl"><span class="n">8</span>  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,</span><span class="l hl"><span class="n">9</span>  appId: import.meta.env.VITE_FIREBASE_APP_ID,</span><span class="l hl"><span class="n">10</span>})</span><span class="l"><span class="n">11</span></span><span class="l"><span class="n">12</span>// ログインの窓口。ストアと apiFetch が同じ1つの auth を見るように、ここで1回だけ作る</span><span class="l hl"><span class="n">13</span>export const auth = getAuth(app)</span></code></pre>
+    <div class="tablewrap"><table class="lines"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>1〜2</td><td>Firebase の SDK から、道具を2つ受け取る。<code>initializeApp</code> は設定を覚えたアプリを作る道具、<code>getAuth</code> はログインの窓口を作る道具</td><td>ファイルのノートの図1 の一番上の矢印</td></tr><tr><td>5〜10</td><td>4つの設定値を SDK に渡して、<code>app</code> を作る。<code>import.meta.env.VITE_…</code> は、Vite が環境変数から入れた値。ここではまだ通信しない</td><td>図2 場面 0「窓口を作る」の前半</td></tr><tr><td>13</td><td><code>app</code> から窓口の <code>auth</code> を作り、<code>export</code> で書き出す。この時点では、<code>auth.currentUser</code>(今ログインしている会員)は <code>null</code></td><td>図2 場面 0 の後半</td></tr></tbody></table></div>
+    <h3>なぜこう書くか</h3>
+    <p>結論:窓口は、このファイルで1回だけ作ります。</p>
+    <ol class="flow">
+      <li><strong>順2 と順4 は、同じ窓口を見る必要がある。</strong>順2 がログインすると、その窓口の <code>currentUser</code> に会員が入ります。順4 は、その同じ <code>currentUser</code> から ID トークンをもらいます。</li>
+      <li><strong>ここに書くだけで、窓口は1つになる。</strong>JavaScript のファイルは、何か所から <code>import</code> されても、中身は最初の1回しか動きません。「1つだけ作る」ための特別な仕組みは要りません。</li>
+      <li><strong><code>app</code> は書き出さない。</strong>ほかのファイルで使わないからです。Firestore を使うフェーズ4で必要になったら書き出します。</li>
+    </ol>
+    <h3>確かめ方</h3>
+    <ul>
+      <li>VS Code で、順2 の11行目 <code>import { auth } from '@/firebase'</code> の <code>auth</code> の上で「定義へ移動」(F12)を押すと、このファイルの13行目に飛びます。</li>
+      <li>設定値の名前を書き間違えると、型チェック(<code>npm run type-check</code>)がエラーにします。名前の型は <code>web/env.d.ts</code> にあります。</li>
+      <li>テストでは、このファイルを偽物に差し替えています(<code>vi.mock('@/firebase', …)</code>)。本物が動くのは、画面を開いたときだけです。</li>
+    </ul>
+    <p class="goto">次へ:順2 の <code>stores/auth.ts</code> は、13行目で書き出した <code>auth</code> を受け取ります。</p>
+  </section>
+
+  <section id="stop2">
+    <h2><span class="num">4</span>順2 stores/auth.ts:ログイン状態を写す</h2>
+    <ol class="route" aria-label="今ここ"><li>順1 firebase.ts</li><li class="on">順2 stores/auth.ts</li><li>順3 App.vue</li><li>順4 api/client.ts</li><li>順5 vite.config.ts</li><li>順6 Rails</li></ol>
+    <div class="io"><div><span class="k">前の順から受け取るもの</span>順1 の <code>auth</code>。Firebase の SDK の道具(<code>GoogleAuthProvider</code>、<code>onAuthStateChanged</code>、<code>signInWithPopup</code>、<code>signOut</code>)。Pinia の <code>defineStore</code></div><div><span class="k">次の順へ渡すもの</span>ストアを取り出す関数 <code>useAuthStore</code>(順3 が受け取る)。ストアの中身は <code>user</code>、<code>authStateReady</code>、<code>signIn</code>、<code>signOut</code> の4つ</div></div>
+    <p class="role"><span class="t-a2">stores/auth.ts</span> は、ログインの状態について SDK と話す係です。SDK にログインとログアウトを頼み、SDK からの知らせを受けて、画面のために <code>user</code> と <code>authStateReady</code> に写します。ID トークンには触りません。</p>
+    <p class="file">web/src/stores/auth.ts</p>
+<pre class="code"><code><span class="l"><span class="n">1</span>import { shallowRef } from 'vue'</span><span class="l"><span class="n">2</span>import { defineStore } from 'pinia'</span><span class="l"><span class="n">3</span>import {</span><span class="l"><span class="n">4</span>  GoogleAuthProvider,</span><span class="l"><span class="n">5</span>  onAuthStateChanged,</span><span class="l"><span class="n">6</span>  signInWithPopup,</span><span class="l"><span class="n">7</span>  signOut as firebaseSignOut,</span><span class="l"><span class="n">8</span>  type User,</span><span class="l"><span class="n">9</span>} from 'firebase/auth'</span><span class="l"><span class="n">10</span></span><span class="l"><span class="n">11</span>import { auth } from '@/firebase'</span><span class="l"><span class="n">12</span></span><span class="l"><span class="n">13</span>// ログイン状態を画面のために写しておくストア。ログイン状態の本体は Firebase の SDK が持つ</span><span class="l hl"><span class="n">14</span>export const useAuthStore = defineStore('auth', () =&gt; {</span><span class="l"><span class="n">15</span>  // SDK が作った会員のオブジェクトを入れるので、入れ替わりだけを見張る shallowRef にする</span><span class="l hl"><span class="n">16</span>  const user = shallowRef&lt;User | null&gt;(null)</span><span class="l"><span class="n">17</span>  // ログインしているかどうかの判定が終わったか。最初の知らせが来るまでは false(確認中)</span><span class="l hl"><span class="n">18</span>  const authStateReady = shallowRef(false)</span><span class="l"><span class="n">19</span></span><span class="l"><span class="n">20</span>  // SDK からの「未ログイン」「ログイン中」の知らせを受けて、ログイン状態を写す。user を書き換えるのはここだけ</span><span class="l hl"><span class="n">21</span>  onAuthStateChanged(auth, (currentUser) =&gt; {</span><span class="l hl"><span class="n">22</span>    user.value = currentUser</span><span class="l hl"><span class="n">23</span>    authStateReady.value = true</span><span class="l hl"><span class="n">24</span>  })</span><span class="l"><span class="n">25</span></span><span class="l"><span class="n">26</span>  // SDK にログインを頼む。失敗(ポップアップを閉じた、など)は、呼んだ画面に伝わる</span><span class="l hl"><span class="n">27</span>  async function signIn() {</span><span class="l hl"><span class="n">28</span>    await signInWithPopup(auth, new GoogleAuthProvider())</span><span class="l hl"><span class="n">29</span>  }</span><span class="l"><span class="n">30</span></span><span class="l"><span class="n">31</span>  // SDK にログアウトを頼む</span><span class="l"><span class="n">32</span>  async function signOut() {</span><span class="l"><span class="n">33</span>    await firebaseSignOut(auth)</span><span class="l"><span class="n">34</span>  }</span><span class="l"><span class="n">35</span></span><span class="l hl"><span class="n">36</span>  return { user, authStateReady, signIn, signOut }</span><span class="l"><span class="n">37</span>})</span></code></pre>
+    <div class="tablewrap"><table class="lines"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>1</td><td>Vue から <code>shallowRef</code> を受け取る。中身の入れ替わりだけを見張る箱を作る道具</td><td></td></tr><tr><td>2</td><td>Pinia から <code>defineStore</code> を受け取る。ストアの設計図を登録する道具</td><td></td></tr><tr><td>3〜9</td><td>Firebase の SDK から、道具4つと型 <code>User</code> を受け取る。SDK の <code>signOut</code> は <code>firebaseSignOut</code> という名前にする(32行目のストアの <code>signOut</code> と名前がぶつからないように)</td><td>ファイルのノートの図1</td></tr><tr><td>11</td><td>順1 の <code>auth</code> を受け取る</td><td>ファイルのノートの図1「auth」</td></tr><tr><td>14</td><td><code>'auth'</code> という名前でストアを登録し、取り出す関数 <code>useAuthStore</code> を書き出す。<code>() =&gt; { … }</code> の中身は、初めて <code>useAuthStore()</code> が呼ばれたときに1回だけ動く</td><td></td></tr><tr><td>16</td><td><code>user</code> の箱。会員のオブジェクトか <code>null</code></td><td></td></tr><tr><td>18</td><td><code>authStateReady</code> の箱。ログインしているかどうかの判定が終わったか。初めは <code>false</code>(確認中)</td><td></td></tr><tr><td>21〜24</td><td>SDK に「ログイン状態が分かったら・変わったら、この関数を呼んで知らせて」と登録する。知らせのたびに、会員(未ログインなら <code>null</code>)を <code>user</code> に入れ、<code>authStateReady</code> を <code>true</code> にする</td><td>図2 の「未ログイン」「ログイン中」の矢印(場面 1・2・4・5)</td></tr><tr><td>27〜29</td><td><code>signIn</code>。SDK にポップアップでのログインを頼む。結果を <code>user</code> に入れるのは、ここではなく22行目</td><td>図2 場面 2「ログインを頼む」</td></tr><tr><td>32〜34</td><td><code>signOut</code>。SDK にログアウトを頼む</td><td>図2 場面 4「ログアウトを頼む」</td></tr><tr><td>36</td><td>外から使えるものを並べる。ここに書かないものは、ほかのファイルから見えない</td><td></td></tr></tbody></table></div>
+    <h3>ログインのボタンを押したとき、このファイルの中で起きる順番</h3>
+    <ol class="flow">
+      <li>順3 の <code>App.vue</code> が、<code>signIn</code>(27行目)を呼ぶ</li>
+      <li>28行目で、SDK がポップアップを開く。会員が Google でログインし終えるまで、ここで待つ</li>
+      <li>ログインが終わると、SDK が、21行目で登録しておいた関数を、会員を渡して呼ぶ(28行目の待ちが終わるのと、どちらが先かは気にしなくてよい作りにしてある。理由は下の 3)</li>
+      <li>22行目で <code>user</code> に会員が入り、23行目で <code>authStateReady</code> が <code>true</code> になる(すでに <code>true</code> なら、そのまま)</li>
+      <li><code>user</code> が入れ替わったので、順3 の <code>App.vue</code> の画面と <code>watch</code> が動く</li>
+    </ol>
+    <h3>なぜこう書くか</h3>
+    <p>結論:<code>user</code> を書き換えるのは、知らせの中(22行目)の1か所だけにします。</p>
+    <ol class="flow">
+      <li><strong>ログイン中になるきっかけは2つある。</strong>ボタンでログインしたとき(場面 2)と、ページを開き直したとき(場面 5)です。<code>signIn</code> の中で <code>user</code> に入れる書き方だと、開き直したときは <code>signIn</code> を通らないので、<code>user</code> が入りません。</li>
+      <li><strong>知らせの中なら、どのきっかけでも同じ1か所を通る。</strong>ログイン、ログアウト、開き直しのどれでも、22行目を通ります。</li>
+      <li><strong>1か所にまとめても損はない。</strong>画面は <code>user</code> の変化を見張っているので、<code>user</code> がいつ入っても同じように動きます。</li>
+    </ol>
+    <p>そのほかの書き方の理由です。</p>
+    <ul>
+      <li><strong><code>shallowRef</code> にする理由</strong>:<code>user</code> の中身は SDK のオブジェクトで、中を書き換えるのは SDK です。知りたいのは入れ替わったかどうかだけなので、入れ替わりだけを見張れば足ります。</li>
+      <li><strong><code>authStateReady</code> を持つ理由</strong>:開いた直後の <code>user</code> の <code>null</code> は、「未ログイン」か「まだ分からない」かを区別できません。区別しないと、ログイン中の会員にも、ログインのボタンが一瞬見えてしまいます。</li>
+    </ul>
+    <h3>確かめ方</h3>
+    <ul>
+      <li>画面の下の中央にある Vue DevTools のボタンを押し、Pinia の欄で <code>auth</code> のストアを選ぶと、<code>user</code> と <code>authStateReady</code> の今の値が見えます。ログインとログアウトで変わるのを見られます(10章)。</li>
+      <li>テスト:<code>web/src/stores/__tests__/auth.spec.ts</code> の5件。偽物の SDK から知らせを送り、<code>user</code> と <code>authStateReady</code> が変わるかを確かめています。</li>
+    </ul>
+    <p class="goto">次へ:順3 の <code>App.vue</code> は、<code>useAuthStore()</code> でこのストアを受け取り、<code>user</code> の変化を見張ります。</p>
+  </section>
+
+  <section id="stop3">
+    <h2><span class="num">5</span>順3 App.vue:画面を出し分ける</h2>
+    <ol class="route" aria-label="今ここ"><li>順1 firebase.ts</li><li>順2 stores/auth.ts</li><li class="on">順3 App.vue</li><li>順4 api/client.ts</li><li>順5 vite.config.ts</li><li>順6 Rails</li></ol>
+    <div class="io"><div><span class="k">前の順から受け取るもの</span>順2 のストア(<code>useAuthStore</code>)、順4 の <code>apiFetch</code>。そして、順6 から戻ってくる会員の id</div><div><span class="k">次の順へ渡すもの</span>画面(ボタン、会員 ID、エラー)。順4 への頼みごと <code>apiFetch('/api/me')</code></div></div>
+    <p class="role"><span class="t-a2">App.vue</span> は、ストアを見て画面を出し分け、ログイン中になったら Rails に会員の id を聞きます。SDK とは直接話さず、ID トークンにも触りません。</p>
+    <p class="file">web/src/App.vue</p>
+<pre class="code"><code><span class="l"><span class="n">1</span>&lt;script setup lang="ts"&gt;</span><span class="l"><span class="n">2</span>import { shallowRef, watch } from 'vue'</span><span class="l"><span class="n">3</span></span><span class="l"><span class="n">4</span>import { apiFetch } from '@/api/client'</span><span class="l"><span class="n">5</span>import { useAuthStore } from '@/stores/auth'</span><span class="l"><span class="n">6</span></span><span class="l hl"><span class="n">7</span>const authStore = useAuthStore()</span><span class="l"><span class="n">8</span>const memberId = shallowRef&lt;number | null&gt;(null)</span><span class="l"><span class="n">9</span>const error = shallowRef&lt;string | null&gt;(null)</span><span class="l"><span class="n">10</span></span><span class="l"><span class="n">11</span>// ログイン中になったら、Rails に会員の id を聞く(場面 3)。未ログインになったら消す</span><span class="l"><span class="n">12</span>// ログインしたとき(場面 2)と、開き直したとき(場面 5)の両方を、user の変化で拾う</span><span class="l hl"><span class="n">13</span>watch(</span><span class="l hl"><span class="n">14</span>  () =&gt; authStore.user,</span><span class="l hl"><span class="n">15</span>  async (user) =&gt; {</span><span class="l"><span class="n">16</span>    memberId.value = null</span><span class="l"><span class="n">17</span>    error.value = null</span><span class="l"><span class="n">18</span>    if (!user) return</span><span class="l"><span class="n">19</span>    try {</span><span class="l hl"><span class="n">20</span>      const response = await apiFetch('/api/me')</span><span class="l hl"><span class="n">21</span>      if (!response.ok) {</span><span class="l"><span class="n">22</span>        error.value = `会員の情報を取得できませんでした(${response.status})`</span><span class="l"><span class="n">23</span>        return</span><span class="l"><span class="n">24</span>      }</span><span class="l hl"><span class="n">25</span>      const member = (await response.json()) as { id: number }</span><span class="l hl"><span class="n">26</span>      memberId.value = member.id</span><span class="l"><span class="n">27</span>    } catch {</span><span class="l"><span class="n">28</span>      error.value = '会員の情報を取得できませんでした'</span><span class="l"><span class="n">29</span>    }</span><span class="l"><span class="n">30</span>  },</span><span class="l"><span class="n">31</span>  { immediate: true },</span><span class="l"><span class="n">32</span>)</span><span class="l"><span class="n">33</span></span><span class="l"><span class="n">34</span>async function signIn() {</span><span class="l"><span class="n">35</span>  error.value = null</span><span class="l"><span class="n">36</span>  try {</span><span class="l hl"><span class="n">37</span>    await authStore.signIn()</span><span class="l"><span class="n">38</span>  } catch {</span><span class="l"><span class="n">39</span>    error.value = 'ログインできませんでした'</span><span class="l"><span class="n">40</span>  }</span><span class="l"><span class="n">41</span>}</span><span class="l"><span class="n">42</span>&lt;/script&gt;</span><span class="l"><span class="n">43</span></span><span class="l"><span class="n">44</span>&lt;template&gt;</span><span class="l"><span class="n">45</span>  &lt;!-- ログイン状態の確認が終わるまでは、何も出さない --&gt;</span><span class="l hl"><span class="n">46</span>  &lt;main v-if="authStore.authStateReady"&gt;</span><span class="l hl"><span class="n">47</span>    &lt;template v-if="authStore.user"&gt;</span><span class="l"><span class="n">48</span>      &lt;p v-if="memberId !== null"&gt;会員 ID:{{ memberId }}&lt;/p&gt;</span><span class="l"><span class="n">49</span>      &lt;button type="button" @click="authStore.signOut()"&gt;ログアウト&lt;/button&gt;</span><span class="l"><span class="n">50</span>    &lt;/template&gt;</span><span class="l hl"><span class="n">51</span>    &lt;button v-else type="button" @click="signIn"&gt;Google でログイン&lt;/button&gt;</span><span class="l"><span class="n">52</span>    &lt;p v-if="error" role="alert"&gt;{{ error }}&lt;/p&gt;</span><span class="l"><span class="n">53</span>  &lt;/main&gt;</span><span class="l"><span class="n">54</span>&lt;/template&gt;</span></code></pre>
+    <div class="tablewrap"><table class="lines"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>1</td><td><code>&lt;script setup&gt;</code>。この中で作った変数や関数を、下の <code>&lt;template&gt;</code> でそのまま使える</td><td></td></tr><tr><td>4〜5</td><td>順4 の <code>apiFetch</code> と、順2 の <code>useAuthStore</code> を受け取る</td><td>ファイルのノートの図1</td></tr><tr><td>7</td><td>ストアを取り出す。アプリの中で初めて呼ばれたときに、順2 の14行目の中身が1回動き、<code>onAuthStateChanged</code> が登録される</td><td></td></tr><tr><td>8〜9</td><td>画面のための箱を2つ作る。<code>memberId</code>(Rails から受け取る会員の id)と <code>error</code>(エラーの文)</td><td></td></tr><tr><td>13〜15</td><td><code>watch</code>。ストアの <code>user</code> を見張り、変わるたびに15〜30行目の関数を、新しい <code>user</code> を渡して動かす</td><td></td></tr><tr><td>16〜18</td><td>いったん表示を消す。未ログイン(<code>null</code>)なら、ここで終わる</td><td></td></tr><tr><td>20</td><td>順4 の <code>apiFetch</code> に「<code>/api/me</code> を呼んで」と頼み、結果(<code>Response</code>)が返るまで待つ</td><td>図2 場面 3 の始まり</td></tr><tr><td>21〜24</td><td>失敗(401 や 500)なら、状態コードつきのエラーを出す</td><td>完了条件 AC-8</td></tr><tr><td>25〜26</td><td>成功なら、JSON から <code>id</code> を取り出して <code>memberId</code> に入れる</td><td>図2 場面 3「会員 ID を出す」</td></tr><tr><td>27〜29</td><td>通信そのものに失敗したとき(Rails が止まっている、など)のエラー</td><td></td></tr><tr><td>31</td><td><code>{ immediate: true }</code>。見張り始めた時点で、一度動かす</td><td></td></tr><tr><td>34〜41</td><td>ログインのボタンを押したときの関数。順2 の <code>signIn</code> を呼び、失敗(ポップアップを閉じた、など)したらエラーを出す</td><td>図2 場面 2</td></tr><tr><td>46</td><td>判定が終わるまで(<code>authStateReady</code> が <code>false</code> の間)は、何も出さない</td><td></td></tr><tr><td>47〜50</td><td>ログイン中なら、会員 ID(取れていれば)と、ログアウトのボタン。ログアウトは順2 の <code>signOut</code> を直接呼ぶ</td><td>図2 場面 3・4</td></tr><tr><td>51</td><td>未ログインなら、ログインのボタン</td><td>図2 場面 1</td></tr><tr><td>52</td><td>エラーがあれば出す。<code>role="alert"</code> は、画面の読み上げソフトにエラーだと伝える印</td><td></td></tr></tbody></table></div>
+    <h3>画面の決まり方</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th><code>authStateReady</code></th><th><code>user</code></th><th><code>/api/me</code> の結果</th><th>画面</th></tr></thead>
+        <tbody>
+          <tr><td><code>false</code></td><td><code>null</code></td><td>(呼ばない)</td><td>何も出さない(46行目)</td></tr>
+          <tr><td><code>true</code></td><td><code>null</code></td><td>(呼ばない)</td><td>ログインのボタン(51行目)</td></tr>
+          <tr><td><code>true</code></td><td>会員</td><td>成功</td><td>会員 ID とログアウトのボタン(48〜49行目)</td></tr>
+          <tr><td><code>true</code></td><td>会員</td><td>失敗</td><td>ログアウトのボタンとエラー(49、52行目)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>なぜこう書くか</h3>
+    <p>結論:<code>/api/me</code> は、ボタンの処理の中ではなく、<code>user</code> の変化(<code>watch</code>)で呼びます。</p>
+    <ol class="flow">
+      <li><strong>ボタンの処理の中で呼ぶと、開き直したときに呼ばれない。</strong>34〜41行目はボタンを押したときにしか動かず、ページを開き直したときは通りません。</li>
+      <li><strong><code>watch</code> なら、2つのきっかけを同じ1か所で拾える。</strong>ログインしたとき(場面 2)と開き直したとき(場面 5)の両方で、<code>user</code> が会員に変わるからです。全体のノートの「場面 5 のあと、場面 3 と同じことが起きる」を、そのまま書いた形です。</li>
+      <li><strong>成功か失敗かを決めるのは、画面の仕事。</strong>順4 の <code>apiFetch</code> は <code>Response</code> を返すだけです。状態コードを見て、何を出すかを決めるのは、この画面です(21〜24行目)。</li>
+    </ol>
+    <h3>確かめ方</h3>
+    <ul>
+      <li>Vue DevTools の Components の欄で <code>App</code> を選ぶと、<code>memberId</code> と <code>error</code> の今の値が見えます。</li>
+      <li>テスト:<code>web/src/__tests__/App.spec.ts</code> の6件。</li>
+    </ul>
+    <p class="goto">次へ:順4 の <code>api/client.ts</code> は、20行目の <code>apiFetch('/api/me')</code> を受け取り、ID トークンを付けます。</p>
+  </section>
+
+  <section id="stop4">
+    <h2><span class="num">6</span>順4 api/client.ts:ID トークンを付けて送る</h2>
+    <ol class="route" aria-label="今ここ"><li>順1 firebase.ts</li><li>順2 stores/auth.ts</li><li>順3 App.vue</li><li class="on">順4 api/client.ts</li><li>順5 vite.config.ts</li><li>順6 Rails</li></ol>
+    <div class="io"><div><span class="k">前の順から受け取るもの</span>順3 からの頼みごと(パスの <code>'/api/me'</code>)。順1 の <code>auth</code>(順2 と同じもの)</div><div><span class="k">次の順へ渡すもの</span>ID トークンを <code>Authorization</code> に入れたリクエスト(ブラウザが順5 へ送る)。戻ってきた <code>Response</code> は、順3 に返す</div></div>
+    <p class="role"><span class="t-a2">api/client.ts</span> は、Vue のコードの中で、ID トークンに触る唯一の場所です。Rails でいうと、Faraday などの HTTP クライアントに、<code>Authorization</code> ヘッダーを足すミドルウェアをはさむのに近いものです。</p>
+    <p class="file">web/src/api/client.ts</p>
+<pre class="code"><code><span class="l"><span class="n">1</span>import { auth } from '@/firebase'</span><span class="l"><span class="n">2</span></span><span class="l"><span class="n">3</span>// Rails の API を呼ぶ。ログインしていれば、ID トークンを Authorization に付けて送る</span><span class="l"><span class="n">4</span>export async function apiFetch(path: string, init: RequestInit = {}): Promise&lt;Response&gt; {</span><span class="l"><span class="n">5</span>  const headers = new Headers(init.headers)</span><span class="l hl"><span class="n">6</span>  const user = auth.currentUser</span><span class="l"><span class="n">7</span>  if (user) {</span><span class="l"><span class="n">8</span>    // 呼ぶたびに SDK に頼む。期限が近ければ、SDK が取り直してから渡す</span><span class="l hl"><span class="n">9</span>    headers.set('Authorization', `Bearer ${await user.getIdToken()}`)</span><span class="l"><span class="n">10</span>  }</span><span class="l hl"><span class="n">11</span>  return fetch(path, { ...init, headers })</span><span class="l"><span class="n">12</span>}</span></code></pre>
+    <div class="tablewrap"><table class="lines"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>1</td><td>順1 の <code>auth</code> を受け取る。順2 が受け取ったものと同じ1つ</td><td>ファイルのノートの図1</td></tr><tr><td>4</td><td><code>apiFetch</code> を書き出す。呼ぶ側から、パス(<code>path</code>)と、<code>fetch</code> に渡すオプション(<code>init</code>。省略したら空)を受け取り、<code>Response</code> を返す。<code>async</code> なので、呼ぶ側は <code>await</code> で待つ</td><td></td></tr><tr><td>5</td><td>呼ぶ側が渡したヘッダーを、<code>Headers</code> という入れ物に写す。<code>Content-Type</code> などを消さずに、<code>Authorization</code> だけを足すため</td><td></td></tr><tr><td>6</td><td>SDK の手元の会員を見る。未ログインなら <code>null</code></td><td>全体のノートの図3「SDK の手元」</td></tr><tr><td>7〜10</td><td>ログイン中なら、SDK に ID トークンを頼み(<code>getIdToken</code>)、「Bearer トークン」の形で <code>Authorization</code> に入れる</td><td>全体のノートの図3 の ③</td></tr><tr><td>11</td><td>ブラウザの <code>fetch</code> で送る。<code>{ ...init, headers }</code> は、呼ぶ側のオプションを写して、<code>headers</code> だけを差し替える書き方(Ruby の <code>**options</code> に近い)</td><td>全体のノートの図3 の ④</td></tr></tbody></table></div>
+    <h3>なぜこう書くか</h3>
+    <p>結論:ID トークンは取っておかず、送るたびに SDK からもらいます(9行目)。</p>
+    <ol class="flow">
+      <li><strong>取っておいた写しは、古いまま残る。</strong>ID トークンの期限は1時間で、期限が近づくと SDK が新しいものに取り直します。取り直されても、私たちのコードが取っておいた写しは変わりません。</li>
+      <li><strong>私たちのコードには、取り直す手段がない。</strong>取り直すための情報も、Google とのやりとりも、SDK が持っています。</li>
+      <li><strong>毎回もらっても、損はない。</strong>期限内なら、SDK は通信せずにすぐ返します。</li>
+    </ol>
+    <p>まとめると、取っておく得はなく、古くなる損だけがあります。詳しくは<a href="vue-google-login.html#token">全体のノートの4章</a>にあります。</p>
+    <p>もう1つ、未ログインのときも、<code>Authorization</code> を付けずに送ります(7行目の <code>if</code> を通らない)。記事の一覧(<code>GET /api/articles</code>)のように、ログインしなくても呼べる API があるためです(完了条件 AC-7)。</p>
+    <h3>確かめ方</h3>
+    <ul>
+      <li>ブラウザの開発者ツール(Mac では Cmd+Option+I)の Network タブで <code>me</code> を選び、Request Headers に <code>Authorization: Bearer …</code> があるかを見ます。</li>
+      <li>テスト:<code>web/src/api/__tests__/client.spec.ts</code> の4件。</li>
+    </ul>
+    <div class="note warn"><p><code>Authorization</code> の値(ID トークン)は、画面の共有や、どこかへの貼り付けをしないでください。期限が切れるまでの間、その会員として Rails を呼べてしまいます。</p></div>
+    <p class="goto">次へ:11行目でブラウザが送ったリクエストは、まず順5 の Vite の開発サーバーに届きます。</p>
+  </section>
+
+  <section id="stop5">
+    <h2><span class="num">7</span>順5 vite.config.ts:Rails へ転送する</h2>
+    <ol class="route" aria-label="今ここ"><li>順1 firebase.ts</li><li>順2 stores/auth.ts</li><li>順3 App.vue</li><li>順4 api/client.ts</li><li class="on">順5 vite.config.ts</li><li>順6 Rails</li></ol>
+    <div class="io"><div><span class="k">前の順から受け取るもの</span>ブラウザからのリクエスト。宛先は <code>http://localhost:5173/api/me</code></div><div><span class="k">次の順へ渡すもの</span>同じリクエストを、Rails(<code>http://api:3000/api/me</code>)へ転送する。Rails の返事は、ブラウザへ戻す</div></div>
+    <p class="role"><span class="t-a1">vite.config.ts</span> は、Vite の開発サーバーの設定ファイルです。ブラウザで動くコードではなく、web コンテナの中で動く Vite の開発サーバーが読みます。<code>/api</code> で始まるリクエストを、Rails に取り次ぎます。Rails の世界でいうと、nginx の <code>proxy_pass</code> にあたります。</p>
+    <p class="file">web/vite.config.ts</p>
+<pre class="code"><code><span class="l"><span class="n">1</span>import { fileURLToPath, URL } from 'node:url'</span><span class="l"><span class="n">2</span></span><span class="l"><span class="n">3</span>import { defineConfig } from 'vite'</span><span class="l"><span class="n">4</span>import vue from '@vitejs/plugin-vue'</span><span class="l"><span class="n">5</span>import vueDevTools from 'vite-plugin-vue-devtools'</span><span class="l"><span class="n">6</span></span><span class="l"><span class="n">7</span>// https://vite.dev/config/</span><span class="l"><span class="n">8</span>export default defineConfig({</span><span class="l"><span class="n">9</span>  plugins: [</span><span class="l"><span class="n">10</span>    vue(),</span><span class="l"><span class="n">11</span>    vueDevTools(),</span><span class="l"><span class="n">12</span>  ],</span><span class="l"><span class="n">13</span>  resolve: {</span><span class="l"><span class="n">14</span>    alias: {</span><span class="l"><span class="n">15</span>      '@': fileURLToPath(new URL('./src', import.meta.url)),</span><span class="l"><span class="n">16</span>    },</span><span class="l"><span class="n">17</span>  },</span><span class="l"><span class="n">18</span>  server: {</span><span class="l"><span class="n">19</span>    proxy: {</span><span class="l"><span class="n">20</span>      // /api へのリクエストを、Docker Compose のネットワークの中の Rails へ転送する</span><span class="l hl"><span class="n">21</span>      '/api': {</span><span class="l hl"><span class="n">22</span>        target: 'http://api:3000',</span><span class="l"><span class="n">23</span>        // Host ヘッダーを書き換えない。文字列だけの書き方('/api': 'http://api:3000')だと</span><span class="l"><span class="n">24</span>        // Vite は true にし、Host が api:3000 になって、Rails の開発環境の Host の確認で弾かれる</span><span class="l hl"><span class="n">25</span>        changeOrigin: false,</span><span class="l"><span class="n">26</span>      },</span><span class="l"><span class="n">27</span>    },</span><span class="l"><span class="n">28</span>  },</span><span class="l"><span class="n">29</span>})</span></code></pre>
+    <div class="tablewrap"><table class="lines"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>9〜12</td><td>Vue のファイルを扱う部品と、Vue DevTools(10章で使う)を組み込む</td><td></td></tr><tr><td>13〜17</td><td><code>'@'</code> を <code>src</code> フォルダーの意味にする。<code>'@/firebase'</code> の <code>@</code> は、ここで決めている</td><td></td></tr><tr><td>18〜19</td><td>開発サーバーの設定の中の、転送(proxy)の設定</td><td></td></tr><tr><td>21〜22</td><td><code>/api</code> で始まるリクエストを、<code>http://api:3000</code> へ転送する。<code>api</code> は、Docker Compose の中での Rails のコンテナの名前。web コンテナから見た <code>localhost</code> は web コンテナ自身なので、<code>localhost:3000</code> とは書けない</td><td>図2 場面 3 の通り道</td></tr><tr><td>25</td><td><code>changeOrigin: false</code>。リクエストの宛先の欄(Host ヘッダー)を、<code>localhost:5173</code> のまま Rails に渡す</td><td></td></tr></tbody></table></div>
+    <h3>なぜこう書くか</h3>
+    <p>結論:ブラウザから見た相手を、<code>localhost:5173</code> の1つにします。</p>
+    <ol class="flow">
+      <li><strong>Rails を直接呼ぶと、相手が2つになる。</strong>ブラウザから <code>localhost:3000</code> の Rails を直接呼ぶと、ブラウザから見た相手が2つ(画面は 5173、API は 3000)になります。すると、ブラウザの安全のための決まり(CORS)によって、Rails 側に「5173 からの呼び出しを許す」設定が要ります。</li>
+      <li><strong>転送なら、その設定が要らない。</strong>ブラウザから見た相手は1つです。本番で、Firebase Hosting が <code>/api</code> を Cloud Run の Rails へ転送する形とも同じになります。</li>
+      <li><strong><code>changeOrigin</code> は <code>false</code> にする。</strong><code>true</code> だと、宛先の欄(Host ヘッダー)が <code>api:3000</code> に書き換わり、Rails の開発環境が「知らない宛先」として断ります。<code>false</code> なら宛先は <code>localhost:5173</code> のままで、Rails が初めから許している <code>localhost</code> に当たります。</li>
+    </ol>
+    <h3>確かめ方</h3>
+    <ul>
+      <li>Network タブで <code>me</code> を選ぶと、Request URL は <code>http://localhost:5173/api/me</code> です。3000 ではないことが、転送されている証拠です。</li>
+      <li>Rails のログ(<code>docker compose logs -f api</code>)に、<code>Started GET "/api/me" for 192.168.…</code> と出ます。この 192.168.… は Docker のネットワークの中のアドレスです(手元の確認では 192.168.97.2 でした)。ブラウザではなく、web コンテナの Vite が Rails を呼んでいることが分かります。</li>
+    </ul>
+    <p class="goto">次へ:順6 の Rails は、転送されてきたリクエストを受け取ります。</p>
+  </section>
+
+  <section id="stop6">
+    <h2><span class="num">8</span>順6 Rails:トークンを確かめて会員を返す</h2>
+    <ol class="route" aria-label="今ここ"><li>順1 firebase.ts</li><li>順2 stores/auth.ts</li><li>順3 App.vue</li><li>順4 api/client.ts</li><li>順5 vite.config.ts</li><li class="on rails">順6 Rails</li></ol>
+    <div class="io"><div><span class="k">前の順から受け取るもの</span>順5 が転送したリクエスト。<code>Authorization: Bearer</code> の欄に、順4 が入れた ID トークンがある</div><div><span class="k">次の順へ渡すもの</span>会員の <code>id</code> と <code>firebase_uid</code>(JSON)。順5 と順4 を通って、順3 の20行目に戻る</div></div>
+    <p class="role"><span class="t-a6">順6</span> は、Issue #8 で作った部分です。ID トークンを確かめて会員を特定し、id を返します。この PR で変えたのは、<code>firebase_id_token_verifier.rb</code> の1行目(<code>require "net/http"</code>)だけです。Rails の中は、6-1 から 6-4 の順に通ります。</p>
+
+    <h3>6-1 ルーティング:どのコントローラーに渡すか</h3>
+    <p class="file">api/config/routes.rb</p>
+<pre class="code rails"><code><span class="l"><span class="n">8</span>  namespace :api do</span><span class="l hl"><span class="n">9</span>    get "me", to: "me#show"</span><span class="l"><span class="n">10</span>    resources :articles, only: %i[index create]</span><span class="l"><span class="n">11</span>  end</span></code></pre>
+    <p><code>GET /api/me</code> を、<code>Api::MeController</code> の <code>show</code> に渡します(9行目)。</p>
+
+    <h3>6-2 me_controller.rb:先に会員を確かめてから返す</h3>
+    <p class="file">api/app/controllers/api/me_controller.rb</p>
+<pre class="code rails"><code><span class="l"><span class="n">1</span>module Api</span><span class="l"><span class="n">2</span>  # ログインしている会員を返す。#11 で、ログインが Rails までつながったかを確かめるときにも使う</span><span class="l"><span class="n">3</span>  class MeController &lt; ApplicationController</span><span class="l hl"><span class="n">4</span>    include FirebaseAuthenticatable</span><span class="l"><span class="n">5</span></span><span class="l hl"><span class="n">6</span>    before_action :authenticate_member!</span><span class="l"><span class="n">7</span></span><span class="l"><span class="n">8</span>    def show</span><span class="l hl"><span class="n">9</span>      render json: { id: current_member.id, firebase_uid: current_member.firebase_uid }</span><span class="l"><span class="n">10</span>    end</span><span class="l"><span class="n">11</span>  end</span><span class="l"><span class="n">12</span>end</span></code></pre>
+    <div class="tablewrap"><table class="lines rails"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>4</td><td><code>FirebaseAuthenticatable</code>(次の 6-3)を取り込む</td><td></td></tr><tr><td>6</td><td><code>show</code> の前に、<code>authenticate_member!</code> を動かす。そこで 401 を返したら、<code>show</code> は動かない</td><td></td></tr><tr><td>9</td><td>確かめた会員の <code>id</code> と <code>firebase_uid</code> を JSON で返す。これが順3 に戻る</td><td>図2 場面 3 の帰り</td></tr></tbody></table></div>
+
+    <h3>6-3 firebase_authenticatable.rb:トークンを取り出し、会員を特定する</h3>
+    <p class="file">api/app/controllers/concerns/firebase_authenticatable.rb</p>
+<pre class="code rails"><code><span class="l"><span class="n">1</span># Firebase の ID トークンで、リクエストした会員を特定する。</span><span class="l"><span class="n">2</span># コントローラーで before_action :authenticate_member! と書くと、トークンがない、または確かめられないリクエストに 401 を返す</span><span class="l"><span class="n">3</span>module FirebaseAuthenticatable</span><span class="l"><span class="n">4</span>  extend ActiveSupport::Concern</span><span class="l"><span class="n">5</span></span><span class="l"><span class="n">6</span>  private</span><span class="l"><span class="n">7</span></span><span class="l"><span class="n">8</span>  def authenticate_member!</span><span class="l hl"><span class="n">9</span>    token = request.authorization.to_s[/\ABearer (.+)\z/, 1]</span><span class="l hl"><span class="n">10</span>    return render_unauthorized("Authorization ヘッダーが Bearer の形ではありません") if token.nil?</span><span class="l"><span class="n">11</span></span><span class="l hl"><span class="n">12</span>    payload = FirebaseIdTokenVerifier.new.verify!(token)</span><span class="l hl"><span class="n">13</span>    @current_member = Member.create_or_find_by!(firebase_uid: payload["sub"])</span><span class="l"><span class="n">14</span>  rescue FirebaseIdTokenVerifier::InvalidToken =&gt; e</span><span class="l hl"><span class="n">15</span>    render_unauthorized(e.message)</span><span class="l"><span class="n">16</span>  end</span><span class="l"><span class="n">17</span></span><span class="l"><span class="n">18</span>  def current_member</span><span class="l"><span class="n">19</span>    @current_member</span><span class="l"><span class="n">20</span>  end</span><span class="l"><span class="n">21</span></span><span class="l"><span class="n">22</span>  # どの確認で失敗したかは返さない(偽造を試す人に手がかりを与えないため)。理由はログに残す</span><span class="l"><span class="n">23</span>  def render_unauthorized(reason)</span><span class="l"><span class="n">24</span>    Rails.logger.info("401 を返します: #{reason}")</span><span class="l"><span class="n">25</span>    render json: { error: "unauthorized" }, status: :unauthorized</span><span class="l"><span class="n">26</span>  end</span><span class="l"><span class="n">27</span>end</span></code></pre>
+    <div class="tablewrap"><table class="lines rails"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>9</td><td><code>Authorization</code> の欄から、「Bearer 」のあとのトークンを取り出す。順4 の9行目で入れたもの</td><td></td></tr><tr><td>10</td><td>形が違えば(トークンがない、など)、401 を返す</td><td></td></tr><tr><td>12</td><td>6-4 の <code>FirebaseIdTokenVerifier</code> に、トークンを確かめさせる。中身(payload)が返る</td><td>図2 場面 3「トークンを検証」</td></tr><tr><td>13</td><td>payload の <code>sub</code>(Firebase の会員の uid)で会員を探す。いなければ作る(初めてログインしたとき)</td><td>完了条件 AC-9</td></tr><tr><td>14〜15</td><td>確かめに失敗したら、401 を返す</td><td></td></tr><tr><td>22〜26</td><td>401 の理由は、返事に入れずログにだけ残す。偽物を作ろうとする人に、どの確認で落ちたかの手がかりを与えないため</td><td></td></tr></tbody></table></div>
+
+    <h3>6-4 firebase_id_token_verifier.rb:トークンを確かめる</h3>
+    <p class="file">api/app/lib/firebase_id_token_verifier.rb</p>
+<pre class="code rails"><code><span class="l"><span class="n">51</span>  def initialize</span><span class="l hl"><span class="n">52</span>    @project_id = Rails.configuration.x.firebase.project_id</span><span class="l"><span class="n">53</span>    raise "Firebase のプロジェクト ID が設定されていません(FIREBASE_PROJECT_ID)" if @project_id.blank?</span><span class="l"><span class="n">54</span>  end</span><span class="l"><span class="n">55</span></span><span class="l"><span class="n">56</span>  def verify!(token)</span><span class="l hl"><span class="n">57</span>    payload, _header = JWT.decode(</span><span class="l"><span class="n">58</span>      token, # 確かめるトークン</span><span class="l"><span class="n">59</span>      nil, # 署名を確かめる鍵。下の jwks: で渡すので、ここでは渡さない</span><span class="l"><span class="n">60</span>      true, # 署名を確かめるか</span><span class="l"><span class="n">61</span>      algorithms: [ "RS256" ],</span><span class="l hl"><span class="n">62</span>      jwks: self.class.method(:fetch_jwks),</span><span class="l hl"><span class="n">63</span>      aud: @project_id, verify_aud: true,</span><span class="l hl"><span class="n">64</span>      iss: "https://securetoken.google.com/#{@project_id}", verify_iss: true,</span><span class="l"><span class="n">65</span>      verify_iat: true</span><span class="l"><span class="n">66</span>    )</span><span class="l"><span class="n">67</span>    raise InvalidToken, "sub が空です" if payload["sub"].blank?</span><span class="l"><span class="n">68</span>    raise InvalidToken, "auth_time が未来です" if payload["auth_time"].to_i &gt; Time.current.to_i</span><span class="l"><span class="n">69</span></span><span class="l hl"><span class="n">70</span>    payload</span><span class="l"><span class="n">71</span>  rescue JWT::DecodeError =&gt; e</span><span class="l"><span class="n">72</span>    raise InvalidToken, e.message</span><span class="l"><span class="n">73</span>  end</span></code></pre>
+    <div class="tablewrap"><table class="lines rails"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>52〜53</td><td>プロジェクト ID を設定から読む。<code>config/application.rb</code> の45行目が、環境変数 <code>FIREBASE_PROJECT_ID</code> から入れた値</td><td>ファイルのノートの図2 の下の道</td></tr><tr><td>57〜66</td><td>jwt gem の <code>JWT.decode</code> で、署名(RS256)、宛先(aud)、発行者(iss)、発行時刻(iat)を確かめる。期限(exp)は、jwt gem が初めから確かめる。署名を確かめる公開鍵は、62行目の <code>fetch_jwks</code> で探す</td><td></td></tr><tr><td>67〜68</td><td><code>sub</code> が空でないか、ログインした時刻(<code>auth_time</code>)が未来でないかを確かめる</td><td></td></tr><tr><td>70</td><td>確かめた中身(payload)を返す。6-3 の12行目に戻る</td><td></td></tr><tr><td>71〜72</td><td>確かめに失敗したら、<code>InvalidToken</code> にして投げる。6-3 の14行目が受け止める</td><td></td></tr></tbody></table></div>
+    <p>署名を確かめる公開鍵は、Google から取ってきます(30行目)。その <code>Net::HTTP</code> を読み込むのが、この PR で足した1行目です。</p>
+    <p class="file">api/app/lib/firebase_id_token_verifier.rb</p>
+<pre class="code rails"><code><span class="l hl"><span class="n">1</span>require "net/http"</span></code></pre>
+    <p class="file">api/app/lib/firebase_id_token_verifier.rb</p>
+<pre class="code rails"><code><span class="l"><span class="n">28</span>    # Google から公開鍵の一覧と、キャッシュの期間(秒)を取ってくる。テストでは差し替える</span><span class="l"><span class="n">29</span>    def download_jwks</span><span class="l hl"><span class="n">30</span>      response = Net::HTTP.get_response(JWKS_URL)</span><span class="l"><span class="n">31</span>      response.value</span><span class="l"><span class="n">32</span>      [ JSON.parse(response.body), response["Cache-Control"][/max-age=(\d+)/, 1].to_i ]</span><span class="l"><span class="n">33</span>    end</span></code></pre>
+    <div class="tablewrap"><table class="lines rails"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>1</td><td><code>Net::HTTP</code> を読み込む。この PR で足した行</td><td></td></tr><tr><td>30</td><td>Google の公開鍵の URL(8行目の <code>JWKS_URL</code>)に取りに行く</td><td></td></tr><tr><td>31</td><td>失敗(200 以外)なら、例外にする</td><td></td></tr><tr><td>32</td><td>公開鍵の一覧と、何秒取っておいてよいか(<code>max-age</code>)を返す</td><td></td></tr></tbody></table></div>
+    <div class="note"><p>署名と公開鍵の仕組みは、<a href="id-token-signature.html">id-token-signature.html</a> と <a href="firebase-public-key.html">firebase-public-key.html</a> に詳しくあります。</p></div>
+
+    <h3>なぜ1行目が抜けていたのに、テストは通っていたのか</h3>
+    <p>Issue #8 のテストは、外へ通信しないように、<code>download_jwks</code>(29行目)を偽物に差し替えていました。そのため、30行目の <code>Net::HTTP</code> は、テストでは一度も動いていませんでした。本物の Google に通信したのは今回の手動確認が初めてで、そこで 500(<code>NameError</code>)になりました。偽物に差し替えた部分は、手動確認でしか確かめられません。</p>
+
+    <h3>確かめ方</h3>
+    <ul>
+      <li>Rails のログ(<code>docker compose logs -f api</code>)で、<code>Processing by Api::MeController#show</code> と <code>Completed 200 OK</code> を見ます。401 のときは「401 を返します:」のあとに理由が出ます(6-3 の24行目)。</li>
+      <li>テスト:<code>docker compose exec api bundle exec rspec spec/requests/api/me_spec.rb</code>(Issue #8 のテスト)。</li>
+      <li>会員の数:<code>docker compose exec api bin/rails runner 'puts Member.count'</code></li>
+    </ul>
+    <p class="goto rails">次へ:会員の id は、順5 と順4 を通って、順3 の20行目の <code>await</code> に戻ります。そのあと25〜26行目で <code>memberId</code> に入り、48行目で画面に出ます。9章で、この一周を通しで追います。</p>
+  </section>
+
+  <section id="trace">
+    <h2><span class="num">9</span>通しで追う</h2>
+    <h3>ボタンを押してから「会員 ID:1」が出るまで</h3>
+    <p>3〜8章で読んだ行が、どの順に動くかを、1本につなげます。縦の点線が、ファイル(と会員、SDK)です。矢印の色は、矢印を出した側の色です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 820 590" role="img" aria-label="ボタンを押してから会員 ID が出るまでを、ファイルごとの縦の線で追う図。番号は1から15まで。1から7がログインする場面、8から15が Rails に会員を聞く場面">
+          <defs>
+            <marker id="f2-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f2-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f2-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+          </defs>
+
+          <rect x="0" y="70" width="820" height="236" class="band"/>
+          <rect x="0" y="310" width="820" height="266" class="band"/>
+          <text x="812" y="86" text-anchor="end" class="s">場面 2:ログインする</text>
+          <text x="812" y="326" text-anchor="end" class="s">場面 3:Rails に会員を聞く</text>
+
+          <line x1="60" y1="60" x2="60" y2="580" class="life"/>
+          <line x1="175" y1="60" x2="175" y2="580" class="life"/>
+          <line x1="290" y1="60" x2="290" y2="580" class="life"/>
+          <line x1="405" y1="60" x2="405" y2="580" class="life"/>
+          <line x1="520" y1="60" x2="520" y2="580" class="life"/>
+          <line x1="635" y1="60" x2="635" y2="580" class="life"/>
+          <line x1="750" y1="60" x2="750" y2="580" class="life"/>
+
+          <rect x="7" y="16" width="106" height="44" rx="7" class="bx-a1"/>
+          <text x="60" y="35" text-anchor="middle" class="b a">会員</text>
+          <text x="60" y="52" text-anchor="middle" class="s">人</text>
+          <rect x="122" y="16" width="106" height="44" rx="7" class="bx-a2"/>
+          <text x="175" y="35" text-anchor="middle" class="b a">画面</text>
+          <text x="175" y="52" text-anchor="middle" class="m">App.vue</text>
+          <rect x="237" y="16" width="106" height="44" rx="7" class="bx-a2"/>
+          <text x="290" y="35" text-anchor="middle" class="b a">ストア</text>
+          <text x="290" y="52" text-anchor="middle" class="m">stores/auth.ts</text>
+          <rect x="352" y="16" width="106" height="44" rx="7" class="bx-a2"/>
+          <text x="405" y="35" text-anchor="middle" class="b a">API を呼ぶ</text>
+          <text x="405" y="52" text-anchor="middle" class="m">api/client.ts</text>
+          <rect x="467" y="16" width="106" height="44" rx="7" class="bx-a3"/>
+          <text x="520" y="35" text-anchor="middle" class="b a">SDK</text>
+          <text x="520" y="52" text-anchor="middle" class="m">firebase/auth</text>
+          <rect x="582" y="16" width="106" height="44" rx="7" class="bx-a1"/>
+          <text x="635" y="35" text-anchor="middle" class="b a">Vite</text>
+          <text x="635" y="52" text-anchor="middle" class="m">vite.config.ts</text>
+          <rect x="697" y="16" width="106" height="44" rx="7" class="bx-a6"/>
+          <text x="750" y="35" text-anchor="middle" class="b a">Rails</text>
+          <text x="750" y="52" text-anchor="middle" class="s">3つのファイル</text>
+
+          <line x1="60" y1="90" x2="171" y2="90" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="117" y="82" text-anchor="middle" class="a">① ボタンを押す</text>
+          <line x1="175" y1="120" x2="286" y2="120" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="232" y="112" text-anchor="middle" class="a">② signIn()</text>
+          <line x1="290" y1="150" x2="516" y2="150" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="405" y="142" text-anchor="middle" class="a">③ signInWithPopup</text>
+          <rect x="450" y="168" width="140" height="24" rx="5" class="bx-a3"/>
+          <text x="520" y="185" text-anchor="middle" class="a">④ Google にログイン</text>
+          <line x1="520" y1="222" x2="294" y2="222" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="405" y="214" text-anchor="middle" class="a">⑤ 知らせ(currentUser)</text>
+          <rect x="215" y="240" width="150" height="24" rx="5" class="bx-a2"/>
+          <text x="290" y="257" text-anchor="middle" class="a">⑥ user を書き換える</text>
+          <line x1="290" y1="294" x2="179" y2="294" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="232" y="286" text-anchor="middle" class="a">⑦ watch が動く</text>
+
+          <line x1="175" y1="340" x2="401" y2="340" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="290" y="332" text-anchor="middle" class="a">⑧ apiFetch('/api/me')</text>
+          <line x1="405" y1="370" x2="516" y2="370" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="462" y="362" text-anchor="middle" class="a">⑨ getIdToken()</text>
+          <line x1="520" y1="400" x2="409" y2="400" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="462" y="392" text-anchor="middle" class="a">⑩ ID トークン</text>
+          <line x1="405" y1="430" x2="631" y2="430" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="520" y="422" text-anchor="middle" class="a">⑪ fetch(Authorization 付き)</text>
+          <line x1="635" y1="460" x2="746" y2="460" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="692" y="452" text-anchor="middle" class="a">⑫ 転送</text>
+          <rect x="680" y="478" width="135" height="24" rx="5" class="bx-a6"/>
+          <text x="747" y="495" text-anchor="middle" class="a">⑬ 確かめて特定</text>
+          <line x1="750" y1="532" x2="179" y2="532" class="ln-a6 dash" marker-end="url(#f2-a6)"/>
+          <text x="462" y="524" text-anchor="middle" class="a">⑭ 会員の id(JSON)</text>
+          <rect x="110" y="548" width="130" height="24" rx="5" class="bx-a2"/>
+          <text x="175" y="565" text-anchor="middle" class="a">⑮ 会員 ID を出す</text>
+        </svg>
+      </div>
+      <figcaption>図2:番号は、下の表の番号と同じです。④ の Google とのやりとりは SDK の中で起きるので、Google は描いていません。⑭ の返事は、実際には Vite と <code>apiFetch</code> を通って <code>App.vue</code> に戻りますが、1本にまとめています。</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>番号</th><th>どこで(ファイルと行)</th><th>何が起きるか</th></tr></thead>
+        <tbody>
+          <tr><td class="step">①</td><td><code>App.vue</code> 51 → 34</td><td>会員が「Google でログイン」を押す。<code>App.vue</code> の <code>signIn</code> が動く</td></tr>
+          <tr><td class="step">②</td><td><code>App.vue</code> 37 → <code>stores/auth.ts</code> 27</td><td><code>App.vue</code> が、ストアの <code>signIn</code> を呼ぶ(失敗に備えて <code>try</code> で囲む)</td></tr>
+          <tr><td class="step">③</td><td><code>stores/auth.ts</code> 28</td><td>ストアが、SDK の <code>signInWithPopup</code> に、窓口の <code>auth</code> と「Google でログイン」の指定を渡す</td></tr>
+          <tr><td class="step">④</td><td>(SDK の中)</td><td>SDK がポップアップを開き、会員が Google でログインする。SDK は ID トークンを受け取り、手元と保存領域にしまう(全体のノートの図3 の ① と ②)</td></tr>
+          <tr><td class="step">⑤</td><td><code>stores/auth.ts</code> 21</td><td>SDK が、ストアが21行目で登録しておいた関数を、会員(<code>currentUser</code>)を渡して呼ぶ</td></tr>
+          <tr><td class="step">⑥</td><td><code>stores/auth.ts</code> 22〜23</td><td>ストアが、<code>user</code> に会員を入れ、<code>authStateReady</code> を <code>true</code> にする</td></tr>
+          <tr><td class="step">⑦</td><td><code>App.vue</code> 13〜15</td><td><code>user</code> が入れ替わったので、Vue が <code>App.vue</code> の <code>watch</code> の関数を動かす。画面も、ログアウトのボタンに描き直す</td></tr>
+          <tr><td class="step">⑧</td><td><code>App.vue</code> 20 → <code>api/client.ts</code> 4</td><td><code>App.vue</code> が <code>apiFetch('/api/me')</code> を呼ぶ</td></tr>
+          <tr><td class="step">⑨</td><td><code>api/client.ts</code> 6、9</td><td><code>apiFetch</code> が <code>auth.currentUser</code> を見て、SDK に <code>getIdToken()</code> を頼む</td></tr>
+          <tr><td class="step">⑩</td><td><code>api/client.ts</code> 9</td><td>SDK が手元の ID トークンを返す(期限が近ければ取り直してから)。<code>apiFetch</code> が <code>Authorization</code> に入れる</td></tr>
+          <tr><td class="step">⑪</td><td><code>api/client.ts</code> 11</td><td><code>apiFetch</code> が、ブラウザの <code>fetch</code> で <code>localhost:5173/api/me</code> に送る</td></tr>
+          <tr><td class="step">⑫</td><td><code>vite.config.ts</code> 21〜22</td><td>Vite の開発サーバーが、<code>/api</code> で始まるので、<code>api:3000</code> の Rails に転送する</td></tr>
+          <tr><td class="step">⑬</td><td><code>me_controller.rb</code> 6 → <code>firebase_authenticatable.rb</code> 9〜13 → <code>firebase_id_token_verifier.rb</code> 57〜70</td><td>Rails が、トークンを取り出して確かめ、会員を特定する(初めてなら作る)</td></tr>
+          <tr><td class="step">⑭</td><td><code>me_controller.rb</code> 9 → <code>App.vue</code> 20</td><td>Rails が会員の id を JSON で返す。返事は Vite と <code>apiFetch</code> を通って、<code>App.vue</code> の20行目の <code>await</code> に戻る</td></tr>
+          <tr><td class="step">⑮</td><td><code>App.vue</code> 25〜26、48</td><td><code>App.vue</code> が id を <code>memberId</code> に入れ、画面に「会員 ID:1」を出す</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>ページを開いたとき(場面 0・1・5)</h3>
+    <p>ボタンを押す前、ページを開いたときにも、同じファイルが決まった順で動きます。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>どこで(ファイルと行)</th><th>何が起きるか</th></tr></thead>
+        <tbody>
+          <tr><td class="step">a</td><td><code>main.ts</code> → <code>firebase.ts</code> 5〜13</td><td><code>main.ts</code> が <code>App.vue</code> を読み込むと、<code>import</code> をたどって <code>firebase.ts</code> が先に動き、窓口の <code>auth</code> ができる(順1)</td></tr>
+          <tr><td class="step">b</td><td><code>App.vue</code> 7 → <code>stores/auth.ts</code> 14、21</td><td><code>App.vue</code> が <code>useAuthStore()</code> を呼び、ストアの中身が1回だけ動く。<code>onAuthStateChanged</code> が登録される(順2)</td></tr>
+          <tr><td class="step">c</td><td><code>App.vue</code> 13〜18、31</td><td><code>watch</code> が見張りを始め、<code>immediate</code> なので一度動く。<code>user</code> はまだ <code>null</code> なので、18行目で終わる</td></tr>
+          <tr><td class="step">d</td><td><code>App.vue</code> 46</td><td><code>authStateReady</code> が <code>false</code> なので、画面には何も出さない</td></tr>
+          <tr><td class="step">e</td><td><code>stores/auth.ts</code> 21〜23</td><td>SDK が保存領域を読み終え、21行目の関数を呼ぶ。<code>user</code> に会員か <code>null</code> が入り、<code>authStateReady</code> が <code>true</code> になる</td></tr>
+          <tr><td class="step">f</td><td><code>App.vue</code> 51、または上の表の ⑦〜⑮</td><td>未ログインなら、ログインのボタンが出る。前回ログインしたままなら、<code>user</code> が会員になったので、上の表の ⑦ から ⑮ と同じことが起きる</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="try">
+    <h2><span class="num">10</span>手を動かして確かめる</h2>
+    <p>読んだコードが本当にその順に動くかを、自分の目で確かめる方法です。どれも、コードを書き換えずにできます。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>道具</th><th>開き方</th><th>見えるもの</th><th>使う順</th></tr></thead>
+        <tbody>
+          <tr><td>VS Code の「定義へ移動」</td><td>名前の上で F12(Mac では fn+F12 のこともある)</td><td>その名前を書き出したファイルの行に飛ぶ。<code>import</code> を逆にたどれる</td><td>順1〜4</td></tr>
+          <tr><td>Vue DevTools</td><td>画面の下の中央のボタン(<code>vite.config.ts</code> の11行目で組み込んだもの)</td><td>Pinia の欄でストアの <code>user</code> と <code>authStateReady</code>。Components の欄で <code>App</code> の <code>memberId</code> と <code>error</code></td><td>順2、順3</td></tr>
+          <tr><td>開発者ツールの Network タブ</td><td>Cmd+Option+I で開き、Network を選ぶ</td><td><code>me</code> のリクエストの URL、Request Headers の <code>Authorization</code>、Response の JSON</td><td>順4〜6</td></tr>
+          <tr><td>開発者ツールの Sources タブ</td><td>左の一覧から <code>localhost:5173</code> › <code>src</code> › <code>api</code> › <code>client.ts</code> を開く</td><td>行番号を押すと、ブレークポイント(そこで止まる印)が付く。止まったら、変数の中身が見える</td><td>順2〜4</td></tr>
+          <tr><td>Rails のログ</td><td><code>docker compose logs -f api</code></td><td><code>Started GET</code>、<code>Processing by</code>、<code>Completed</code>、401 の理由</td><td>順5、順6</td></tr>
+          <tr><td>テスト</td><td><code>docker compose exec web npm run test:unit -- --run</code></td><td>順1〜4 の動きを、偽物の SDK で確かめる</td><td>順1〜4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>やってみること</h3>
+    <ol class="flow">
+      <li>ログアウトした状態で、Vue DevTools の Pinia の欄を開いておき、ログインする。<code>user</code> が <code>null</code> から会員に入れ替わるのを見る(図2 の ⑥)</li>
+      <li>Network タブで <code>me</code> を選び、Request URL が <code>localhost:5173</code> であること(⑪⑫)、Request Headers に <code>Authorization</code> があること(⑩⑪)、Response が <code>{"id":1,"firebase_uid":"…"}</code> の形であること(⑭)を見る</li>
+      <li>Sources タブで <code>api/client.ts</code> の11行目にブレークポイントを置き、ページを再読み込みする。止まったら、<code>headers</code> に <code>Authorization</code> が入っていることを見る(⑩⑪)。見終わったら、印を外して再開する</li>
+      <li>ターミナルで <code>docker compose logs -f api</code> を動かしたまま再読み込みし、<code>Started GET "/api/me"</code> と <code>Completed 200 OK</code> が出るのを見る(⑫⑬)</li>
+      <li>ログインしたまま何回か再読み込みして、ログインのボタンが一瞬も見えないことを確かめる(<code>authStateReady</code> の働き)</li>
+    </ol>
+    <div class="note"><p>Vue DevTools の欄の名前や場所は、バージョンによって少し違うことがあります。このページの Vue DevTools の説明は、私の知識によるもので、手元の画面で確かめたものではありません。見つからないときは、欄の一覧を順に開いてみてください。</p></div>
+    <div class="note warn"><p>Network タブや Sources タブに出る ID トークンは、画面の共有や貼り付けをしないでください。</p></div>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">11</span>確認用の問い</h2>
+    <ol class="check">
+      <li>順2 の <code>stores/auth.ts</code> で <code>user</code> を書き換えるのは、何行目だけですか。なぜ1か所なのですか。<span class="hint">4章の「なぜこう書くか」です。</span></li>
+      <li>ページを開き直したときにも <code>/api/me</code> が呼ばれるのは、<code>App.vue</code> の何行目のおかげですか。<span class="hint">5章と、9章の「ページを開いたとき」の f です。</span></li>
+      <li>Vue のコードの中で、ID トークンに触るのは、どのファイルの何行目ですか。<span class="hint">6章です。</span></li>
+      <li>Network タブで、<code>me</code> のリクエストの URL が 3000 ではなく 5173 なのはなぜですか。<span class="hint">7章です。</span></li>
+      <li>今回の手動確認で出た 500 は、図2 のどの番号で起きていましたか。<span class="hint">8章の 6-4 と、9章の ⑬ です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

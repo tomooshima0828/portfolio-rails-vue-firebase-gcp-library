@@ -33,6 +33,34 @@ Rails、Vue、PostgreSQL を Docker で動かす([ADR 0002](docs/adr/0002-local-
 
 ### 初回の準備
 
+#### 1. Firebase の開発用のプロジェクトを作る
+
+ローカルでも、本物の Firebase で Google ログインする([ADR 0004](docs/adr/0004-local-firebase-auth.md))。無料の Spark プランで使える。Firebase のコンソール(https://console.firebase.google.com/)で、次を行う。
+
+1. プロジェクトを作る。名前は自由(例:`knowledge-library-dev`)。途中で聞かれる Gemini と Google アナリティクスは、どちらも使わない。
+2. 「Authentication」を開いて始め、「ログイン方法」(英語の画面では「Sign-in method」)のログインプロバイダで「Google」を有効にする。プロジェクトのサポートメールには、自分のメールアドレスを選ぶ。
+3. 「プロジェクトの設定」の「マイアプリ」で、ウェブアプリ(`</>`)を追加する。Firebase Hosting は設定しない。
+4. 表示された `firebaseConfig` の `projectId`、`apiKey`、`authDomain`、`appId` を控える。
+
+#### 2. `.env` を書く
+
+リポジトリ直下に `.env` を作り、控えた値を書く。`.env` は Git の管理から外してあり、コミットされない。
+
+```bash
+cp .env.example .env
+```
+
+| `.env` のキー | `firebaseConfig` の値 |
+|---|---|
+| `FIREBASE_PROJECT_ID` | `projectId` |
+| `VITE_FIREBASE_API_KEY` | `apiKey` |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `authDomain` |
+| `VITE_FIREBASE_APP_ID` | `appId` |
+
+Docker Compose が `.env` を読み、api と web のコンテナに渡す。あとで `.env` を書き換えたときは、`docker compose up -d` でコンテナを作り直す。
+
+#### 3. イメージと DB を用意する
+
 ```bash
 docker compose build                              # イメージを作る
 docker compose run --rm api bin/rails db:prepare  # 開発用とテスト用の DB を作る
@@ -113,6 +141,8 @@ docker compose run --rm api bin/rails db:prepare  # DB を作り直す
 - **「A server is already running」と出て api が起動しない**:前回の終了の仕方によって、`api/tmp/pids/server.pid` が残っている。このファイルを消してから、もう一度起動する。
 - **様子がおかしいので、イメージを作り直したい**:`docker compose build --no-cache api`
 - **web が「Cannot find module '@rolldown/binding-linux-arm64-gnu'」などで起動しない**:Mac で npm を実行して、`web/node_modules` が Mac 用になった可能性がある。`docker compose run --rm web npm ci` で入れ直す(`npm ci` は `node_modules` を消して、`package-lock.json` のとおりに入れ直す)。`package-lock.json` に差分が出ていたら、先に `git restore web/package-lock.json` で戻す。
+- **docker compose の実行で「The "FIREBASE_PROJECT_ID" variable is not set」と警告が出る**:リポジトリ直下に `.env` がないか、キーが足りない。「初回の準備」の 2 を行う。
+- **ログインのポップアップで「auth/unauthorized-domain」と出る**:Firebase のコンソールの「Authentication」の「設定」で、「承認済みドメイン」に `localhost` があるかを確かめる(初めから入っている)。
 - **VS Code で、`.vue` や `.ts` の import に赤線が出る**:`web/node_modules` がまだない。`docker compose run --rm web npm ci` を実行する。それでも消えないときは、コマンドパレットの「Developer: Reload Window」で VS Code を読み込み直す。
 
 ## 求人要件と、このポートフォリオでの示し方

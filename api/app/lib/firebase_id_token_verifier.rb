@@ -1,3 +1,5 @@
+require "net/http"
+
 # Firebase の ID トークンを確かめ、トークンの中身(payload)を返す。
 # Firebase 公式の「サードパーティの JWT ライブラリで ID トークンを検証する」手順のとおりに確かめる
 class FirebaseIdTokenVerifier

@@ -43,7 +43,7 @@ async function signIn() {
 
 <template>
   <!-- ログイン状態の確認が終わるまでは、何も出さない -->
-  <main v-if="authStore.ready">
+  <main v-if="authStore.authStateReady">
     <template v-if="authStore.user">
       <p v-if="memberId !== null">会員 ID:{{ memberId }}</p>
       <button type="button" @click="authStore.signOut()">ログアウト</button>

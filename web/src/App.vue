@@ -1,35 +1,12 @@
 <script setup lang="ts">
-import { shallowRef, watch } from 'vue'
+import { shallowRef } from 'vue'
+import { useRouter } from 'vue-router'
 
-import { apiFetch } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
-const memberId = shallowRef<number | null>(null)
+const router = useRouter()
 const error = shallowRef<string | null>(null)
-
-// ログイン中になったら、Rails に会員の id を聞く(場面 3)。未ログインになったら消す
-// ログインしたとき(場面 2)と、開き直したとき(場面 5)の両方を、user の変化で拾う
-watch(
-  () => authStore.user,
-  async (user) => {
-    memberId.value = null
-    error.value = null
-    if (!user) return
-    try {
-      const response = await apiFetch('/api/me')
-      if (!response.ok) {
-        error.value = `会員の情報を取得できませんでした(${response.status})`
-        return
-      }
-      const member = (await response.json()) as { id: number }
-      memberId.value = member.id
-    } catch {
-      error.value = '会員の情報を取得できませんでした'
-    }
-  },
-  { immediate: true },
-)
 
 async function signIn() {
   error.value = null
@@ -39,16 +16,24 @@ async function signIn() {
     error.value = 'ログインできませんでした'
   }
 }
+
+// ログアウトしたら一覧画面に移す。ガードは画面を開くときにしか働かないので、投稿画面に残らないようにする
+async function signOut() {
+  await authStore.signOut()
+  await router.push('/')
+}
 </script>
 
 <template>
-  <!-- ログイン状態の確認が終わるまでは、何も出さない -->
-  <main v-if="authStore.authStateReady">
-    <template v-if="authStore.user">
-      <p v-if="memberId !== null">会員 ID:{{ memberId }}</p>
-      <button type="button" @click="authStore.signOut()">ログアウト</button>
+  <header>
+    <!-- ログイン状態の確認が終わるまでは、ボタンを出さない -->
+    <template v-if="authStore.authStateReady">
+      <button v-if="authStore.user" type="button" @click="signOut">ログアウト</button>
+      <button v-else type="button" @click="signIn">Google でログイン</button>
     </template>
-    <button v-else type="button" @click="signIn">Google でログイン</button>
     <p v-if="error" role="alert">{{ error }}</p>
+  </header>
+  <main>
+    <RouterView />
   </main>
 </template>

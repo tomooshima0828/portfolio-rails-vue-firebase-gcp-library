@@ -37,8 +37,8 @@ Rails、Vue、PostgreSQL を Docker で動かす([ADR 0002](docs/adr/0002-local-
 
 ローカルでも、本物の Firebase で Google ログインする([ADR 0004](docs/adr/0004-local-firebase-auth.md))。無料の Spark プランで使える。Firebase のコンソール(https://console.firebase.google.com/)で、次を行う。
 
-1. プロジェクトを作る。名前は自由(例:`knowledge-library-dev`)。Google アナリティクスは使わない。
-2. 「Authentication」を開いて始め、「Sign-in method」で「Google」を有効にする。
+1. プロジェクトを作る。名前は自由(例:`knowledge-library-dev`)。途中で聞かれる Gemini と Google アナリティクスは、どちらも使わない。
+2. 「Authentication」を開いて始め、「ログイン方法」(英語の画面では「Sign-in method」)のログインプロバイダで「Google」を有効にする。プロジェクトのサポートメールには、自分のメールアドレスを選ぶ。
 3. 「プロジェクトの設定」の「マイアプリ」で、ウェブアプリ(`</>`)を追加する。Firebase Hosting は設定しない。
 4. 表示された `firebaseConfig` の `projectId`、`apiKey`、`authDomain`、`appId` を控える。
 

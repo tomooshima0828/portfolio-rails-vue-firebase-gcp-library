@@ -60,7 +60,7 @@ Issue: #11
 12. `web/src/stores/auth.ts`:ログイン状態の Pinia ストア。ログイン、ログアウト、`onAuthStateChanged` での状態の更新
 13. `web/src/api/client.ts`:ログインしていれば ID トークンを付けて、Rails API を呼ぶ関数
 14. `web/src/App.vue`:ログイン・ログアウトのボタンと、会員の `id` の表示
-15. `docs/architecture.md`:「機能一覧」のログインの状態と、「構成」のローカル環境の Firebase の行を直す
+15. `docs/architecture.md`:「機能一覧」のログインの状態と、「構成」のローカル環境の Firebase の行を直す。「画面」に、#12 で置き換える仮の画面を1行足す
 16. `README.md`:「初回の準備」に、Firebase のプロジェクトの作り方と `.env` の書き方を足す
 
 ### 入出力

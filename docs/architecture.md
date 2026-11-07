@@ -9,7 +9,7 @@
 
 | 機能 | 内容 | データの置き場所 | 状態 |
 |---|---|---|---|
-| ログイン | Google アカウントでログインする。Rails は Firebase の ID トークンを検証して会員を特定する | Firebase Auth | Rails の検証のみ(#8) |
+| ログイン | Google アカウントでログインする。Rails は Firebase の ID トークンを検証して会員を特定する | Firebase Auth | Vue の Google ログインと Rails の検証(#8、#11) |
 | 記事の投稿・編集・削除 | ログインした会員が、自分の記事を投稿・編集・削除する | Rails(PostgreSQL) | 投稿の API のみ(#10) |
 | 記事の一覧・詳細 | 記事を一覧と詳細で表示する | Rails(PostgreSQL) | 一覧の API のみ(#10) |
 | 検索 | 記事をキーワードで検索する | Rails(PostgreSQL) | 未実装 |
@@ -36,13 +36,17 @@
 - 配信:Vue は Firebase Hosting から配信し、`/api` を Cloud Run へ転送する(優先度 B)
 - CI:PR の作成・更新と main への push のたびに、GitHub Actions が RSpec、RuboCop、Brakeman、bundler-audit、Vitest、vue-tsc を実行する。main の Ruleset で、その成功をマージの条件にしている([ADR 0003](adr/0003-ci-environment.md))
 - デプロイ:GitHub Actions → Artifact Registry → Cloud Run。Workload Identity 連携を使い、鍵ファイルを使わない
-- ローカル環境:Rails、Vue(Vite の開発サーバー)、PostgreSQL を Docker Compose で動かす([ADR 0002](adr/0002-local-dev-on-docker.md))。Firebase は Emulator Suite を使う
+- ローカル環境:Rails、Vue(Vite の開発サーバー)、PostgreSQL を Docker Compose で動かす([ADR 0002](adr/0002-local-dev-on-docker.md))。Vue から Rails へのリクエストは、Vite の開発サーバーが `/api` を転送する。Firebase Auth は、開発用の本物のプロジェクトを使う([ADR 0004](adr/0004-local-firebase-auth.md))。Emulator Suite は、Firestore を使うフェーズ4で使う
 
 ディレクトリ構成は [README.md](../README.md) の「想定するディレクトリ構成」にある。
 
 ## 画面
 
 各タスクの仕様書で決まった時点で追記する。
+
+| 画面 | 内容 | 仕様書 |
+|---|---|---|
+| トップ(`/`) | ログイン・ログアウトのボタンと、会員の `id`。仮の画面で、#12 で記事の画面に置き換える | [#11](specs/011-vue-google-login.md) |
 
 ## API
 

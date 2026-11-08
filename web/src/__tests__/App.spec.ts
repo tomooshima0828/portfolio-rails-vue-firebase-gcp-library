@@ -42,6 +42,8 @@ describe('App', () => {
   it('ログイン状態の確認中は、ボタンを出さない', () => {
     const wrapper = mountApp()
 
+    // あえて notifyAuthState を呼ばない。Firebase の最初の知らせがまだ届いていない「確認中」の状態になる
+
     expect(wrapper.find('button').exists()).toBe(false)
   })
 

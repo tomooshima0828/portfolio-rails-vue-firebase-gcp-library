@@ -3,7 +3,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import type { User } from 'firebase/auth'
 
-import { apiFetch } from '@/api/client'
 import App from '../App.vue'
 
 // Firebase の SDK を偽物に差し替える。本物の Firebase には通信しない。
@@ -17,19 +16,20 @@ const firebaseAuth = vi.hoisted(() => ({
 vi.mock('firebase/auth', () => firebaseAuth)
 vi.mock('@/firebase', () => ({ auth: { name: 'fake-auth' } }))
 
-// API を呼ぶ関数を偽物に差し替える。トークンを付ける処理は client.spec.ts で確かめている
-vi.mock('@/api/client', () => ({ apiFetch: vi.fn() }))
+// 画面を移す頼み(router.push)を受け取る偽物(ArticleNewView.spec.ts と同じ)
+const push = vi.hoisted(() => vi.fn())
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
 // ストアが onAuthStateChanged に登録した関数を呼んで、Firebase からの知らせを再現する
 async function notifyAuthState(user: User | null) {
   const listener = firebaseAuth.onAuthStateChanged.mock.lastCall?.[1]
   listener(user)
-  // 画面の更新と、/api/me の応答を待つ
   await flushPromises()
 }
 
+// <RouterView> は、何も描かない偽物にする。差し込まれる画面は、それぞれのテストで確かめている
 function mountApp() {
-  return mount(App, { global: { plugins: [createPinia()] } })
+  return mount(App, { global: { plugins: [createPinia()], stubs: { RouterView: true } } })
 }
 
 const member = { uid: 'uid-1' } as User
@@ -37,13 +37,12 @@ const member = { uid: 'uid-1' } as User
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(apiFetch).mockResolvedValue(
-      new Response(JSON.stringify({ id: 1, firebase_uid: 'uid-1' }), { status: 200 }),
-    )
   })
 
   it('ログイン状態の確認中は、ボタンを出さない', () => {
     const wrapper = mountApp()
+
+    // あえて notifyAuthState を呼ばない。Firebase の最初の知らせがまだ届いていない「確認中」の状態になる
 
     expect(wrapper.find('button').exists()).toBe(false)
   })
@@ -65,33 +64,22 @@ describe('App', () => {
     expect(firebaseAuth.signInWithPopup).toHaveBeenCalled()
   })
 
-  it('ログイン中は、/api/me が返した会員の id と、ログアウトのボタンを出す', async () => {
+  it('ログイン中は、ログアウトのボタンを出す', async () => {
     const wrapper = mountApp()
 
     await notifyAuthState(member)
 
-    expect(apiFetch).toHaveBeenCalledWith('/api/me')
-    expect(wrapper.text()).toContain('会員 ID:1')
     expect(wrapper.find('button').text()).toBe('ログアウト')
   })
 
-  it('ログアウトのボタンを押したとき、ログアウトする', async () => {
+  it('ログアウトのボタンを押したとき、ログアウトして一覧画面に移る', async () => {
     const wrapper = mountApp()
     await notifyAuthState(member)
 
     await wrapper.find('button').trigger('click')
+    await flushPromises()
 
     expect(firebaseAuth.signOut).toHaveBeenCalled()
-  })
-
-  it('/api/me が失敗したとき、エラーを出す', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(
-      new Response('{"error":"unauthorized"}', { status: 401 }),
-    )
-    const wrapper = mountApp()
-
-    await notifyAuthState(member)
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(push).toHaveBeenCalledWith('/')
   })
 })

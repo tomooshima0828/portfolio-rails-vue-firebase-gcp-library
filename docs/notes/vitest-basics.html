@@ -1,0 +1,818 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitest を RSpec と比べて読む</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* 学習ノートのひな形(layered-tech-explanation スキル)。
+   使い方は references/html-note.md。
+   登場人物の色:1人に1色(a1〜a6)を割り当て、図と本文で同じ色を使う。
+   a2 は「私たちが書くコード」と「今ここ」に使う。ここに割り当てを書いておく:
+   a1=テストされる部品、a2=テストのファイル(今ここ)、a3=Vitest、a4=偽物、a5=Vue Test Utils と jsdom、a6=本物の相手 */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+/* コードの字体は合字(=> が矢印になる、など)を切る。VS Code の見た目と食い違わないように */
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* コードを読むノートの部品(references/html-note.md の 5.5)。使わなければ消してよい */
+.route { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0 0 14px; }
+.route li { font-size: 12.5px; line-height: 1.7; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); white-space: nowrap; }
+.route li.on { border-color: var(--a2); color: var(--a2); background: var(--a2-soft); font-weight: 700; }
+.route li.on.rails { border-color: var(--a6); color: var(--a6); background: var(--a6-soft); }
+.io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.io > div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.7; min-width: 0; }
+.io .k { display: block; font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+.role { font-size: 15.5px; }
+.file { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin: 18px 0 -6px; }
+pre.code { padding: 12px 0; }
+pre.code code { display: inline-block; min-width: 100%; }
+pre.code .l { display: block; padding-right: 16px; }
+pre.code .n { display: inline-block; width: 3.4em; padding-right: 1em; text-align: right; color: var(--muted); user-select: none; }
+pre.code .l.hl { background: var(--a2-soft); }
+pre.code.rails .l.hl { background: var(--a6-soft); }
+table.lines td:first-child { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; color: var(--a2); }
+table.lines.rails td:first-child { color: var(--a6); }
+table.lines td:last-child { font-size: 13px; color: var(--muted); min-width: 8.5em; }
+table.lines th, table.story th:first-child { white-space: nowrap; }
+table.routes td:first-child { white-space: nowrap; font-weight: 700; }
+.goto { margin: 18px 0 0; padding: 10px 14px; border: 1px dashed var(--a2); border-radius: 8px; font-size: 14.5px; line-height: 1.75; }
+.goto.rails { border-color: var(--a6); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast, .io { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #12 · PR #27 · 学習メモ</p>
+    <h1>Vitest を RSpec と比べて読む</h1>
+    <p class="lead">PR #27 で、Vue の画面と関数のテストを6つ書きました。どれも Vitest というテストの道具で書いています。このページは、RSpec は知っているがフロントエンドのテストは初めて、という人が、そのテストを読めるようになるためのものです。中心にあるのは「偽物」という考え方です。</p>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>Vue のテストで、何を確かめたいのか(1章)</li>
+        <li>テストに登場する道具と、それぞれの役割(2章)</li>
+        <li>1つのテストが、どんな順で動くのか(3章)</li>
+        <li>偽物とは何か、なぜ要るのか、Rails のテストとどう違うのか(4章)</li>
+        <li>Vitest の名前が、RSpec の何にあたるのか(5章)</li>
+        <li>実際のテストを1つ、行ごとに読む(6章)</li>
+        <li>PR #27 のテストの一覧と、動かし方(7章)</li>
+        <li>RSpec を知っている人が、つまずきやすいところ(8章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:何を確かめたいのか</h2>
+    <p>記事の投稿画面を例にします。確かめたいことの1つは、「Rails が『タイトルが空です』と返したとき、投稿画面はエラーを表示し、一覧画面に移らない」です。確かめたいのは、<strong>投稿画面という部品が、受け取った返事に正しく応じるか</strong>だけです。</p>
+    <p>ところが、投稿画面は自分だけでは動きません。送るボタンを押すと、記事を頼む関数、ID トークンを付ける関数、Firebase、ブラウザの通信、Rails、データベースと、次々に先の部品が呼ばれます。全部を本物のまま動かそうとすると、Rails とデータベースを起動し、本物の Google アカウントでログインしておく必要があります。CI では Google のログインができないので、テストが動きません。「Rails がエラーを返す」場面を、狙って起こすのも難しくなります。</p>
+    <p>そこで、<strong>確かめたい部品のすぐ先にいる相手を、テストのときだけ代役(偽物)に入れ替えます</strong>。代役は、テストが決めたとおりの返事を返し、どう呼ばれたかを覚えています。こうすると、Rails もログインも本物のブラウザもなしで、部品1つの振る舞いを、何度でも速く確かめられます。これが、このページの中心の考え方です。</p>
+  </section>
+
+  <section id="cast">
+    <h2><span class="num">2</span>登場人物</h2>
+    <p>テストは、web のコンテナの中の Node(JavaScript を動かす実行環境)で動きます。本物のブラウザも、本物の Rails も使いません。色は、このページの図と本文で共通です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 820 290" role="img" aria-label="テストのとき、Node の中にテストのファイル、Vitest、Vue Test Utils、テストされる部品、偽物がある。本物の相手はネットワークの先にあり、テストでは呼ばない">
+          <defs>
+            <marker id="f1-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f1-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f1-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f1-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+
+          <rect x="20" y="20" width="540" height="250" rx="12" class="bx-frame"/>
+          <text x="36" y="44" class="s">Node の中(web のコンテナ)</text>
+
+          <rect x="40" y="60" width="140" height="60" rx="8" class="bx-a2"/>
+          <text x="110" y="86" text-anchor="middle" class="b">テストのファイル</text>
+          <text x="110" y="106" text-anchor="middle" class="s">私たちが書く</text>
+
+          <rect x="40" y="180" width="140" height="60" rx="8" class="bx-a3"/>
+          <text x="110" y="206" text-anchor="middle" class="b">Vitest</text>
+          <text x="110" y="226" text-anchor="middle" class="s">動かす・比べる</text>
+
+          <rect x="230" y="60" width="130" height="60" rx="8" class="bx-a5"/>
+          <text x="295" y="86" text-anchor="middle" class="b">Vue Test Utils</text>
+          <text x="295" y="106" text-anchor="middle" class="s">+ jsdom</text>
+
+          <rect x="410" y="60" width="130" height="60" rx="8" class="bx-a1"/>
+          <text x="475" y="86" text-anchor="middle" class="b">テストされる部品</text>
+          <text x="475" y="106" text-anchor="middle" class="s">画面・関数(本物)</text>
+
+          <rect x="410" y="180" width="130" height="60" rx="8" class="bx-a4"/>
+          <text x="475" y="206" text-anchor="middle" class="b">偽物</text>
+          <text x="475" y="226" text-anchor="middle" class="s">本物の相手の代役</text>
+
+          <rect x="600" y="20" width="200" height="250" rx="12" class="bx-frame"/>
+          <text x="616" y="44" class="s">ネットワークの先</text>
+          <rect x="620" y="60" width="160" height="60" rx="8" class="bx-a6"/>
+          <text x="700" y="86" text-anchor="middle" class="b">本物の相手</text>
+          <text x="700" y="106" text-anchor="middle" class="s">Rails・Firebase</text>
+          <text x="700" y="150" text-anchor="middle" class="s">テストでは呼ばない</text>
+
+          <line x1="180" y1="90" x2="226" y2="90" class="ln-a2" marker-end="url(#f1-a2)"/>
+          <text x="203" y="82" text-anchor="middle" class="s">操作</text>
+          <line x1="360" y1="90" x2="406" y2="90" class="ln-a5" marker-end="url(#f1-a5)"/>
+          <text x="383" y="82" text-anchor="middle" class="s">描く</text>
+          <line x1="110" y1="120" x2="110" y2="176" class="ln-a2" marker-end="url(#f1-a2)"/>
+          <text x="118" y="152" class="s">頼む</text>
+          <line x1="180" y1="210" x2="406" y2="210" class="ln-a3" marker-end="url(#f1-a3)"/>
+          <text x="293" y="202" text-anchor="middle" class="s">作る</text>
+          <line x1="475" y1="124" x2="475" y2="176" class="ln-a1" marker-start="url(#f1-a1)" marker-end="url(#f1-a1)"/>
+          <text x="483" y="152" class="s">呼ぶ・返事</text>
+        </svg>
+      </div>
+      <figcaption>図1:<span class="t-a1">テストされる部品</span> は、<span class="t-a6">本物の相手</span> ではなく、すぐ下の <span class="t-a4">偽物</span> を呼びます。<span class="t-a6">本物の相手</span> とつながる線はありません。テストの間、Rails にも Firebase にも何も届きません。</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card a2"><p><span class="who t-a2">テストのファイル</span><span class="kind">web/src の __tests__ の中 · 私たちが書く</span>何を確かめるかを書いたファイル。偽物を用意し、部品を動かし、結果を比べるよう頼む。RSpec の spec ファイルにあたる。</p></div>
+      <div class="card a3"><p><span class="who t-a3">Vitest</span><span class="kind">ライブラリ</span>テストのファイルを読み込んで動かし、期待どおりかを比べ、結果を出す。偽物を作る道具も持っている。RSpec 本体と rspec-mocks にあたる。</p></div>
+      <div class="card a5"><p><span class="who t-a5">Vue Test Utils と jsdom</span><span class="kind">ライブラリ</span>Vue の画面を1つだけ描き、入力やクリックを起こし、表示を読む。jsdom は、Node の中で動く偽物のブラウザ。Capybara の rack_test にあたる。</p></div>
+      <div class="card a1"><p><span class="who t-a1">テストされる部品</span><span class="kind">web/src · 私たちが書いた本物</span>投稿画面、一覧画面、記事を頼む関数など。テストの主役で、偽物にはしない。</p></div>
+      <div class="card a4"><p><span class="who t-a4">偽物</span><span class="kind">テストの間だけ · Vitest が作る</span>本物の相手の代わりに置く代役。テストが決めた返事を返し、どう呼ばれたかを覚えている。4章で詳しく見る。</p></div>
+      <div class="card a6"><p><span class="who t-a6">本物の相手</span><span class="kind">ネットワークの先など</span>Rails、Firebase、本物のブラウザ。テストでは呼ばない。全部をつないだ流れは、手動確認で確かめる。</p></div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">3</span>全体の流れ:1つのテストが動く順番</h2>
+    <p>1つのテストは、4つの場面で進みます。例は、1章の「Rails が『タイトルが空です』と返したとき」のテストです。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 740 630" role="img" aria-label="場面0の読み込みで偽物を作ってつなぎ、場面1で返事を決め、場面2で画面を操作して偽物が返事を返し、場面3で表示と記録を確かめる">
+          <defs>
+            <marker id="f2-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f2-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f2-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+
+          <rect x="0" y="96" width="740" height="120" class="band"/>
+          <rect x="0" y="220" width="740" height="60" class="band-here"/>
+          <rect x="0" y="284" width="740" height="180" class="band"/>
+          <rect x="0" y="468" width="740" height="150" class="band"/>
+
+          <text x="12" y="120" class="scene">場面 0</text>
+          <text x="12" y="138" class="a">読み込み</text>
+          <text x="12" y="244" class="scene">場面 1</text>
+          <text x="12" y="262" class="a">準備</text>
+          <text x="12" y="275" class="lab-here">4章で拡大</text>
+          <text x="12" y="308" class="scene">場面 2</text>
+          <text x="12" y="326" class="a">実行</text>
+          <text x="12" y="492" class="scene">場面 3</text>
+          <text x="12" y="510" class="a">確認</text>
+
+          <path d="M238 38 V30 H462 V38" class="ln"/>
+          <text x="350" y="22" text-anchor="middle" class="s">道具(ライブラリ)</text>
+
+          <line x1="170" y1="84" x2="170" y2="618" class="life"/>
+          <line x1="290" y1="84" x2="290" y2="618" class="life"/>
+          <line x1="410" y1="84" x2="410" y2="618" class="life"/>
+          <line x1="530" y1="84" x2="530" y2="618" class="life"/>
+          <line x1="650" y1="84" x2="650" y2="618" class="life"/>
+
+          <rect x="114" y="44" width="112" height="40" rx="7" class="bx-a2"/>
+          <text x="170" y="69" text-anchor="middle" class="b a">テストのファイル</text>
+          <rect x="234" y="44" width="112" height="40" rx="7" class="bx-a3"/>
+          <text x="290" y="69" text-anchor="middle" class="b a">Vitest</text>
+          <rect x="354" y="44" width="112" height="40" rx="7" class="bx-a5"/>
+          <text x="410" y="69" text-anchor="middle" class="b a">Vue Test Utils</text>
+          <rect x="474" y="44" width="112" height="40" rx="7" class="bx-a1"/>
+          <text x="530" y="69" text-anchor="middle" class="b a">投稿画面</text>
+          <rect x="594" y="44" width="112" height="40" rx="7" class="bx-a4"/>
+          <text x="650" y="69" text-anchor="middle" class="b a">偽物</text>
+
+          <!-- 場面 0 -->
+          <line x1="170" y1="128" x2="286" y2="128" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="228" y="120" text-anchor="middle" class="a">差し替えを頼む</text>
+          <line x1="290" y1="158" x2="646" y2="158" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="470" y="150" text-anchor="middle" class="a">偽物を作る</text>
+          <line x1="290" y1="188" x2="526" y2="188" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="410" y="180" text-anchor="middle" class="a">偽物を渡す</text>
+
+          <!-- 場面 1 -->
+          <line x1="170" y1="252" x2="646" y2="252" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="410" y="244" text-anchor="middle" class="a">返事を決める</text>
+
+          <!-- 場面 2 -->
+          <line x1="170" y1="316" x2="406" y2="316" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="290" y="308" text-anchor="middle" class="a">描いて操作</text>
+          <line x1="410" y1="346" x2="526" y2="346" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <text x="470" y="338" text-anchor="middle" class="a">送信を起こす</text>
+          <line x1="530" y1="376" x2="646" y2="376" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="590" y="368" text-anchor="middle" class="a">記事を頼む</text>
+          <line x1="650" y1="406" x2="534" y2="406" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="590" y="398" text-anchor="middle" class="a">決めた返事</text>
+          <line x1="530" y1="436" x2="414" y2="436" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="470" y="428" text-anchor="middle" class="a">エラーを表示</text>
+
+          <!-- 場面 3 -->
+          <line x1="170" y1="500" x2="406" y2="500" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="290" y="492" text-anchor="middle" class="a">表示を聞く</text>
+          <line x1="410" y1="530" x2="174" y2="530" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <text x="290" y="522" text-anchor="middle" class="a">文字を渡す</text>
+          <line x1="170" y1="560" x2="646" y2="560" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="410" y="552" text-anchor="middle" class="a">記録を聞く</text>
+          <line x1="650" y1="590" x2="174" y2="590" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="410" y="582" text-anchor="middle" class="a">記録を渡す</text>
+        </svg>
+      </div>
+      <figcaption>図2:<span class="t-a1">投稿画面</span> が呼ぶのは <span class="t-a4">偽物</span> で、その先(Rails)には何も届きません。<span class="t-a4">偽物</span> は、場面 1 で決められた返事を、場面 2 でそのまま返します。場面 3 では、<span class="t-a2">テストのファイル</span> が、画面の表示と偽物の記録の両方を確かめます。</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 0:読み込み<span class="tag">テストのファイルを読み込むとき、1回だけ</span></h3>
+    <ol class="flow">
+      <li><span class="t-a2">テストのファイル</span> が、<span class="t-a3">Vitest</span> に「記事を頼む関数を、偽物に差し替えて」と頼む</li>
+      <li><span class="t-a3">Vitest</span> が、<span class="t-a4">偽物</span> を作る。偽物は、本物と同じ名前で、同じように呼べる</li>
+      <li><span class="t-a3">Vitest</span> が、<span class="t-a1">投稿画面</span> を読み込むときに、本物の代わりに <span class="t-a4">偽物</span> を渡す。<span class="t-a1">投稿画面</span> は、偽物だと気づかない</li>
+    </ol>
+    <div class="note"><p>この場面は、テストのファイルの中のどこに書いても、ほかの読み込み(import)より先に動きます。投稿画面が読み込まれる前に、差し替えを済ませておく必要があるためです(8章の 3)。</p></div>
+
+    <h3 class="scene-h">場面 1:準備<span class="tag">テストごと</span></h3>
+    <ol class="flow">
+      <li><span class="t-a2">テストのファイル</span> が、<span class="t-a4">偽物</span> に「呼ばれたら、『タイトルが空です(422)』と返して」と決める</li>
+    </ol>
+    <div class="note here"><p>偽物を使うテストの中心は、この場面です。4章で、偽物の中で何が起きているかを拡大します。</p></div>
+
+    <h3 class="scene-h">場面 2:実行<span class="tag">テストごと</span></h3>
+    <ol class="flow">
+      <li><span class="t-a2">テストのファイル</span> が、<span class="t-a5">Vue Test Utils</span> に、投稿画面を描いて、タイトルと本文を入れて、送るよう頼む</li>
+      <li><span class="t-a5">Vue Test Utils</span> が、<span class="t-a1">投稿画面</span> のフォームに、送信を起こす</li>
+      <li><span class="t-a1">投稿画面</span> が、記事を頼む関数(本当は <span class="t-a4">偽物</span>)を呼ぶ</li>
+      <li><span class="t-a4">偽物</span> が、場面 1 で決めた返事を <span class="t-a1">投稿画面</span> に渡す。あわせて、何を渡されて呼ばれたかを記録する</li>
+      <li><span class="t-a1">投稿画面</span> が、返事を見てエラーを表示する(jsdom の中の画面に描く)</li>
+    </ol>
+
+    <h3 class="scene-h">場面 3:確認<span class="tag">テストごと</span></h3>
+    <ol class="flow">
+      <li><span class="t-a2">テストのファイル</span> が、<span class="t-a5">Vue Test Utils</span> に、画面に出ている文字を聞く</li>
+      <li><span class="t-a5">Vue Test Utils</span> が、<span class="t-a2">テストのファイル</span> に文字を渡す</li>
+      <li><span class="t-a2">テストのファイル</span> が、<span class="t-a4">偽物</span>(画面を移す頼みの偽物)に、どう呼ばれたかを聞く</li>
+      <li><span class="t-a4">偽物</span> が、<span class="t-a2">テストのファイル</span> に記録を渡す(今回は「一度も呼ばれていない」)</li>
+      <li><span class="t-a2">テストのファイル</span> が、受け取った文字と記録を、<span class="t-a3">Vitest</span> の <code>expect</code> で期待と比べる。違っていれば、<span class="t-a3">Vitest</span> がテストを失敗にする</li>
+    </ol>
+    <div class="note"><p>簡略化したところ:図2 では、偽物を1つにまとめています。実際のテストには、記事を頼む関数の偽物と、画面を移す頼み(router)の偽物の2つがあります。場面 2 で記録されるのは前者、場面 3 で確かめているのは主に後者です。</p></div>
+  </section>
+
+  <section id="object">
+    <h2><span class="num">4</span>偽物を追う</h2>
+    <p>3章の場面のうち、いちばん大事なのは偽物です。この章では、偽物だけに注目して、生まれてから記録が消されるまでを追います。そのあとで、なぜ偽物が要るのか、Rails のテストとどう違うのかを見ます。</p>
+
+    <h3>たとえ話:映画の代役</h3>
+    <p>テストの「偽物」は、英語では test double と言います。double は「そっくりな代役」という意味で、映画のスタントの代役(stunt double)が名前の由来です。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>映画</th><th>テストでは</th></tr></thead>
+        <tbody>
+          <tr><td>主役の俳優</td><td>本物の相手(記事を頼む本物の関数。その先に Rails がいる)</td></tr>
+          <tr><td>代役</td><td><span class="t-a4">偽物</span></td></tr>
+          <tr><td>監督が、代役に演技を指示する</td><td><span class="t-a2">テストのファイル</span> が、偽物に返事を決める</td></tr>
+          <tr><td>共演者は、相手が代役だと気づかない</td><td><span class="t-a1">投稿画面</span> は、偽物を本物だと思って呼ぶ</td></tr>
+          <tr><td>撮影の記録を、後で見返す</td><td>偽物が覚えている「呼ばれ方」を、後で確かめる</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>偽物の中で起きていること</h3>
+    <p>偽物は、2つのものを持っています。テストが入れる「返事」と、呼ばれるたびに増える「記録」です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 680 340" role="img" aria-label="テストのファイルが偽物に返事を入れ、投稿画面が偽物を呼ぶと記録が増え、偽物が返事を渡す。テストのファイルは記録を見て確かめ、次のテストの前に記録を消す">
+          <defs>
+            <marker id="f3-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f3-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f3-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+          </defs>
+
+          <rect x="30" y="40" width="150" height="56" rx="8" class="bx-a2"/>
+          <text x="105" y="64" text-anchor="middle" class="b">テストのファイル</text>
+          <text x="105" y="84" text-anchor="middle" class="s">私たちが書く</text>
+
+          <rect x="500" y="40" width="150" height="56" rx="8" class="bx-a1"/>
+          <text x="575" y="64" text-anchor="middle" class="b">投稿画面</text>
+          <text x="575" y="84" text-anchor="middle" class="s">テストされる部品</text>
+
+          <rect x="210" y="120" width="260" height="150" rx="10" class="bx-a4"/>
+          <text x="340" y="144" text-anchor="middle" class="b">偽物</text>
+          <text x="340" y="162" text-anchor="middle" class="s">記事を頼む関数の代役</text>
+          <rect x="226" y="176" width="108" height="76" rx="8" class="bx-frame"/>
+          <text x="280" y="206" text-anchor="middle" class="b">返事</text>
+          <text x="280" y="228" text-anchor="middle" class="s">テストが入れる</text>
+          <rect x="346" y="176" width="108" height="76" rx="8" class="bx-frame"/>
+          <text x="400" y="206" text-anchor="middle" class="b">記録</text>
+          <text x="400" y="228" text-anchor="middle" class="s">呼ばれると増える</text>
+
+          <path d="M180 68 H250 V172" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="188" y="60" class="a">① 返事を決める</text>
+          <path d="M560 96 V214 H458" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="568" y="160" class="a">② 呼ぶ</text>
+          <path d="M420 120 V68 H496" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="428" y="114" class="a">③ 返事を渡す</text>
+          <path d="M400 256 V300 H105 V100" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="250" y="294" text-anchor="middle" class="a">④ 記録を見せる</text>
+          <text x="340" y="328" text-anchor="middle" class="s">⑤ 次のテストの前に、テストのファイルが記録を消す</text>
+        </svg>
+      </div>
+      <figcaption>図3:① と ④ は <span class="t-a2">テストのファイル</span> と偽物の間、② と ③ は <span class="t-a1">投稿画面</span> と偽物の間のやりとりです。<span class="t-a1">投稿画面</span> は、返事を決める手段も、記録を見る手段も持っていません。</figcaption>
+    </figure>
+
+    <h3>偽物の一生</h3>
+    <p>右の列は、その時点で偽物が持っているものです。例は、1章のテストです。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>誰が、何をするか</th><th>偽物が持っているもの</th></tr></thead>
+        <tbody>
+          <tr><td class="step">生まれる</td><td><span class="t-a3">Vitest</span> が、ファイルを読み込むときに偽物を作り、<span class="t-a1">投稿画面</span> に本物の代わりに渡す(図2 場面 0)</td><td><span class="loc a4">返事:なし</span><span class="loc a4">記録:0件</span></td></tr>
+          <tr><td class="step">①</td><td><span class="t-a2">テストのファイル</span> が、返事を「422、タイトルが空」に決める</td><td><span class="loc a4">返事:422</span><span class="loc a4">記録:0件</span></td></tr>
+          <tr><td class="step">② ③</td><td><span class="t-a1">投稿画面</span> が偽物を呼ぶ。偽物は、何を渡されたかを記録し、決められた返事を渡す</td><td><span class="loc a4">返事:422</span><span class="loc a4">記録:1件</span></td></tr>
+          <tr><td class="step">④</td><td><span class="t-a2">テストのファイル</span> が、記録を見て「正しいものを渡されて呼ばれたか」を確かめる</td><td><span class="loc a4">返事:422</span><span class="loc a4">記録:1件</span></td></tr>
+          <tr><td class="step">⑤</td><td>次のテストの前に、<span class="t-a2">テストのファイル</span> が記録を消す。続けて、返事を「成功」に決め直す</td><td><span class="loc a4">返事:成功</span><span class="loc a4">記録:0件</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><p>⑤ で記録を消すのは、偽物がファイルの中で1回しか作られず、テストの間で使い回されるためです。消さないと、前のテストで呼ばれた記録が残り、「一度も呼ばれていない」を確かめるテストが落ちます。RSpec は、この後片付けをテストごとに自動でしますが、Vitest は、このプロジェクトの設定ではしません(8章の 4)。記録を消しても、決めた返事は消えません。なので、⑤ では返事も決め直しています。</p></div>
+
+    <h3>なぜ偽物を使うのか</h3>
+    <p>結論から言うと、<strong>確かめたい部品の振る舞いだけを、ほかの部品に振り回されずに確かめるため</strong>です。理由は3つあります。</p>
+    <ol class="flow">
+      <li><strong>本物の相手は、テストの中でそろえられない。</strong>Rails は別のサーバーで動いていて、Vitest の中では起動できません。本物の Google のログインは、CI ではできません。</li>
+      <li><strong>本物の相手では、確かめたい場面を起こしにくい。</strong>「Rails が 422 を返す」「通信に失敗する」を狙って起こすのは大変です。偽物なら、返事を1行で決められます。</li>
+      <li><strong>偽物の方が、確かめたいことがよく見える。</strong>「一覧画面に移るよう頼んでいない」のような、何も起きなかったことは、外から見えにくいです。偽物は呼ばれ方を記録しているので、「一度も呼ばれていない」をそのまま確かめられます。</li>
+    </ol>
+    <p>まとめると、得は「速い、何度でも同じ結果になる、どんな場面でも作れる」ことです。損は「偽物を置いたところから先は、本物が動かない」ことです(下の「偽物の限界」)。仕様書 <a href="../specs/012-articles-ui.md">012-articles-ui.md</a> の完了条件で、画面と関数の振る舞いはテスト、全部をつないだ流れ(AC-20)は手動確認、と分けているのはこのためです。</p>
+
+    <h3>Rails のテストとの違い</h3>
+    <p>偽物にするかどうかの決まりは、Rails でも Vue でも同じです。<strong>テストが自分で用意できないもの(自分の外にあるもの)を、偽物にします。</strong>違うのは、「自分の外」にあるものの量です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 760 260" role="img" aria-label="Rails のテストでは、データベースは本物で、公開鍵の取得だけ偽物。Vue のテストでは、Rails は別のサーバーなので呼ばず、記事を頼む関数を偽物にする">
+          <defs>
+            <marker id="f4-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f4-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+          </defs>
+
+          <rect x="20" y="20" width="340" height="225" rx="12" class="bx-frame"/>
+          <text x="36" y="44" class="s">Rails のテスト(RSpec)</text>
+          <rect x="40" y="60" width="110" height="50" rx="8" class="bx-a2"/>
+          <text x="95" y="82" text-anchor="middle" class="b">request spec</text>
+          <text x="95" y="100" text-anchor="middle" class="s">私たちが書く</text>
+          <rect x="190" y="60" width="150" height="50" rx="8" class="bx-a1"/>
+          <text x="265" y="82" text-anchor="middle" class="b">コントローラー</text>
+          <text x="265" y="100" text-anchor="middle" class="s">モデル(本物)</text>
+          <rect x="215" y="160" width="125" height="56" rx="8" class="bx-a6"/>
+          <text x="277" y="184" text-anchor="middle" class="b">データベース</text>
+          <text x="277" y="204" text-anchor="middle" class="s">本物(テスト用)</text>
+          <rect x="40" y="160" width="120" height="56" rx="8" class="bx-a4"/>
+          <text x="100" y="184" text-anchor="middle" class="b">公開鍵の取得</text>
+          <text x="100" y="204" text-anchor="middle" class="s">偽物</text>
+          <line x1="150" y1="85" x2="186" y2="85" class="ln-a2" marker-end="url(#f4-a2)"/>
+          <text x="168" y="77" text-anchor="middle" class="s">呼ぶ</text>
+          <line x1="300" y1="114" x2="300" y2="156" class="ln-a1" marker-start="url(#f4-a1)" marker-end="url(#f4-a1)"/>
+          <text x="308" y="140" class="s">保存</text>
+          <path d="M200 110 V188 H164" class="ln-a1" marker-end="url(#f4-a1)"/>
+          <text x="192" y="150" text-anchor="end" class="s">取得</text>
+
+          <rect x="400" y="20" width="340" height="225" rx="12" class="bx-frame"/>
+          <text x="416" y="44" class="s">Vue のテスト(Vitest)</text>
+          <rect x="420" y="60" width="120" height="50" rx="8" class="bx-a2"/>
+          <text x="480" y="82" text-anchor="middle" class="b">テストのファイル</text>
+          <text x="480" y="100" text-anchor="middle" class="s">私たちが書く</text>
+          <rect x="580" y="60" width="140" height="50" rx="8" class="bx-a1"/>
+          <text x="650" y="82" text-anchor="middle" class="b">投稿画面</text>
+          <text x="650" y="100" text-anchor="middle" class="s">本物</text>
+          <rect x="580" y="160" width="140" height="56" rx="8" class="bx-a4"/>
+          <text x="650" y="184" text-anchor="middle" class="b">記事を頼む関数</text>
+          <text x="650" y="204" text-anchor="middle" class="s">偽物</text>
+          <rect x="420" y="160" width="120" height="56" rx="8" class="bx-frame"/>
+          <text x="480" y="184" text-anchor="middle" class="b">Rails</text>
+          <text x="480" y="204" text-anchor="middle" class="s">別のサーバー</text>
+          <line x1="540" y1="85" x2="576" y2="85" class="ln-a2" marker-end="url(#f4-a2)"/>
+          <text x="558" y="77" text-anchor="middle" class="s">操作</text>
+          <line x1="650" y1="110" x2="650" y2="156" class="ln-a1" marker-end="url(#f4-a1)"/>
+          <text x="658" y="138" class="s">呼ぶ</text>
+        </svg>
+      </div>
+      <figcaption>図4:Rails のテストでは、いちばん大事な相手の <span class="t-a6">データベース</span> を本物のまま使い、外のサービス(Google)だけを <span class="t-a4">偽物</span> にします。Vue のテストでは、いちばん大事な相手の Rails がネットワークの向こうにあるので、そのすぐ手前を <span class="t-a4">偽物</span> にします。Rails とつながる線はありません。</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>Rails のテスト</th><th>Vue のテスト</th></tr></thead>
+        <tbody>
+          <tr><td>いちばん大事な相手</td><td>データベース</td><td>Rails</td></tr>
+          <tr><td>その相手を手元で用意できるか</td><td>できる。Rails がテスト用のデータベースを持ち、テストごとに中身を元に戻せる</td><td>できない。別のサーバーで動いている</td></tr>
+          <tr><td>偽物にするもの</td><td>外のサービスだけ(Google の公開鍵の取得)</td><td>Rails への頼み、Firebase、ブラウザ(jsdom)、場合によって router</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>フロントエンドのテストで偽物が多くなるのは、フロントエンドが特別だからではありません。大事なデータが、ネットワークの向こうにあるからです。</p>
+
+    <h3>偽物の限界</h3>
+    <p>偽物を置いたところから先は、テストでは本物が一度も動きません。その例が、PR #24 で見つかった <code>require "net/http"</code> の抜けです。Rails のテストでは、公開鍵を取る処理を偽物にしていたので、本物の通信の行は一度も動かず、テストはすべて通っていました。手動確認で初めて 500 が出ました。</p>
+    <p>なので、このプロジェクトでは次のように分けています。</p>
+    <ul>
+      <li>部品ごとの振る舞い:偽物を使ったテストで確かめる。偽物にした先の部品は、その部品自身のテストで確かめる(記事を頼む関数は <code>articles.spec.ts</code> で)</li>
+      <li>全部を本物でつないだ流れ:手動確認で確かめる(PR #27 の AC-20「ログインして投稿し、一覧に出る」)</li>
+    </ul>
+    <p>本物のブラウザで本物の Rails とつないで操作するテスト(E2E テスト。Rails の system spec にあたる)もありますが、このプロジェクトではまだ書いていません。</p>
+
+    <h3>偽物と factory の違い</h3>
+    <p>どちらもテストの準備で使いますが、用意するものが違います。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>factory(FactoryBot)</th><th>偽物</th></tr></thead>
+        <tbody>
+          <tr><td>用意するもの</td><td>データ(会員、記事のレコード)</td><td>呼ばれる相手(関数、通信)</td></tr>
+          <tr><td>本物か</td><td>本物。本物のモデルで、本物のデータベースに保存される</td><td>偽物。本物の代わりに置く</td></tr>
+          <tr><td>Vitest のテストでは</td><td>ファイルの上に書いたデータ(<code>const article = { ... }</code>)</td><td><code>vi.fn()</code> で作る関数</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>テストでは、この2つを組み合わせます。PR #27 のテストでも、「偽物が、用意したデータ(article)を返す」形になっています。</p>
+  </section>
+
+  <section id="words">
+    <h2><span class="num">5</span>言葉:Vitest の名前と RSpec の対応</h2>
+    <p>ここからコードの名前を出します。Vitest の名前は、Vitest 本体、偽物の道具(<code>vi</code>)、画面の道具(Vue Test Utils)の3つに分かれます。<code>vi</code> は、偽物を扱う関数をまとめて持っている入れ物です。Ruby の <code>Math.sqrt</code> のように、<code>vi.fn()</code> は「<code>vi</code> の中の <code>fn</code> を呼ぶ」と読みます。</p>
+
+    <h3>骨組みと比べ方(Vitest 本体)</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Vitest</th><th>RSpec</th><th>何か</th></tr></thead>
+        <tbody>
+          <tr><td><code>describe('…', () =&gt; { })</code></td><td><code>describe '…' do end</code></td><td>テストのまとまり。<code>do … end</code> の代わりに関数を渡す</td></tr>
+          <tr><td><code>it('…', async () =&gt; { })</code></td><td><code>it '…' do end</code></td><td>1つのテスト。中で <code>await</code> を使うなら <code>async</code> を付ける</td></tr>
+          <tr><td><code>beforeEach(() =&gt; { })</code></td><td><code>before do end</code></td><td>各テストの前に動く準備</td></tr>
+          <tr><td><code>expect(x).toBe(y)</code></td><td><code>expect(x).to equal(y)</code></td><td>同じものか。文字や数なら <code>eq</code> と同じ結果になる</td></tr>
+          <tr><td><code>expect(x).toEqual(y)</code></td><td><code>expect(x).to eq(y)</code></td><td>中身が同じか。オブジェクトや配列はこちら</td></tr>
+          <tr><td><code>toContain('…')</code></td><td><code>include('…')</code></td><td>含んでいるか</td></tr>
+          <tr><td><code>toHaveLength(2)</code></td><td><code>have_attributes(size: 2)</code> など</td><td>長さ</td></tr>
+          <tr><td><code>toBeDefined()</code> / <code>toBeUndefined()</code></td><td><code>not_to be_nil</code> / <code>be_nil</code></td><td>あるか、ないか</td></tr>
+          <tr><td><code>expect(x).not.…</code></td><td><code>expect(x).not_to …</code></td><td>否定</td></tr>
+          <tr><td><code>await expect(p).rejects.toThrow()</code></td><td><code>expect { … }.to raise_error</code></td><td>Promise が失敗することを確かめる</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>偽物の道具(vi)</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Vitest</th><th>RSpec</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td><code>vi.mock('ファイル', () =&gt; ({ … }))</code></td><td>近いのは <code>allow(Klass).to receive(…)</code></td><td>ファイル(モジュール)を丸ごと偽物に差し替える。読み込みより先に動く</td><td>図2 場面 0</td></tr>
+          <tr><td><code>vi.fn()</code></td><td><code>double</code></td><td>偽物の関数を作る。呼ばれ方を記録する</td><td>図2 場面 0「偽物を作る」</td></tr>
+          <tr><td><code>vi.hoisted(() =&gt; …)</code></td><td>(ない)</td><td>中身を、読み込みより先に作る。<code>vi.mock</code> の中で使う偽物に使う</td><td>図2 場面 0</td></tr>
+          <tr><td><code>mockResolvedValue(x)</code></td><td><code>and_return(x)</code></td><td>呼ばれたら、中身が x の Promise を返す</td><td>図3 ①</td></tr>
+          <tr><td><code>mockRejectedValue(e)</code></td><td><code>and_raise(e)</code></td><td>呼ばれたら、失敗する Promise を返す</td><td>図3 ①</td></tr>
+          <tr><td><code>mockReturnValue(x)</code></td><td><code>and_return(x)</code></td><td>呼ばれたら、x をそのまま返す</td><td>図3 ①</td></tr>
+          <tr><td><code>toHaveBeenCalledWith(…)</code></td><td><code>have_received(…).with(…)</code></td><td>その引数で呼ばれたか</td><td>図3 ④</td></tr>
+          <tr><td><code>.mock.lastCall</code></td><td>(近いものはない)</td><td>最後に呼ばれたときの引数の配列</td><td>図3 ④</td></tr>
+          <tr><td><code>vi.clearAllMocks()</code></td><td>(RSpec は自動)</td><td>全部の偽物の記録を消す。決めた返事は消えない</td><td>図3 ⑤</td></tr>
+          <tr><td><code>vi.mocked(f)</code></td><td>(ない)</td><td>TypeScript に「これは偽物」と伝えるだけ。実行時は何もしない</td><td>―</td></tr>
+          <tr><td><code>vi.stubGlobal('fetch', f)</code></td><td>近いのは <code>stub_const</code></td><td><code>fetch</code> のような、どこでも使える名前を偽物にする</td><td>―</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>画面の道具(Vue Test Utils)</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Vue Test Utils</th><th>Capybara</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td><code>mount(画面, { global: … })</code></td><td><code>visit</code></td><td>画面を1つ描く。返ってくる <code>wrapper</code> が操作の窓口</td><td>図2 場面 2</td></tr>
+          <tr><td><code>wrapper.find('セレクター')</code> / <code>findAll</code></td><td><code>find</code> / <code>all</code></td><td>CSS セレクターで要素を探す</td><td>図2 場面 2・3</td></tr>
+          <tr><td><code>.setValue('…')</code></td><td><code>fill_in</code></td><td>入力欄に入れる</td><td>図2 場面 2</td></tr>
+          <tr><td><code>.trigger('click')</code> / <code>.trigger('submit')</code></td><td><code>click_button</code></td><td>操作を起こす</td><td>図2 場面 2「送信を起こす」</td></tr>
+          <tr><td><code>.text()</code> / <code>.attributes('…')</code></td><td><code>.text</code> / <code>[:…]</code></td><td>表示の文字と属性を読む</td><td>図2 場面 3</td></tr>
+          <tr><td><code>flushPromises()</code></td><td>(Capybara は自動で待つ)</td><td>待っている Promise の続きを、先に全部進める</td><td>図2 場面 2 の最後</td></tr>
+          <tr><td><code>global: { plugins: [createPinia()] }</code></td><td>―</td><td>画面がストアを使えるようにする(<code>main.ts</code> の <code>app.use</code> にあたる)</td><td>―</td></tr>
+          <tr><td><code>global: { stubs: { RouterView: true } }</code></td><td>―</td><td>その部品を、空の偽物に置き換える</td><td>―</td></tr>
+          <tr><td><code>RouterLinkStub</code></td><td>―</td><td>行き先(<code>to</code>)だけを持つ、RouterLink の偽物</td><td>―</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>私たちのテストの中で作った名前</h3>
+    <p>どれも、テストを読みやすくするための小さな関数です。Vitest の機能ではありません。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>名前</th><th>何か</th><th>あるファイル</th></tr></thead>
+        <tbody>
+          <tr><td><code>respond(body, status)</code></td><td>偽物の <code>apiFetch</code> が返す、Rails の応答を決める</td><td><code>articles.spec.ts</code></td></tr>
+          <tr><td><code>sent()</code></td><td>偽物の <code>apiFetch</code> が最後に受け取ったパスとオプション</td><td><code>articles.spec.ts</code></td></tr>
+          <tr><td><code>notifyAuthState(user)</code></td><td>Firebase からの「ログイン中/未ログイン」の知らせを再現する</td><td><code>App.spec.ts</code> ほか</td></tr>
+          <tr><td><code>mountView()</code> / <code>mountApp()</code></td><td>画面を、ストアや偽物の部品つきで描く</td><td><code>ArticleListView.spec.ts</code> / <code>App.spec.ts</code></td></tr>
+          <tr><td><code>submit(wrapper)</code></td><td>タイトルと本文を入れて、フォームを送る</td><td><code>ArticleNewView.spec.ts</code></td></tr>
+          <tr><td><code>openedRoutePath()</code></td><td>今開いている画面の、登録したときのパス</td><td><code>router/__tests__/index.spec.ts</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="detail">
+    <h2><span class="num">6</span>1つのテストを行ごとに読む</h2>
+    <p>図2 で追ったテストを、実際のコードで読みます。コードは PR #27 の時点のものです(ブランチ <code>feature/12-articles-ui</code>)。色の付いた行が、図2 の場面にあたる行です。</p>
+
+    <h3>ファイルの上の方:場面 0 と、共通の準備</h3>
+<p class="file">web/src/views/__tests__/ArticleNewView.spec.ts</p>
+<pre class="code"><code><span class="l"><span class="n">1</span>import { describe, it, expect, vi, beforeEach } from 'vitest'</span><span class="l"><span class="n">2</span>import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'</span><span class="l"><span class="n">3</span></span><span class="l"><span class="n">4</span>import { createArticle } from '@/api/articles'</span><span class="l"><span class="n">5</span>import ArticleNewView from '../ArticleNewView.vue'</span><span class="l"><span class="n">6</span></span><span class="l"><span class="n">7</span>// 記事の API を呼ぶ関数を偽物に差し替える。Rails とのやりとりは articles.spec.ts で確かめている</span><span class="l hl"><span class="n">8</span>vi.mock('@/api/articles', () =&gt; ({ createArticle: vi.fn() }))</span><span class="l"><span class="n">9</span></span><span class="l"><span class="n">10</span>// 画面を移す頼み(router.push)を受け取る偽物。どこへ移ろうとしたかだけを見る</span><span class="l"><span class="n">11</span>// vi.mock は import より先に動くので、偽物は vi.hoisted で先に作っておく</span><span class="l hl"><span class="n">12</span>const push = vi.hoisted(() =&gt; vi.fn())</span><span class="l hl"><span class="n">13</span>vi.mock('vue-router', () =&gt; ({ useRouter: () =&gt; ({ push }) }))</span><span class="l"><span class="n">14</span></span><span class="l"><span class="n">15</span>const article = {</span><span class="l"><span class="n">16</span>  id: 1,</span><span class="l"><span class="n">17</span>  title: 'タイトル',</span><span class="l"><span class="n">18</span>  body: '本文',</span><span class="l"><span class="n">19</span>  member_id: 1,</span><span class="l"><span class="n">20</span>  created_at: '2026-11-07T10:00:00.000Z',</span><span class="l"><span class="n">21</span>  updated_at: '2026-11-07T10:00:00.000Z',</span><span class="l"><span class="n">22</span>}</span><span class="l"><span class="n">23</span></span><span class="l"><span class="n">24</span>// タイトルと本文を入れて、フォームを送る</span><span class="l"><span class="n">25</span>async function submit(wrapper: VueWrapper, title = 'タイトル', body = '本文') {</span><span class="l"><span class="n">26</span>  await wrapper.find('input[name="title"]').setValue(title)</span><span class="l"><span class="n">27</span>  await wrapper.find('textarea[name="body"]').setValue(body)</span><span class="l"><span class="n">28</span>  await wrapper.find('form').trigger('submit')</span><span class="l"><span class="n">29</span>  // createArticle の結果を待つ</span><span class="l hl"><span class="n">30</span>  await flushPromises()</span><span class="l"><span class="n">31</span>}</span><span class="l"><span class="n">32</span></span><span class="l"><span class="n">33</span>describe('ArticleNewView', () =&gt; {</span><span class="l"><span class="n">34</span>  beforeEach(() =&gt; {</span><span class="l hl"><span class="n">35</span>    vi.clearAllMocks()</span><span class="l hl"><span class="n">36</span>    vi.mocked(createArticle).mockResolvedValue({ ok: true, article })</span><span class="l"><span class="n">37</span>  })</span></code></pre>
+    <div class="tablewrap">
+      <table class="lines">
+        <thead><tr><th>行</th><th>何をしているか</th><th>図との対応</th></tr></thead>
+        <tbody>
+          <tr><td>1〜2</td><td>使う道具を読み込む。<code>describe</code> や <code>it</code> も、毎回ここで読み込む</td><td>―</td></tr>
+          <tr><td>8</td><td>記事を頼む関数を、偽物の関数(<code>vi.fn()</code>)1つだけを持つファイルに差し替える</td><td>図2 場面 0</td></tr>
+          <tr><td>12</td><td>画面を移す頼み(<code>push</code>)の偽物を、読み込みより先に作る</td><td>図2 場面 0</td></tr>
+          <tr><td>13</td><td><code>vue-router</code> を、<code>useRouter()</code> が <code>push</code> の偽物を返すだけのものに差し替える</td><td>図2 場面 0</td></tr>
+          <tr><td>15〜22</td><td>テスト用の記事のデータ。偽物の返事に使う(factory にあたる)</td><td>―</td></tr>
+          <tr><td>25〜31</td><td>入力して送る手順をまとめた関数。最後に、待っている Promise を全部進める(30行目)</td><td>図2 場面 2</td></tr>
+          <tr><td>35</td><td>前のテストで記録された呼ばれ方を消す</td><td>図3 ⑤</td></tr>
+          <tr><td>36</td><td>返事を、いったん「成功」に決めておく。テストごとに上書きできる</td><td>図3 ①</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>ファイルの中で、実際に動く順番</h3>
+    <p>上のコードは、書いてある順(上から下)には動きません。Vitest が、動かす前にファイルを書き換え、<code>vi.hoisted</code> と <code>vi.mock</code> を一番上(すべての import より前)に持ち上げるためです。hoist は英語で「持ち上げる」という意味です。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>何が動くか</th><th>行</th></tr></thead>
+        <tbody>
+          <tr><td class="step">1</td><td>持ち上げられた <code>vi.mock</code> と <code>vi.hoisted</code> が、書いた順に動く。<code>vi.hoisted</code> は中身をすぐに動かし、<code>push</code> に偽物の関数が入る。<code>vi.mock</code> は「このファイルは、この偽物に差し替える」と<strong>登録するだけ</strong>で、<code>() =&gt; ({ … })</code> の中身はまだ動かない</td><td>8、12、13</td></tr>
+          <tr><td class="step">2</td><td>import が動く。投稿画面などが読み込まれ、このとき登録した差し替えの中身が動いて、偽物が届く。<code>vue-router</code> の偽物の中で <code>push</code> を使うが、1 で作ってあるので大丈夫</td><td>1〜5</td></tr>
+          <tr><td class="step">3</td><td>残りの部分が、書いた順に動く</td><td>15〜</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>なぜ <code>vi.hoisted</code> が要るのか</strong>:<code>vi.mock</code> だけが持ち上げられると、2 の import のときに、まだ動いていない <code>const push = vi.fn()</code> を使うことになり、エラーになります。<code>vi.hoisted</code> で包むと、<code>push</code> を作る処理も一緒に持ち上げられ、import より前にできあがります。</p>
+    <p><strong>なぜ <code>createArticle</code> には要らず、<code>push</code> には要るのか</strong>:違いは、テストが偽物を後から手に入れられるかどうかです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>偽物</th><th>テストはどうやって手に入れるか</th><th><code>vi.hoisted</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>createArticle</code></td><td><code>vi.mock</code> の中で作る。テストは <code>import { createArticle } from '@/api/articles'</code> で、差し替えた後の偽物を受け取れる</td><td>要らない</td></tr>
+          <tr><td><code>push</code></td><td>偽物の <code>useRouter()</code> の戻り値の中にしまわれていて、import では取り出せない。でもテストは後で <code>expect(push)</code> と確かめたいので、<code>vi.mock</code> の外で先に作り、手元の変数に持っておく</td><td>要る</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>覚え方:「持ち上げられたもの(<code>vi.hoisted</code> と <code>vi.mock</code>)→ import → 残り」の順で動き、<code>vi.mock</code> の中身は import のときに動く。<code>vi.hoisted</code> を使うのは、「<code>vi.mock</code> の中で使い、テストの確認でも使いたい偽物」を作るときだけです。</p>
+
+    <h3>422 のテスト:場面 1〜3</h3>
+<p class="file">web/src/views/__tests__/ArticleNewView.spec.ts</p>
+<pre class="code"><code><span class="l"><span class="n">69</span>  it('422 の場合、項目ごとのエラーを表示し、投稿画面に留まる', async () =&gt; {</span><span class="l hl"><span class="n">70</span>    vi.mocked(createArticle).mockResolvedValue({</span><span class="l hl"><span class="n">71</span>      ok: false,</span><span class="l hl"><span class="n">72</span>      errors: { title: ["can't be blank"], body: ["can't be blank"] },</span><span class="l hl"><span class="n">73</span>    })</span><span class="l"><span class="n">74</span>    const wrapper = mount(ArticleNewView)</span><span class="l"><span class="n">75</span></span><span class="l hl"><span class="n">76</span>    await submit(wrapper)</span><span class="l"><span class="n">77</span></span><span class="l hl"><span class="n">78</span>    expect(wrapper.text()).toContain("タイトル:can't be blank")</span><span class="l hl"><span class="n">79</span>    expect(wrapper.text()).toContain("本文:can't be blank")</span><span class="l hl"><span class="n">80</span>    expect(push).not.toHaveBeenCalled()</span><span class="l"><span class="n">81</span>  })</span></code></pre>
+    <div class="tablewrap">
+      <table class="lines">
+        <thead><tr><th>行</th><th>何をしているか</th><th>図との対応</th></tr></thead>
+        <tbody>
+          <tr><td>69</td><td>テストの名前。中で <code>await</code> を使うので <code>async</code> を付ける</td><td>―</td></tr>
+          <tr><td>70〜73</td><td>偽物の返事を「422、タイトルと本文が空」に決める。36行目の「成功」を上書きする</td><td>図2 場面 1、図3 ①</td></tr>
+          <tr><td>74</td><td>投稿画面を描く</td><td>図2 場面 2</td></tr>
+          <tr><td>76</td><td>入力して送り、偽物の返事が画面に反映されるまで待つ</td><td>図2 場面 2</td></tr>
+          <tr><td>78〜79</td><td>画面に、項目ごとのエラーが出ているかを確かめる</td><td>図2 場面 3「表示を聞く」</td></tr>
+          <tr><td>80</td><td>画面を移す頼みの偽物が、一度も呼ばれていないことを確かめる</td><td>図2 場面 3「記録を聞く」</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><p>試し方:VS Code で <code>web/src/views/ArticleNewView.vue</code> の <code>router.push('/')</code> を消して保存し、7章のコマンドでテストを動かすと、「記事が保存されたとき、一覧画面に移る」のテストが落ちます。偽物の記録が、本当に振る舞いを見張っていることが分かります。試した後は元に戻してください。</p></div>
+  </section>
+
+  <section id="files">
+    <h2><span class="num">7</span>PR #27 のテストの一覧と、動かし方</h2>
+    <p>どのテストも、「1つ内側の相手を偽物にして、自分の仕事だけを確かめる」形になっています。内側の相手は、それぞれ自分のテストで確かめています。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>テストのファイル</th><th>テストされる部品</th><th>偽物にしたもの</th><th>完了条件</th></tr></thead>
+        <tbody>
+          <tr><td><code>api/__tests__/client.spec.ts</code></td><td><code>apiFetch</code>(ID トークンを付ける)</td><td>Firebase の <code>auth</code>、ブラウザの <code>fetch</code></td><td>Issue #11 の AC-6、AC-7</td></tr>
+          <tr><td><code>api/__tests__/articles.spec.ts</code></td><td>記事を取る・作る関数</td><td><code>apiFetch</code></td><td>AC-1〜AC-4</td></tr>
+          <tr><td><code>router/__tests__/index.spec.ts</code></td><td>ログインのガード</td><td>Firebase の <code>auth</code>、2つの画面</td><td>AC-9〜AC-11</td></tr>
+          <tr><td><code>views/__tests__/ArticleListView.spec.ts</code></td><td>一覧画面</td><td>記事を取る関数、Firebase の SDK、<code>RouterLink</code></td><td>AC-5〜AC-8</td></tr>
+          <tr class="now"><td><code>views/__tests__/ArticleNewView.spec.ts</code></td><td>投稿画面</td><td>記事を作る関数、router</td><td>AC-12〜AC-16</td></tr>
+          <tr><td><code>__tests__/App.spec.ts</code></td><td>ヘッダー</td><td>Firebase の SDK、router、<code>RouterView</code></td><td>AC-17〜AC-19</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>色の付いた行が、このページの例(図2、6章)に使ったファイルです。パスは <code>web/src/</code> から先を書いています。</p>
+
+    <h3>動かし方</h3>
+<pre><code><span class="c"># 全部のテストを1回だけ動かす(リポジトリ直下で)</span>
+docker compose run --rm web npm run test:unit -- --run
+
+<span class="c"># 1つのファイルだけ動かす</span>
+docker compose run --rm web npx vitest run src/views/__tests__/ArticleNewView.spec.ts</code></pre>
+    <p><code>--run</code> を付けないと、ファイルを保存するたびに動き直すモード(監視モード)で動き続けます。止めるときは Ctrl+C です。CI では、web のジョブが同じテストを動かしています。</p>
+  </section>
+
+  <section id="pitfalls">
+    <h2><span class="num">8</span>RSpec を知っている人がつまずくところ</h2>
+    <ol class="flow">
+      <li><strong><code>describe</code> や <code>it</code> も、ファイルの先頭で読み込む。</strong>このプロジェクトの設定では、自動では使えません。</li>
+      <li><strong>オブジェクトや配列は <code>toEqual</code>、文字や数は <code>toBe</code>。</strong><code>toBe</code> は「同じもの」を比べるので、中身が同じでも、別々に作った配列どうしは落ちます。</li>
+      <li><strong><code>vi.mock</code> は、どこに書いても読み込みより先に動く。</strong>そのため、<code>vi.mock</code> の中では、ファイルの途中で作った変数を使えません(まだ作られていない)。中で使う偽物は <code>vi.hoisted</code> で作ります(6章の「ファイルの中で、実際に動く順番」)。</li>
+      <li><strong>偽物の記録は、自動では消えない。</strong>RSpec は、テストごとに偽物を作り直します。このプロジェクトの Vitest の設定では、偽物はファイルで1回だけ作られて使い回されるので、<code>beforeEach</code> で <code>vi.clearAllMocks()</code> を呼びます(図3 ⑤)。</li>
+      <li><strong>画面のテストは、待ってくれない。</strong>Capybara は、要素が出てくるまで少し待ってくれます。Vue Test Utils は待たないので、操作の後に <code>await flushPromises()</code> を書き、偽物の返事を画面に反映させてから確かめます。</li>
+      <li><strong>失敗を確かめるときは、<code>expect</code> の前に <code>await</code>。</strong><code>await expect(…).rejects.toThrow()</code> の <code>await</code> を忘れると、確かめる前にテストが終わり、間違っていても通ります。</li>
+      <li><strong>jsdom は本物のブラウザではない。</strong>たとえば <code>trigger('submit')</code> は送信の出来事を直接起こすので、ブラウザが送る前にする <code>required</code> の確認を通りません。PR #27 では、入力欄に <code>required</code> の属性があるかを確かめ、本物のブラウザでの動きは手動で見ています。</li>
+    </ol>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">9</span>確認用の問い</h2>
+    <ol class="check">
+      <li>投稿画面のテストで確かめたいのは、誰の振る舞いですか。そのとき、Rails には何か届きますか。<span class="hint">1章と図1、図2 です。</span></li>
+      <li>偽物が持っている2つのものは何ですか。それぞれ、誰が入れて、誰が見ますか。<span class="hint">4章の図3 と「偽物の一生」です。</span></li>
+      <li>Vue のテストで、Rails のテストより偽物が多くなるのはなぜですか。<span class="hint">4章の「Rails のテストとの違い」と図4 です。</span></li>
+      <li><code>beforeEach</code> の <code>vi.clearAllMocks()</code> を消すと、どのテストが、なぜ落ちる可能性がありますか。<span class="hint">図3 ⑤ と、8章の 4 です。</span></li>
+      <li>偽物を使ったテストがすべて通っても、手動確認が要るのはなぜですか。<span class="hint">4章の「偽物の限界」です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本番の箱と、財布と、見張り</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Issue #29 の学習ノート(layered-tech-explanation スキルのひな形から作った)。
+   登場人物の色:1人に1色(a1〜a6)を割り当て、図と本文で同じ色を使う。
+   a2 は「私たちが書くコード」と「今ここ」に使う。ここに割り当てを書いておく:
+   a1=オーナー、a2=本番用プロジェクト(今ここ)、a3=開発用プロジェクト、a4=請求先アカウント、a5=予算アラート、a6=ローカル環境 */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+/* コードの字体は合字(=> が矢印になる、など)を切る。VS Code の見た目と食い違わないように */
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* コードを読むノートの部品(references/html-note.md の 5.5)。使わなければ消してよい */
+.route { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0 0 14px; }
+.route li { font-size: 12.5px; line-height: 1.7; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); white-space: nowrap; }
+.route li.on { border-color: var(--a2); color: var(--a2); background: var(--a2-soft); font-weight: 700; }
+.route li.on.rails { border-color: var(--a6); color: var(--a6); background: var(--a6-soft); }
+.io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.io > div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.7; min-width: 0; }
+.io .k { display: block; font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+.role { font-size: 15.5px; }
+.file { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin: 18px 0 -6px; }
+pre.code { padding: 12px 0; }
+pre.code code { display: inline-block; min-width: 100%; }
+pre.code .l { display: block; padding-right: 16px; }
+pre.code .n { display: inline-block; width: 3.4em; padding-right: 1em; text-align: right; color: var(--muted); user-select: none; }
+pre.code .l.hl { background: var(--a2-soft); }
+pre.code.rails .l.hl { background: var(--a6-soft); }
+table.lines td:first-child { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; color: var(--a2); }
+table.lines.rails td:first-child { color: var(--a6); }
+table.lines td:last-child { font-size: 13px; color: var(--muted); min-width: 8.5em; }
+table.lines th, table.story th:first-child { white-space: nowrap; }
+table.routes td:first-child { white-space: nowrap; font-weight: 700; }
+.goto { margin: 18px 0 0; padding: 10px 14px; border: 1px dashed var(--a2); border-radius: 8px; font-size: 14.5px; line-height: 1.75; }
+.goto.rails { border-color: var(--a6); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast, .io { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #29 · 学習メモ</p>
+    <h1>本番の箱と、財布と、見張り</h1>
+    <p class="lead">フェーズ2の最初の Issue #29 で用意する、本番用の Google Cloud プロジェクト、請求先アカウント、予算アラートの関係を図にしたノートです。コンソールで作業する前に、それぞれが何で、どうつながるかを見渡します。</p>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>なぜ本番用の箱と見張りが要るのか(1章)</li>
+        <li>フェーズ2の中で、今どこにいるか(2章)</li>
+        <li>Issue #29 が終わった時点の構成(3章)</li>
+        <li>お金がどう流れ、誰が誰に知らせるか(4章)</li>
+        <li>費用を追うと分かる、設定の理由(5章)</li>
+        <li>コンソールの画面に出てくる名前が、図のどこにあたるか(6章)</li>
+        <li>Issue #29 の作業と完了条件の対応(7章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:なぜ本番用の箱と見張りが要るのか</h2>
+    <p>フェーズ1では、Rails・Vue・データベースが、すべてオーナーの Mac の上で動いていました。Google の設備を使ったのは Google ログインだけで、それも無料の開発用プロジェクトで済んでいました。</p>
+    <p>フェーズ2では、同じものを Google の設備の上で動かし、インターネットから使えるようにします。Google の設備は使った分だけ料金がかかります。そこで困りごとが2つ出てきます。</p>
+    <ol class="flow">
+      <li><strong>開発の試しと本番が混ざる。</strong>同じ箱で両方を動かすと、試しの操作が本番のデータや料金に響きます。そこで、本番用の箱を開発用とは別に作ります。</li>
+      <li><strong>気づかないうちに料金が膨らむ。</strong>止め忘れや設定の誤りがあっても、請求が来るまで気づけません。そこで、使った額が決めた額に近づいたら知らせる見張りを置きます。</li>
+    </ol>
+    <p>Issue #29 では、この「本番用の箱」「料金を払う財布」「見張り」の3つを用意します。箱の中身(Rails やデータベース)は、まだ入れません。</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">2</span>フェーズ2の地図と今ここ</h2>
+    <p>フェーズ2は7つの Issue に分かれています。矢印は進める順番で、矢印の元が終わってから先に進みます。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 210" role="img" aria-label="フェーズ2の Issue の順番。#29 土台を用意(今ここ)、#30 Rails を載せる、#31 データベースを繋ぐ、#32 Vue を配信、#33 自動デプロイの順に進む。#30 の後に #34 ログ、#31 の後に #35 スケール設定がある">
+          <defs>
+            <marker id="f1-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <text x="80" y="24" text-anchor="middle" class="lab-here">今ここ</text>
+          <rect x="20" y="32" width="120" height="60" rx="8" class="bx-a2"/>
+          <text x="80" y="57" text-anchor="middle" class="b">#29</text>
+          <text x="80" y="77" text-anchor="middle" class="s">土台を用意</text>
+          <rect x="170" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="230" y="57" text-anchor="middle" class="b">#30</text>
+          <text x="230" y="77" text-anchor="middle" class="s">Rails を載せる</text>
+          <rect x="320" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="380" y="57" text-anchor="middle" class="b">#31</text>
+          <text x="380" y="77" text-anchor="middle" class="s">DB を繋ぐ</text>
+          <rect x="470" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="530" y="57" text-anchor="middle" class="b">#32</text>
+          <text x="530" y="77" text-anchor="middle" class="s">Vue を配信</text>
+          <rect x="620" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="680" y="57" text-anchor="middle" class="b">#33</text>
+          <text x="680" y="77" text-anchor="middle" class="s">自動デプロイ</text>
+          <rect x="170" y="132" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="230" y="157" text-anchor="middle" class="b">#34</text>
+          <text x="230" y="177" text-anchor="middle" class="s">ログとエラー</text>
+          <rect x="320" y="132" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="380" y="157" text-anchor="middle" class="b">#35</text>
+          <text x="380" y="177" text-anchor="middle" class="s">スケール設定</text>
+          <line x1="140" y1="62" x2="166" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="290" y1="62" x2="316" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="440" y1="62" x2="466" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="590" y1="62" x2="616" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="230" y1="92" x2="230" y2="128" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="380" y1="92" x2="380" y2="128" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="470" y="160" class="s">料金がかかり始めるのは #31 から</text>
+          <text x="470" y="180" class="s">(データベースは止めない限り課金が続く)</text>
+        </svg>
+      </div>
+      <figcaption>図1:<span class="t-a2">#29</span> は、ほかのすべての Issue の前提です。#29 だけでは何も動かないので、料金はかかりません。</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Issue</th><th>本番用の箱に入るもの</th></tr></thead>
+        <tbody>
+          <tr class="now"><td>#29</td><td>何も入らない。箱そのものと、財布と見張りを用意する</td></tr>
+          <tr><td>#30</td><td>Rails(Cloud Run で動かす)と、その入れ物の置き場(Artifact Registry)</td></tr>
+          <tr><td>#31</td><td>データベース(Cloud SQL)</td></tr>
+          <tr><td>#32</td><td>Vue の配信(Firebase Hosting)と、本番のログイン(Firebase Authentication)</td></tr>
+          <tr><td>#33</td><td>GitHub から自動でデプロイするための通行証(Workload Identity 連携)</td></tr>
+          <tr><td>#34、#35</td><td>新しい部品は入らない。ログの見え方と、スケールの設定を整える</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="cast">
+    <h2><span class="num">3</span>登場人物と、#29 が終わった時点の構成</h2>
+    <p>登場人物は6つです。オーナーとローカル環境は手元に、残りの4つは Google の中にあります。色は、このページの図と本文で共通です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 760 300" role="img" aria-label="Issue #29 が終わった時点の構成。オーナーの Mac のローカル環境は、開発用プロジェクトをログインに使う。Google の中に、開発用プロジェクト、本番用プロジェクト、請求先アカウント、予算アラートがある。本番用プロジェクトだけが請求先アカウントに料金を付け、予算アラートが請求先アカウントの費用を見て、オーナーにメールを送る">
+          <defs>
+            <marker id="f2-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+            <marker id="f2-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f2-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+
+          <rect x="10" y="16" width="155" height="134" rx="12" class="bx-frame"/>
+          <text x="24" y="38" class="s">オーナーの Mac</text>
+          <rect x="25" y="60" width="125" height="70" rx="8" class="bx-a6"/>
+          <text x="87" y="90" text-anchor="middle" class="b">ローカル環境</text>
+          <text x="87" y="112" text-anchor="middle" class="s">Rails・Vue・DB</text>
+
+          <rect x="25" y="200" width="125" height="70" rx="8" class="bx-a1"/>
+          <text x="87" y="230" text-anchor="middle" class="b">オーナー</text>
+          <text x="87" y="252" text-anchor="middle" class="s">メールを受け取る</text>
+
+          <rect x="190" y="16" width="565" height="276" rx="12" class="bx-frame"/>
+          <text x="204" y="38" class="s">Google の中</text>
+          <rect x="280" y="60" width="180" height="70" rx="8" class="bx-a3"/>
+          <text x="370" y="90" text-anchor="middle" class="b">開発用プロジェクト</text>
+          <text x="370" y="112" text-anchor="middle" class="s">ログインだけ・無料</text>
+          <text x="560" y="54" class="lab-here">今ここ(#29 で作る)</text>
+          <rect x="560" y="60" width="180" height="70" rx="8" class="bx-a2"/>
+          <text x="650" y="90" text-anchor="middle" class="b">本番用プロジェクト</text>
+          <text x="650" y="112" text-anchor="middle" class="s">今は空・#30 から使う</text>
+          <rect x="280" y="200" width="180" height="70" rx="8" class="bx-a5"/>
+          <text x="370" y="230" text-anchor="middle" class="b">予算アラート</text>
+          <text x="370" y="252" text-anchor="middle" class="s">月 3,000円を見張る</text>
+          <rect x="560" y="200" width="180" height="70" rx="8" class="bx-a4"/>
+          <text x="650" y="230" text-anchor="middle" class="b">請求先アカウント</text>
+          <text x="650" y="252" text-anchor="middle" class="s">オーナーのカード</text>
+
+          <line x1="150" y1="95" x2="276" y2="95" class="ln-a6" marker-end="url(#f2-a6)"/>
+          <text x="235" y="87" text-anchor="middle" class="s">ログイン</text>
+          <line x1="650" y1="130" x2="650" y2="196" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="658" y="168" class="s">料金を付ける</text>
+          <line x1="560" y1="235" x2="464" y2="235" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="510" y="227" text-anchor="middle" class="s">費用を見せる</text>
+          <line x1="280" y1="235" x2="154" y2="235" class="ln-a5 dash" marker-end="url(#f2-a5)"/>
+          <text x="172" y="227" text-anchor="middle" class="s">メール</text>
+        </svg>
+      </div>
+      <figcaption>図2:線がないところにも意味があります。<span class="t-a3">開発用プロジェクト</span> から <span class="t-a4">請求先アカウント</span> への線はありません(財布がない = 料金がかからない)。<span class="t-a6">ローカル環境</span> と <span class="t-a2">本番用プロジェクト</span> の間にも、まだ線はありません(#30 からつながります)。</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card a1"><p><span class="who t-a1">オーナー</span><span class="kind">手元 · 人</span>コンソール(Google の設定画面)で箱と財布と見張りを作る。見張りからのメールを受け取り、止めるかを決める。</p></div>
+      <div class="card a6"><p><span class="who t-a6">ローカル環境</span><span class="kind">オーナーの Mac · 私たちが作った</span>フェーズ1で作った開発の場。Rails・Vue・データベースが Docker で動く。#29 では変わらない。</p></div>
+      <div class="card a3"><p><span class="who t-a3">開発用プロジェクト</span><span class="kind">Google の中 · フェーズ1で作った</span>ローカル環境の Google ログインに使う箱。無料のプランのままで、財布は紐づけない。</p></div>
+      <div class="card a2"><p><span class="who t-a2">本番用プロジェクト</span><span class="kind">Google の中 · #29 で作る</span>本番の Rails・データベース・Vue を入れる箱。#29 の時点では空。</p></div>
+      <div class="card a4"><p><span class="who t-a4">請求先アカウント</span><span class="kind">Google の中 · #29 で作る</span>料金を払う財布。オーナーのクレジットカードを登録し、本番用プロジェクトに紐づける。</p></div>
+      <div class="card a5"><p><span class="who t-a5">予算アラート</span><span class="kind">Google の中 · #29 で設定する</span>本番用プロジェクトの、その月の費用を見張る。決めた段階に達したらメールを送る。課金は止めない。</p></div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">4</span>お金の流れ</h2>
+    <p>お金に関わる出来事を、5つの場面に分けました。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。破線は、条件によって起きることです。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 30 720 570" role="img" aria-label="お金の流れ。場面1 準備する(今ここ):オーナーが本番用プロジェクトと請求先アカウントを作り、紐づけ、予算アラートを設定する。場面2 使う:本番用プロジェクトで部品が動き、費用が請求先アカウントに積み上がる。場面3 見張る:予算アラートが当月の費用を3,000円と比べ、超えそうならオーナーにメールする。場面4 止める:オーナーが必要なら部品を止める。場面5 支払う:請求先アカウントがカードに請求する">
+          <defs>
+            <marker id="f3-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f3-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f3-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f3-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+
+          <rect x="0" y="96" width="720" height="150" class="band-here"/>
+          <rect x="0" y="250" width="720" height="90" class="band"/>
+          <rect x="0" y="344" width="720" height="120" class="band"/>
+          <rect x="0" y="468" width="720" height="60" class="band"/>
+          <rect x="0" y="532" width="720" height="60" class="band"/>
+
+          <text x="12" y="120" class="scene">場面 1</text>
+          <text x="12" y="138" class="a">準備する</text>
+          <text x="12" y="153" class="lab-here">今ここ(#29)</text>
+          <text x="12" y="274" class="scene">場面 2</text>
+          <text x="12" y="292" class="a">使う</text>
+          <text x="12" y="307" class="s">#30 から</text>
+          <text x="12" y="368" class="scene">場面 3</text>
+          <text x="12" y="386" class="a">見張る</text>
+          <text x="12" y="401" class="s">1日に数回</text>
+          <text x="12" y="490" class="scene">場面 4</text>
+          <text x="12" y="508" class="a">止める</text>
+          <text x="12" y="521" class="s">必要なとき</text>
+          <text x="12" y="554" class="scene">場面 5</text>
+          <text x="12" y="572" class="a">支払う</text>
+          <text x="12" y="585" class="s">毎月</text>
+
+          <line x1="200" y1="84" x2="200" y2="592" class="life"/>
+          <line x1="340" y1="84" x2="340" y2="592" class="life"/>
+          <line x1="480" y1="84" x2="480" y2="592" class="life"/>
+          <line x1="620" y1="84" x2="620" y2="592" class="life"/>
+
+          <rect x="145" y="44" width="110" height="40" rx="7" class="bx-a1"/>
+          <text x="200" y="69" text-anchor="middle" class="b a">オーナー</text>
+          <rect x="280" y="44" width="120" height="40" rx="7" class="bx-a2"/>
+          <text x="340" y="69" text-anchor="middle" class="b a">本番プロジェクト</text>
+          <rect x="420" y="44" width="120" height="40" rx="7" class="bx-a4"/>
+          <text x="480" y="69" text-anchor="middle" class="b a">請求先アカウント</text>
+          <rect x="565" y="44" width="110" height="40" rx="7" class="bx-a5"/>
+          <text x="620" y="69" text-anchor="middle" class="b a">予算アラート</text>
+
+          <!-- 場面 1 -->
+          <line x1="200" y1="126" x2="336" y2="126" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="270" y="118" text-anchor="middle" class="a">① 作る</text>
+          <line x1="200" y1="156" x2="476" y2="156" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="410" y="148" text-anchor="middle" class="a">② 作る・カードを登録</text>
+          <line x1="200" y1="186" x2="336" y2="186" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="270" y="178" text-anchor="middle" class="a">③ 財布を紐づける</text>
+          <line x1="200" y1="216" x2="616" y2="216" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="550" y="208" text-anchor="middle" class="a">④ 設定する(月 3,000円)</text>
+
+          <!-- 場面 2 -->
+          <rect x="285" y="258" width="110" height="24" rx="6" class="bx-a2"/>
+          <text x="340" y="275" text-anchor="middle" class="a">部品が動く</text>
+          <line x1="340" y1="316" x2="476" y2="316" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="410" y="308" text-anchor="middle" class="a">費用が積み上がる</text>
+
+          <!-- 場面 3 -->
+          <line x1="480" y1="374" x2="616" y2="374" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="550" y="366" text-anchor="middle" class="a">当月の費用</text>
+          <rect x="555" y="391" width="130" height="26" rx="6" class="bx-a5"/>
+          <text x="620" y="409" text-anchor="middle" class="a">3,000円と比べる</text>
+          <line x1="620" y1="434" x2="204" y2="434" class="ln-a5 dash" marker-end="url(#f3-a5)"/>
+          <text x="410" y="426" text-anchor="middle" class="a">段階に達したらメール</text>
+
+          <!-- 場面 4 -->
+          <line x1="200" y1="498" x2="336" y2="498" class="ln-a1 dash" marker-end="url(#f3-a1)"/>
+          <text x="270" y="490" text-anchor="middle" class="a">DB などを止める</text>
+
+          <!-- 場面 5 -->
+          <line x1="480" y1="562" x2="204" y2="562" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="340" y="554" text-anchor="middle" class="a">カードに請求</text>
+        </svg>
+      </div>
+      <figcaption>図3:<span class="t-a5">予算アラート</span> から出る矢印は、<span class="t-a1">オーナー</span> へのメールだけです。<span class="t-a2">本番用プロジェクト</span> へ向かう矢印はありません。つまり、予算アラートは課金を止めません。止めるのは <span class="t-a1">オーナー</span> です(場面 4)。</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 1:準備する<span class="tag">#29、1回だけ</span></h3>
+    <ol class="flow">
+      <li><span class="t-a1">オーナー</span> が、Firebase のコンソールで <span class="t-a2">本番用プロジェクト</span> を作る</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a4">請求先アカウント</span> を作り、クレジットカードを登録する</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a2">本番用プロジェクト</span> に <span class="t-a4">請求先アカウント</span> を紐づける(Firebase では「Blaze プランに上げる」と表示される)</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a5">予算アラート</span> を設定する。対象は本番用プロジェクトだけ、金額は月 3,000円</li>
+    </ol>
+    <div class="note here"><p>Issue #29 は、この場面 1 だけを受け持ちます。場面 2〜5 は、#30 以降で部品を動かし始めてから起きます。</p></div>
+
+    <h3 class="scene-h">場面 2:使う<span class="tag">#30 から</span></h3>
+    <ol class="flow">
+      <li><span class="t-a2">本番用プロジェクト</span> の中で、Rails やデータベースが動き、データを保存する</li>
+      <li><span class="t-a2">本番用プロジェクト</span> で使った分の費用が、<span class="t-a4">請求先アカウント</span> に積み上がる</li>
+    </ol>
+
+    <h3 class="scene-h">場面 3:見張る<span class="tag">1日に数回</span></h3>
+    <ol class="flow">
+      <li><span class="t-a4">請求先アカウント</span> が、<span class="t-a5">予算アラート</span> に当月の費用(本番用プロジェクトの分)を見せる</li>
+      <li><span class="t-a5">予算アラート</span> が、その額を 3,000円と比べる。月末までの見込み(予測)も比べる</li>
+      <li>段階(1,500円、2,700円、3,000円、月末に 3,000円を超える見込み)に達したら、<span class="t-a5">予算アラート</span> が <span class="t-a1">オーナー</span> にメールを送る</li>
+    </ol>
+
+    <h3 class="scene-h">場面 4:止める<span class="tag">必要なとき</span></h3>
+    <ol class="flow">
+      <li>メールを見た <span class="t-a1">オーナー</span> が、止めるかを決める。止めるなら、<span class="t-a1">オーナー</span> が <span class="t-a2">本番用プロジェクト</span> の中のデータベースなどを止める、または削除する</li>
+    </ol>
+
+    <h3 class="scene-h">場面 5:支払う<span class="tag">毎月</span></h3>
+    <ol class="flow">
+      <li><span class="t-a4">請求先アカウント</span> が、その月の費用を <span class="t-a1">オーナー</span> のクレジットカードに請求する</li>
+    </ol>
+  </section>
+
+  <section id="object">
+    <h2><span class="num">5</span>費用を追う</h2>
+    <p>4章の流れの中心にあるのは「費用」です。費用がどこで生まれ、誰の目に触れ、どこで払われるかを追うと、Issue #29 の設定の理由が見えてきます。</p>
+
+    <h3>たとえ話:家計と、使いすぎの通知</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>たとえ話</th><th>このプロジェクトでは</th></tr></thead>
+        <tbody>
+          <tr><td>仕事用の部屋(私用の部屋とは別)</td><td><span class="t-a2">本番用プロジェクト</span></td></tr>
+          <tr><td>その部屋の電気代を払うカード</td><td><span class="t-a4">請求先アカウント</span></td></tr>
+          <tr><td>カード会社の「今月の利用額が○円を超えました」という通知</td><td><span class="t-a5">予算アラート</span>。通知するだけで、カードは止めない</td></tr>
+          <tr><td>電気代のかからない、ブレーカーを落とした部屋</td><td><span class="t-a3">開発用プロジェクト</span>(無料の範囲だけを使う)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>費用の一生(場面 2〜5、#30 から)</h3>
+    <p>右の列は、その時点で費用(の記録)がどこにあるかです。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>誰が、何をするか</th><th>ある場所</th></tr></thead>
+        <tbody>
+          <tr><td class="step">①</td><td><span class="t-a2">本番用プロジェクト</span> の部品が動き、費用が生まれる。#29 の時点では部品がないので、生まれない</td><td><span class="loc a2">本番用プロジェクト</span></td></tr>
+          <tr><td class="step">②</td><td>Google が、その費用を <span class="t-a4">請求先アカウント</span> に記録する</td><td><span class="loc a4">請求先アカウント</span></td></tr>
+          <tr><td class="step">③</td><td><span class="t-a5">予算アラート</span> が、当月の本番用プロジェクトの分を読み、3,000円と比べる。読むだけで、費用は動かない</td><td><span class="loc a4">請求先アカウント</span></td></tr>
+          <tr><td class="step">④</td><td>段階に達したら、<span class="t-a5">予算アラート</span> が <span class="t-a1">オーナー</span> にメールを送る。費用はそのまま増え続ける</td><td><span class="loc a4">請求先アカウント</span></td></tr>
+          <tr><td class="step">⑤</td><td>月が変わると、<span class="t-a4">請求先アカウント</span> が前の月の分を <span class="t-a1">オーナー</span> のカードに請求する。予算アラートは、新しい月を 0円から数え直す</td><td><span class="loc a1">オーナーのカード</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>なぜ、開発用と本番用で箱を分けるのか</h3>
+    <p>結論から言うと、<strong>お金がかかるのを本番用の箱だけに閉じ込められる</strong>からです。理由は3つあります。</p>
+    <ol class="flow">
+      <li><strong>1つの箱で兼ねると、開発用にも財布が要る。</strong>本番で Cloud Run やデータベースを使うには、箱に財布を紐づける必要があります。箱が1つなら、ローカル開発で使うログインの箱にも財布が紐づき、開発の試しで料金が生まれうる状態になります。</li>
+      <li><strong>1つの箱で兼ねると、試しの操作が本番に響く。</strong>開発用のログインの設定を変えたつもりが、本番のログインまで変わる、ということが起きます。</li>
+      <li><strong>分けても、損は小さい。</strong>箱が2つになると設定を2回することになりますが、開発用の箱で使っているのはログインだけです。追加の料金もかかりません。</li>
+    </ol>
+    <p>つまり、分ける損は「設定が2回」だけで、得は「開発は無料のまま」「試しが本番に響かない」の2つです。詳しくは、この後に書く ADR 0005 に残します。仕様書の完了条件 AC-5(開発用は無料のまま)は、このことを確かめます。</p>
+
+    <h3>なぜ、予算アラートで課金を自動で止めないのか</h3>
+    <p>結論から言うと、<strong>月 3,000円の規模なら、メールを見てから手で止めても十分に間に合う</strong>からです。</p>
+    <ol class="flow">
+      <li><strong>自動で止めると、本番がまるごと止まる。</strong>課金を自動で止めるには、通知を受けて財布を外す仕組みを別に作ります。財布を外すと、箱の中の部品がすべて止まり、元に戻すのに手間がかかります。</li>
+      <li><strong>費用の増え方がゆっくりしている。</strong>フェーズ2で主にお金がかかるのはデータベース(Cloud SQL)で、月 1,500円前後、1日あたり 50円ほどの見込みです。メールが来てから数日のうちに止めれば、損は数百円で済みます。</li>
+      <li><strong>超える前に気づける。</strong>「月末に 3,000円を超える見込み」の通知を足すので、実際に超える前にメールが来ます。</li>
+    </ol>
+    <p>つまり、自動で止める仕組みを作る手間と、本番が突然止まる危うさに比べて、手で止める損(気づくまでの数百円)の方が小さい、という判断です。仕様書の「やらないこと」と「判断したこと」の最後の項目が、このことです。</p>
+    <p>なお、作業のときに、Google Cloud には予算に達したら一部のサービスを一時停止する「利用額上限」という仕組みもあると分かりました(6章)。#29 では使いません。Cloud SQL が対象になるかは、#31 で確かめます。</p>
+
+    <h3>なぜ、クレジットを引く前の金額で見るのか</h3>
+    <p>新しく作る請求先アカウントには、無料トライアルのクレジット(一定額まで料金を肩代わりする割引)が付くことがあります。クレジットを引いた後の金額で見ると、トライアルの間は費用が 0円に見えて、メールが一度も来ません。トライアルが終わった月に、いきなり本当の請求が来ることになります。クレジットを引く前の金額で見ておけば、トライアルの間も「本当ならいくらかかっているか」が分かります。</p>
+
+    <div class="note"><p>作業のときに画面で確かめたこと(2026-11-10):(1)費用が予算に反映されるまで、数時間かかります。24 時間以上かかることもあります(予算の編集画面の説明より)。そのため、メールは即時ではありません。(2)無料トライアルの案内は出ず、請求先アカウントは「有料のアカウント」、クレジットは 0 でした。クレジットの項目は、予算の画面では「コスト削減」という名前で、両方のチェックを外しました。</p></div>
+  </section>
+
+  <section id="words">
+    <h2><span class="num">6</span>言葉:コンソールの画面に出てくる名前</h2>
+    <p>ここまでは平易な呼び名で書きました。コンソールの画面では、次の名前で出てきます。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>画面での名前</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td>Firebase コンソール、Google Cloud コンソール</td><td>設定をする画面。2つあるが、同じ箱を別の窓から見ている</td><td>図3 場面 1 で <span class="t-a1">オーナー</span> が使う</td></tr>
+          <tr><td>Google Cloud プロジェクト、Firebase プロジェクト</td><td>どちらも同じ1つの箱。Firebase プロジェクトは、Google Cloud プロジェクトに Firebase の機能を足したもの</td><td>図2 <span class="t-a2">本番用プロジェクト</span>、<span class="t-a3">開発用プロジェクト</span></td></tr>
+          <tr><td>プロジェクト ID</td><td>箱の名前。世界で一意で、後から変えられない。本番用は <code>knowledge-library-prod</code> にする</td><td>図2 <span class="t-a2">本番用プロジェクト</span></td></tr>
+          <tr><td>Cloud Billing アカウント(請求先アカウント)</td><td>財布。クレジットカードと通貨(日本円)を持つ</td><td>図2 <span class="t-a4">請求先アカウント</span></td></tr>
+          <tr><td>Spark プラン、Blaze プラン</td><td>Firebase での呼び方。Spark は財布なし(無料の範囲だけ)、Blaze は財布あり(使った分だけ払う)</td><td>図2 <span class="t-a3">開発用</span> = Spark、<span class="t-a2">本番用</span> = Blaze</td></tr>
+          <tr><td>予算と上限</td><td>見張りを設定する画面。Google Cloud のコンソールの「お支払い」→「コスト管理」の中にある</td><td>図2 <span class="t-a5">予算アラート</span></td></tr>
+          <tr><td>アラートしきい値ルール</td><td>メールを送る段階。トリガー対象「実値」(実際の費用)の 50%・90%・100% と、「予測」の 100%</td><td>図3 場面 3「段階に達したらメール」</td></tr>
+          <tr><td>コスト削減(コスト削減プログラム、その他のコスト削減)</td><td>クレジットや割引など、料金からの値引き。チェックを付けると、予算は値引き後の金額で数える。本番用では両方のチェックを外した</td><td>5章「なぜ、クレジットを引く前の金額で見るのか」</td></tr>
+          <tr><td>利用額上限</td><td>予算に達したら、一部のサービスを一時停止する仕組み。予算の編集画面の「定義」で「利用額上限の適用」を選ぶと使える。#29 では使わず、「アラートのみ」にした</td><td>図にはない(使っていないため)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="steps">
+    <h2><span class="num">7</span>Issue #29 の作業と完了条件</h2>
+    <p>仕様書 <code>docs/specs/029-gcp-project.md</code> の完了条件と、図3 場面 1 の手順の対応です。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>作業</th><th>誰が</th><th>図3 場面 1</th><th>完了条件</th></tr></thead>
+        <tbody>
+          <tr><td>本番用プロジェクトを Firebase のコンソールで作る</td><td><span class="t-a1">オーナー</span></td><td>①</td><td>AC-1</td></tr>
+          <tr><td>請求先アカウントを作り、本番用プロジェクトに紐づける</td><td><span class="t-a1">オーナー</span></td><td>②③</td><td>AC-2</td></tr>
+          <tr><td>予算アラートを設定する</td><td><span class="t-a1">オーナー</span></td><td>④</td><td>AC-3、AC-4</td></tr>
+          <tr><td>開発用プロジェクトには何もしない</td><td>―</td><td>―</td><td>AC-5</td></tr>
+          <tr><td>手順を出し、設定の結果を一緒に確かめる。手順書 <code>docs/production-setup.md</code> に残す</td><td>Claude</td><td>①〜④</td><td>―</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">8</span>確認用の問い</h2>
+    <ol class="check">
+      <li>Issue #29 が終わった時点で、料金はかかりますか。かかり始めるのはどの Issue からですか。<span class="hint">2章の図1 と、5章「費用の一生」の ① です。</span></li>
+      <li>予算アラートが 3,000円に達したことを知らせたあと、課金を止めるのは誰ですか。<span class="hint">4章の図3 場面 4 と、その下の説明です。</span></li>
+      <li>開発用プロジェクトに財布を紐づけないのは、なぜですか。<span class="hint">5章「なぜ、開発用と本番用で箱を分けるのか」です。</span></li>
+      <li>Firebase の画面で「Blaze プランに上げる」と出たら、図のどの線を引くことになりますか。<span class="hint">6章の表と、図2 の「料金を付ける」の線です。</span></li>
+      <li>予算をクレジットを引いた後の金額で見ると、無料トライアルの間に何が起きますか。<span class="hint">5章「なぜ、クレジットを引く前の金額で見るのか」です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

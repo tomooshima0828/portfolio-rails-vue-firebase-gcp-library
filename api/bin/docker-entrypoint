@@ -1,8 +1,7 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
-if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
-  ./bin/rails db:prepare
-fi
+# 起動のたびに、データベースの準備(rails db:prepare)はしない。
+# Cloud Run は同時に複数のコンテナを起動することがあり、それぞれがマイグレーションを流すと、ぶつかる恐れがあるため。
+# マイグレーションをどこで流すかは #31 で決める(docs/specs/030-cloud-run-deploy.md)。
 
 exec "${@}"

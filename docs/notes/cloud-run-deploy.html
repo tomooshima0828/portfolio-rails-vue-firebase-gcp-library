@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>置き場と、動かす場所と、鍵の金庫</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Issue #30 の学習ノート(layered-tech-explanation スキルのひな形から作った)。
+   登場人物の色:1人に1色(a1〜a6)を割り当て、図と本文で同じ色を使う。
+   a2 は「私たちが書くコード」と「今ここ」に使う。ここに割り当てを書いておく:
+   a1=オーナー、a2=Rails(私たちのコード・今ここ)、a3=イメージの置き場、a4=鍵の金庫、a5=動かす場所、a6=ブラウザ */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .xs { font-size: 10.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+/* コードの字体は合字(=> が矢印になる、など)を切る。VS Code の見た目と食い違わないように */
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* コードを読むノートの部品(references/html-note.md の 5.5)。使わなければ消してよい */
+.route { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0 0 14px; }
+.route li { font-size: 12.5px; line-height: 1.7; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); white-space: nowrap; }
+.route li.on { border-color: var(--a2); color: var(--a2); background: var(--a2-soft); font-weight: 700; }
+.route li.on.rails { border-color: var(--a6); color: var(--a6); background: var(--a6-soft); }
+.io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.io > div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.7; min-width: 0; }
+.io .k { display: block; font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+.role { font-size: 15.5px; }
+.file { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin: 18px 0 -6px; }
+pre.code { padding: 12px 0; }
+pre.code code { display: inline-block; min-width: 100%; }
+pre.code .l { display: block; padding-right: 16px; }
+pre.code .n { display: inline-block; width: 3.4em; padding-right: 1em; text-align: right; color: var(--muted); user-select: none; }
+pre.code .l.hl { background: var(--a2-soft); }
+pre.code.rails .l.hl { background: var(--a6-soft); }
+table.lines td:first-child { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; color: var(--a2); }
+table.lines.rails td:first-child { color: var(--a6); }
+table.lines td:last-child { font-size: 13px; color: var(--muted); min-width: 8.5em; }
+table.lines th, table.story th:first-child { white-space: nowrap; }
+table.routes td:first-child { white-space: nowrap; font-weight: 700; }
+.goto { margin: 18px 0 0; padding: 10px 14px; border: 1px dashed var(--a2); border-radius: 8px; font-size: 14.5px; line-height: 1.75; }
+.goto.rails { border-color: var(--a6); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast, .io { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #30 · 学習メモ</p>
+    <h1>置き場と、動かす場所と、鍵の金庫</h1>
+    <p class="lead">Issue #30 で、Rails を本番の Google Cloud で動かします。そのために使う3つの部品(イメージの置き場、動かす場所、鍵の金庫)が何で、どうつながるかを図にしたノートです。作業の前に、Rails が本番で動き出すまでの流れを見渡します。</p>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>なぜ3つの部品が要るのか(1章)</li>
+        <li>フェーズ2の中で、今どこにいるか(2章)</li>
+        <li>Issue #30 が終わった時点の構成(3章)</li>
+        <li>Rails が本番で動き出し、応答するまでの流れ(4章)</li>
+        <li>鍵(RAILS_MASTER_KEY)を追うと分かる、設定の理由(5章)</li>
+        <li>Google Cloud の名前と、AWS・Heroku で近いもの(6章)</li>
+        <li>Issue #30 の作業と完了条件の対応(7章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:なぜ3つの部品が要るのか</h2>
+    <p>フェーズ1では、Rails はオーナーの Mac の上で、Docker を使って動いていました。Issue #29 では、本番用の箱(Google Cloud のプロジェクト)と、料金を払う財布を用意しました。箱の中は、まだ空です。</p>
+    <p>Issue #30 では、Mac で動いている Rails を、本番用の箱の中で動かし、インターネットから呼べるようにします。そのためには、3つの問題を解く必要があります。</p>
+    <ol class="flow">
+      <li><strong>Rails をどうやって Google まで運ぶか。</strong>Rails は、コードだけでは動きません。Ruby と gem も要ります。そこで、全部を1つにまとめた「イメージ」を Mac で作り、Google の中の<strong>イメージの置き場(Artifact Registry)</strong>に送ります。</li>
+      <li><strong>運んだ Rails を、誰が起動し、誰が URL で受け付けるか。</strong>自分でサーバーを借りて管理すると、OS の更新や台数の調整まで受け持つことになります。そこで、イメージを渡せば起動と受け付けを引き受けてくれる<strong>動かす場所(Cloud Run)</strong>を使います。</li>
+      <li><strong>Rails の起動に要る鍵を、どうやって安全に渡すか。</strong>Rails は、暗号化した設定(<code>api/config/credentials.yml.enc</code>)を、鍵で開いて読みます。鍵は、オーナーの Mac にある <code>api/config/master.key</code> の中身です。本番では、このファイルの代わりに、同じ値を環境変数 <code>RAILS_MASTER_KEY</code> で Rails に渡します。鍵をイメージや設定画面に書くと、見える人がみな鍵を手にできます。そこで、鍵を<strong>鍵の金庫(Secret Manager)</strong>にしまい、決めた相手にだけ渡してもらいます。</li>
+    </ol>
+    <p>Issue #30 のゴールは、本番の URL の <code>/up</code>(Rails が起動しているかを答える入口)が 200 を返すことです。データベースは、まだ繋ぎません(Issue #31)。</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">2</span>フェーズ2の地図と今ここ</h2>
+    <p>フェーズ2は7つの Issue に分かれています。矢印は進める順番で、矢印の元が終わってから先に進みます。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 210" role="img" aria-label="フェーズ2の Issue の順番。#29 土台を用意(済み)、#30 Rails を載せる(今ここ)、#31 データベースを繋ぐ、#32 Vue を配信、#33 自動デプロイの順に進む。#30 の後に #34 ログ、#31 の後に #35 スケール設定がある">
+          <defs>
+            <marker id="f1-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <rect x="20" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="80" y="57" text-anchor="middle" class="b">#29</text>
+          <text x="80" y="77" text-anchor="middle" class="s">土台を用意(済み)</text>
+          <text x="230" y="24" text-anchor="middle" class="lab-here">今ここ</text>
+          <rect x="170" y="32" width="120" height="60" rx="8" class="bx-a2"/>
+          <text x="230" y="57" text-anchor="middle" class="b">#30</text>
+          <text x="230" y="77" text-anchor="middle" class="s">Rails を載せる</text>
+          <rect x="320" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="380" y="57" text-anchor="middle" class="b">#31</text>
+          <text x="380" y="77" text-anchor="middle" class="s">DB を繋ぐ</text>
+          <rect x="470" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="530" y="57" text-anchor="middle" class="b">#32</text>
+          <text x="530" y="77" text-anchor="middle" class="s">Vue を配信</text>
+          <rect x="620" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="680" y="57" text-anchor="middle" class="b">#33</text>
+          <text x="680" y="77" text-anchor="middle" class="s">自動デプロイ</text>
+          <rect x="170" y="132" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="230" y="157" text-anchor="middle" class="b">#34</text>
+          <text x="230" y="177" text-anchor="middle" class="s">ログとエラー</text>
+          <rect x="320" y="132" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="380" y="157" text-anchor="middle" class="b">#35</text>
+          <text x="380" y="177" text-anchor="middle" class="s">スケール設定</text>
+          <line x1="140" y1="62" x2="166" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="290" y1="62" x2="316" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="440" y1="62" x2="466" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="590" y1="62" x2="616" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="230" y1="92" x2="230" y2="128" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="380" y1="92" x2="380" y2="128" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="470" y="160" class="s">#30 で手で行うデプロイを、</text>
+          <text x="470" y="180" class="s">#33 で GitHub から自動にする</text>
+        </svg>
+      </div>
+      <figcaption>図1:<span class="t-a2">#30</span> は、#29 で用意した空の箱に、最初の部品(Rails)を入れる Issue です。#30 で手で通した手順を、#33 で自動にします。</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Issue</th><th>本番用の箱に入るもの</th></tr></thead>
+        <tbody>
+          <tr><td>#29(済み)</td><td>何も入らない。箱そのものと、財布と見張りを用意した</td></tr>
+          <tr class="now"><td>#30</td><td>イメージの置き場、動かす場所、鍵の金庫。動かす場所の中で Rails が動く</td></tr>
+          <tr><td>#31</td><td>データベース。Rails から繋ぐ</td></tr>
+          <tr><td>#32</td><td>Vue の配信と、本番のログイン</td></tr>
+          <tr><td>#33</td><td>GitHub から自動でデプロイするための通行証</td></tr>
+          <tr><td>#34、#35</td><td>新しい部品は入らない。ログの見え方と、スケールの設定を整える</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="cast">
+    <h2><span class="num">3</span>登場人物と、#30 が終わった時点の構成</h2>
+    <p>登場人物は6つです。オーナーは手元の Mac に、ブラウザはインターネットのどこかに、残りの4つは Google の中(本番用の箱)にあります。色は、このページの図と本文で共通です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 760 330" role="img" aria-label="Issue #30 が終わった時点の構成。オーナーの Mac から、イメージの置き場にイメージを送り、動かす場所にデプロイを指示し、鍵の金庫に鍵を登録する。動かす場所は、置き場からイメージを、金庫から鍵を受け取り、Rails を起動する。ブラウザは Rails に /up を送り、200 を受け取る">
+          <defs>
+            <marker id="f2-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f2-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+            <marker id="f2-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+          </defs>
+
+          <rect x="10" y="64" width="155" height="112" rx="12" class="bx-frame"/>
+          <text x="24" y="86" class="s">オーナーの Mac</text>
+          <rect x="25" y="96" width="125" height="66" rx="8" class="bx-a1"/>
+          <text x="87" y="124" text-anchor="middle" class="b">オーナー</text>
+          <text x="87" y="146" text-anchor="middle" class="s">Docker で作る</text>
+
+          <rect x="10" y="206" width="155" height="112" rx="12" class="bx-frame"/>
+          <text x="24" y="228" class="s">インターネット</text>
+          <rect x="25" y="238" width="125" height="66" rx="8" class="bx-a6"/>
+          <text x="87" y="266" text-anchor="middle" class="b">ブラウザ</text>
+          <text x="87" y="288" text-anchor="middle" class="s">/up を開く</text>
+
+          <rect x="190" y="16" width="565" height="306" rx="12" class="bx-frame"/>
+          <text x="204" y="38" class="s">Google の中(本番用の箱)</text>
+          <text x="375" y="38" class="lab-here">今ここ:#30 で、この枠の中を作る</text>
+
+          <rect x="205" y="96" width="140" height="66" rx="8" class="bx-a3"/>
+          <text x="275" y="124" text-anchor="middle" class="b">イメージの置き場</text>
+          <text x="275" y="146" text-anchor="middle" class="s">Artifact Registry</text>
+
+          <rect x="405" y="80" width="170" height="232" rx="10" class="bx-a5"/>
+          <text x="490" y="106" text-anchor="middle" class="b">動かす場所</text>
+          <text x="490" y="126" text-anchor="middle" class="s">Cloud Run</text>
+          <rect x="420" y="228" width="140" height="66" rx="8" class="bx-a2"/>
+          <text x="490" y="256" text-anchor="middle" class="b">Rails</text>
+          <text x="490" y="278" text-anchor="middle" class="s">/up に 200 を返す</text>
+
+          <rect x="615" y="96" width="130" height="66" rx="8" class="bx-a4"/>
+          <text x="680" y="124" text-anchor="middle" class="b">鍵の金庫</text>
+          <text x="680" y="146" text-anchor="middle" class="s">Secret Manager</text>
+
+          <!-- オーナーから -->
+          <line x1="150" y1="118" x2="201" y2="118" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="176" y="110" text-anchor="middle" class="s">送る</text>
+          <path d="M150 150 H180 V186 H401" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="290" y="180" text-anchor="middle" class="s">デプロイ</text>
+          <path d="M120 96 V54 H680 V92" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="688" y="80" class="s">鍵を登録</text>
+
+          <!-- 動かす場所へ -->
+          <line x1="345" y1="140" x2="401" y2="140" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="373" y="132" text-anchor="middle" class="s">イメージ</text>
+          <line x1="615" y1="140" x2="579" y2="140" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="597" y="132" text-anchor="middle" class="s">鍵</text>
+
+          <!-- 動かす場所の中 -->
+          <line x1="490" y1="150" x2="490" y2="224" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <text x="498" y="182" class="s">起動して</text>
+          <text x="498" y="198" class="s">鍵を渡す</text>
+
+          <!-- ブラウザ -->
+          <line x1="154" y1="271" x2="416" y2="271" class="ln-a6" marker-start="url(#f2-a6)" marker-end="url(#f2-a6)"/>
+          <text x="285" y="263" text-anchor="middle" class="s">/up を開く・200</text>
+        </svg>
+      </div>
+      <figcaption>図2:線がないところにも意味があります。<span class="t-a6">ブラウザ</span> は、<span class="t-a3">イメージの置き場(Artifact Registry)</span> と <span class="t-a4">鍵の金庫(Secret Manager)</span> には触れません。<span class="t-a1">オーナー</span> から <span class="t-a2">Rails</span> へ鍵を直接渡す線もありません。鍵は、いつも <span class="t-a4">鍵の金庫(Secret Manager)</span> から <span class="t-a5">動かす場所(Cloud Run)</span> を通って Rails に届きます。<br>(簡略化:<span class="t-a6">ブラウザ</span> の矢印は、実際には <span class="t-a5">動かす場所(Cloud Run)</span> の受付を通ってから Rails に届きます。4章の図3 では、この受け渡しも描きます)</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card a1"><p><span class="who t-a1">オーナー</span><span class="kind">手元の Mac · 人</span>Mac の Docker でイメージを作り、置き場に送る。動かす場所に「この版を動かして」と頼む(デプロイ)。鍵の金庫に鍵を登録する。#30 では、オーナーの Mac で Claude がコマンドを実行する。Google から見ると、どちらもオーナーのアカウントの操作になる。</p></div>
+      <div class="card a3"><p><span class="who t-a3">イメージの置き場(Artifact Registry)</span><span class="kind">Google の中 · #30 で作る</span>イメージを、版ごとに名前(タグ)を付けて保管する。動かす場所に頼まれたら、イメージを渡す。</p></div>
+      <div class="card a5"><p><span class="who t-a5">動かす場所(Cloud Run)</span><span class="kind">Google の中 · #30 で作る</span>イメージから Rails を起動し、URL を付けて公開する。アクセスがなければ 0 台に戻す。金庫に鍵を頼むときは、Rails 専用の身分証(サービスアカウント。人ではなくプログラムに渡す身分)を名乗る。</p></div>
+      <div class="card a2"><p><span class="who t-a2">Rails</span><span class="kind">動かす場所の中 · 私たちが書いた</span>フェーズ1で作った API。起動のときに鍵を受け取り、暗号化した設定を開く。#30 では <code>/up</code> にだけ正しく応答できる(データベースがまだないため)。</p></div>
+      <div class="card a4"><p><span class="who t-a4">鍵の金庫(Secret Manager)</span><span class="kind">Google の中 · #30 で作る</span>鍵を暗号化してしまう。頼んできた相手の身分証を見て、読む権限がある相手にだけ鍵を渡す。</p></div>
+      <div class="card a6"><p><span class="who t-a6">ブラウザ</span><span class="kind">インターネット · 誰でも</span>本番の URL を開く。#30 では、オーナーが <code>/up</code> を開いて(または curl で)、200 が返るかを確かめる。</p></div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">4</span>Rails が動き出し、応答するまでの流れ</h2>
+    <p>Rails が本番で応答するまでを、5つの場面に分けました。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。破線は、条件によって起きることです。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 26 800 724" role="img" aria-label="Rails が動き出すまでの流れ。場面1 準備する:オーナーが金庫に鍵を登録し、身分証に読む権限を付ける。場面2 デプロイする:オーナーがイメージを作って置き場に送り、動かす場所に版を指示する。動かす場所は置き場からイメージを受け取る。場面3 起動する:動かす場所が身分証を見せて金庫に鍵を頼み、金庫が身分を確かめて鍵を渡す。動かす場所は鍵を渡して Rails を起動する。場面4 応答する:ブラウザの /up を動かす場所が Rails に渡し、Rails の 200 をブラウザに返す。場面5 0台に戻る:アクセスがなければ動かす場所が Rails を止める">
+          <defs>
+            <marker id="f3-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f3-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f3-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f3-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f3-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+            <marker id="f3-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+          </defs>
+
+          <rect x="0" y="96" width="800" height="90" class="band-here"/>
+          <rect x="0" y="190" width="800" height="180" class="band-here"/>
+          <rect x="0" y="374" width="800" height="150" class="band"/>
+          <rect x="0" y="528" width="800" height="150" class="band"/>
+          <rect x="0" y="682" width="800" height="60" class="band"/>
+
+          <text x="12" y="120" class="scene">場面 1</text>
+          <text x="12" y="138" class="a">準備する</text>
+          <text x="12" y="153" class="lab-here">今ここ(手で)</text>
+          <text x="12" y="214" class="scene">場面 2</text>
+          <text x="12" y="232" class="a">デプロイする</text>
+          <text x="12" y="247" class="lab-here">今ここ(手で)</text>
+          <text x="12" y="398" class="scene">場面 3</text>
+          <text x="12" y="416" class="a">起動する</text>
+          <text x="12" y="431" class="s">Google が行う</text>
+          <text x="12" y="552" class="scene">場面 4</text>
+          <text x="12" y="570" class="a">応答する</text>
+          <text x="12" y="585" class="s">アクセスのたび</text>
+          <text x="12" y="706" class="scene">場面 5</text>
+          <text x="12" y="724" class="a">0台に戻る</text>
+          <text x="12" y="737" class="s">しばらく後</text>
+
+          <line x1="170" y1="86" x2="170" y2="742" class="life"/>
+          <line x1="280" y1="86" x2="280" y2="742" class="life"/>
+          <line x1="390" y1="86" x2="390" y2="742" class="life"/>
+          <line x1="500" y1="86" x2="500" y2="742" class="life"/>
+          <line x1="625" y1="86" x2="625" y2="742" class="life"/>
+          <line x1="740" y1="86" x2="740" y2="742" class="life"/>
+
+          <rect x="120" y="34" width="100" height="52" rx="7" class="bx-a1"/>
+          <text x="170" y="65" text-anchor="middle" class="b a">オーナー</text>
+          <rect x="222" y="34" width="114" height="52" rx="7" class="bx-a3"/>
+          <text x="280" y="55" text-anchor="middle" class="b a">置き場</text>
+          <text x="280" y="75" text-anchor="middle" class="xs">Artifact Registry</text>
+          <rect x="339" y="34" width="105" height="52" rx="7" class="bx-a4"/>
+          <text x="390" y="55" text-anchor="middle" class="b a">金庫</text>
+          <text x="390" y="75" text-anchor="middle" class="xs">Secret Manager</text>
+          <rect x="450" y="34" width="100" height="52" rx="7" class="bx-a5"/>
+          <text x="500" y="55" text-anchor="middle" class="b a">動かす場所</text>
+          <text x="500" y="75" text-anchor="middle" class="xs">Cloud Run</text>
+          <rect x="575" y="34" width="100" height="52" rx="7" class="bx-a2"/>
+          <text x="625" y="65" text-anchor="middle" class="b a">Rails</text>
+          <rect x="690" y="34" width="100" height="52" rx="7" class="bx-a6"/>
+          <text x="740" y="65" text-anchor="middle" class="b a">ブラウザ</text>
+
+          <!-- 場面 1 -->
+          <line x1="170" y1="126" x2="386" y2="126" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="280" y="118" text-anchor="middle" class="a">① 鍵を登録</text>
+          <line x1="170" y1="156" x2="386" y2="156" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="280" y="148" text-anchor="middle" class="a">② 身分証に読む権限</text>
+
+          <!-- 場面 2 -->
+          <rect x="112" y="204" width="116" height="26" rx="6" class="bx-a1"/>
+          <text x="170" y="222" text-anchor="middle" class="a">③ イメージを作る</text>
+          <line x1="170" y1="250" x2="276" y2="250" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="223" y="242" text-anchor="middle" class="a">④ 送る</text>
+          <line x1="170" y1="280" x2="496" y2="280" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="335" y="272" text-anchor="middle" class="a">⑤ この版を動かして</text>
+          <line x1="500" y1="310" x2="284" y2="310" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="445" y="302" text-anchor="middle" class="a">⑥ イメージを頼む</text>
+          <line x1="280" y1="340" x2="496" y2="340" class="ln-a3" marker-end="url(#f3-a3)"/>
+          <text x="335" y="332" text-anchor="middle" class="a">⑦ イメージ</text>
+
+          <!-- 場面 3 -->
+          <line x1="500" y1="404" x2="394" y2="404" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="445" y="396" text-anchor="middle" class="a">⑧ 鍵を頼む</text>
+          <rect x="330" y="415" width="120" height="24" rx="6" class="bx-a4"/>
+          <text x="390" y="432" text-anchor="middle" class="a">⑨ 身分を確かめる</text>
+          <line x1="390" y1="464" x2="496" y2="464" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="445" y="456" text-anchor="middle" class="a">⑩ 鍵</text>
+          <line x1="500" y1="494" x2="621" y2="494" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="562" y="486" text-anchor="middle" class="a">⑪ 鍵を渡し起動</text>
+
+          <!-- 場面 4 -->
+          <line x1="740" y1="558" x2="504" y2="558" class="ln-a6" marker-end="url(#f3-a6)"/>
+          <text x="682" y="550" text-anchor="middle" class="a">⑫ GET /up</text>
+          <line x1="500" y1="588" x2="621" y2="588" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="562" y="580" text-anchor="middle" class="a">⑬ 渡す</text>
+          <line x1="625" y1="618" x2="504" y2="618" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="562" y="610" text-anchor="middle" class="a">⑭ 200</text>
+          <line x1="500" y1="648" x2="736" y2="648" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="682" y="640" text-anchor="middle" class="a">⑮ 200</text>
+
+          <!-- 場面 5 -->
+          <line x1="500" y1="712" x2="621" y2="712" class="ln-a5 dash" marker-end="url(#f3-a5)"/>
+          <text x="562" y="704" text-anchor="middle" class="a">⑯ 止める</text>
+        </svg>
+      </div>
+      <figcaption>図3:<span class="t-a1">オーナー</span> の矢印は、場面 1 と 2 にしかありません。場面 3〜5 は、<span class="t-a5">動かす場所(Cloud Run)</span> が自分で行います。鍵(⑩)は <span class="t-a4">金庫(Secret Manager)</span> から <span class="t-a5">動かす場所(Cloud Run)</span> に渡り、<span class="t-a5">動かす場所(Cloud Run)</span> から <span class="t-a2">Rails</span> に渡ります(⑪)。<span class="t-a1">オーナー</span> から鍵が直接渡る矢印はありません。</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 1:準備する<span class="tag">#30 で1回だけ</span></h3>
+    <ol class="flow">
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a4">鍵の金庫(Secret Manager)</span> に鍵(<code>config/master.key</code> の中身)を登録する。この作業だけは Claude ではなくオーナーが行う</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a4">鍵の金庫(Secret Manager)</span> に「Rails 専用の身分証(サービスアカウント)には、この鍵を読ませてよい」と設定する。読める身分は、この1つだけ</li>
+    </ol>
+    <div class="note"><p>簡略化:図では、部品を使えるようにする設定(API の有効化)、置き場を作る作業、身分証を作る作業を省いています。どれも準備の前に1回だけ行います。7章の表に入れています。</p></div>
+
+    <h3 class="scene-h">場面 2:デプロイする<span class="tag">新しい版を出すたび。#33 から自動</span></h3>
+    <ol class="flow" start="3">
+      <li><span class="t-a1">オーナー</span> の Mac で、Docker が <code>api/Dockerfile</code> からイメージを作る</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a3">イメージの置き場(Artifact Registry)</span> にイメージを送る</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a5">動かす場所(Cloud Run)</span> に「置き場のこの版を、この身分証と、金庫のこの鍵で動かして」と頼む</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、<span class="t-a3">イメージの置き場(Artifact Registry)</span> にイメージを頼む</li>
+      <li><span class="t-a3">イメージの置き場(Artifact Registry)</span> が、<span class="t-a5">動かす場所(Cloud Run)</span> にイメージを渡す</li>
+    </ol>
+    <div class="note here"><p>Issue #30 で手を動かすのは、場面 1 と 2 です。場面 2 は、#33 で GitHub Actions が受け持つようになります。そのときは、図3 の <span class="t-a1">オーナー</span> の縦の線が、GitHub Actions に置き換わります。</p></div>
+
+    <h3 class="scene-h">場面 3:起動する<span class="tag">デプロイの直後と、0 台からアクセスが来たとき</span></h3>
+    <ol class="flow" start="8">
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、Rails 専用の身分証を名乗って、<span class="t-a4">鍵の金庫(Secret Manager)</span> に鍵を頼む</li>
+      <li><span class="t-a4">鍵の金庫(Secret Manager)</span> が、その身分証に読む権限があるかを確かめる。なければ鍵を渡さず、デプロイは失敗し、その版は動かない(完了条件 AC-4)</li>
+      <li><span class="t-a4">鍵の金庫(Secret Manager)</span> が、<span class="t-a5">動かす場所(Cloud Run)</span> に鍵を渡す</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、鍵を環境変数 <code>RAILS_MASTER_KEY</code> に入れて、<span class="t-a2">Rails</span> を起動する。<span class="t-a2">Rails</span> は、その鍵で暗号化した設定を開く</li>
+    </ol>
+    <div class="note"><p>確かめていないこと:0 台から起動するとき、<span class="t-a5">動かす場所(Cloud Run)</span> がイメージを置き場から読み直すのか、手元に持っているのかは確かめていません。図では、イメージを受け取るのはデプロイのとき(⑥⑦)だけに描きました。鍵は、起動のたびに金庫から受け取ります(⑧〜⑩)。</p></div>
+    <div class="note"><p>今の Rails は、起動するときにデータベースの準備(<code>rails db:prepare</code>)もしようとします。#30 ではデータベースがないので、ここで起動に失敗します。そのため、#30 で <code>api/bin/docker-entrypoint</code> からこの処理を外します(仕様書 030 の「判断したこと」)。</p></div>
+
+    <h3 class="scene-h">場面 4:応答する<span class="tag">アクセスのたび</span></h3>
+    <ol class="flow" start="12">
+      <li><span class="t-a6">ブラウザ</span> が、本番の URL の <code>/up</code> を開く。リクエストは、まず <span class="t-a5">動かす場所(Cloud Run)</span> の受付に届く</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、動いている <span class="t-a2">Rails</span> にリクエストを渡す</li>
+      <li><span class="t-a2">Rails</span> が、<span class="t-a5">動かす場所(Cloud Run)</span> に 200(起動している)を返す</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、<span class="t-a6">ブラウザ</span> に 200 を返す(完了条件 AC-1)</li>
+    </ol>
+
+    <h3 class="scene-h">場面 5:0 台に戻る<span class="tag">しばらくアクセスがないとき</span></h3>
+    <ol class="flow" start="16">
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、<span class="t-a2">Rails</span> を止める。0 台の間は、料金がかからない。次にアクセスが来たら、場面 3 からやり直す(そのぶん、最初の応答は遅くなる)</li>
+    </ol>
+  </section>
+
+  <section id="object">
+    <h2><span class="num">5</span>鍵を追う</h2>
+    <p>Issue #30 の設定のほとんどは、鍵(<code>RAILS_MASTER_KEY</code>)を誰に見せ、誰に見せないかのために決めています。鍵が、どこに生まれ、誰の手を通り、どこで消えるかを追います。</p>
+
+    <h3>鍵の一生</h3>
+    <p>右の列は、その時点で鍵がある場所です。番号は、図3 の番号とは別に振っています。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>誰が、何をするか</th><th>ある場所</th></tr></thead>
+        <tbody>
+          <tr><td class="step">①</td><td>フェーズ1で <code>rails new</code> をしたとき、Rails が鍵を作り、<code>api/config/master.key</code> に保存した。<code>.gitignore</code> で除いているので、GitHub には上がっていない</td><td><span class="loc a1">オーナーの Mac</span></td></tr>
+          <tr><td class="step">②</td><td><span class="t-a1">オーナー</span> が、鍵を <span class="t-a4">鍵の金庫(Secret Manager)</span> に登録する(図3 の ①)。金庫は、1つ目の版として暗号化してしまう。Mac の鍵は、そのまま残る</td><td><span class="loc a1">オーナーの Mac</span><span class="loc a4">鍵の金庫(Secret Manager)</span></td></tr>
+          <tr><td class="step">③</td><td>Docker がイメージを作るとき、<code>api/.dockerignore</code> が <code>config/master.key</code> を除く。イメージには鍵が入らない(図3 の ③)</td><td><span class="loc a1">オーナーの Mac</span><span class="loc a4">鍵の金庫(Secret Manager)</span></td></tr>
+          <tr><td class="step">④</td><td><span class="t-a1">オーナー</span> がデプロイするとき、<span class="t-a5">動かす場所(Cloud Run)</span> に渡すのは「金庫の <code>rails-master-key</code> の 1 つ目の版」という指し示しだけ。鍵の値は渡さない(図3 の ⑤)</td><td><span class="loc a1">オーナーの Mac</span><span class="loc a4">鍵の金庫(Secret Manager)</span></td></tr>
+          <tr><td class="step">⑤</td><td>起動のとき、<span class="t-a5">動かす場所(Cloud Run)</span> が身分証を名乗って金庫に頼み、鍵を受け取る(図3 の ⑧〜⑩)</td><td><span class="loc a4">鍵の金庫(Secret Manager)</span><span class="loc a5">動かす場所(Cloud Run)。起動中だけ</span></td></tr>
+          <tr><td class="step">⑥</td><td><span class="t-a5">動かす場所(Cloud Run)</span> が、鍵を環境変数に入れて <span class="t-a2">Rails</span> を起動する。<span class="t-a2">Rails</span> は、鍵で暗号化した設定を開く(図3 の ⑪)</td><td><span class="loc a4">鍵の金庫(Secret Manager)</span><span class="loc a2">Rails(動いている間だけ)</span></td></tr>
+          <tr><td class="step">⑦</td><td>0 台に戻ると、<span class="t-a2">Rails</span> と一緒に、受け取った鍵も消える(図3 の ⑯)。次の起動では、⑤ からやり直す</td><td><span class="loc a4">鍵の金庫(Secret Manager)</span><span class="loc a1">オーナーの Mac</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>表のとおり、鍵がずっと残っている場所は、<span class="t-a1">オーナーの Mac</span> と <span class="t-a4">鍵の金庫(Secret Manager)</span> の2つだけです。<span class="t-a3">イメージの置き場(Artifact Registry)</span> と、<span class="t-a5">動かす場所(Cloud Run)</span> の設定には、一度も鍵が入りません。</p>
+
+    <h3>受け持ちの分け方</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>すること</th><th>誰がするか</th></tr></thead>
+        <tbody>
+          <tr><td>鍵を金庫に登録する(②)</td><td><span class="t-a1">オーナー</span>。秘密の値を扱うので、Claude は行わない</td></tr>
+          <tr><td>どの身分証に読ませるかを決める、デプロイで指し示しを渡す(④)</td><td>私たち(#30 では Claude が gcloud のコマンドで行う)</td></tr>
+          <tr><td>暗号化してしまう、身分を確かめて渡す(⑤)</td><td><span class="t-a4">鍵の金庫(Secret Manager)</span>(Google)</td></tr>
+          <tr><td>起動のたびに鍵を受け取り、環境変数に入れる(⑤⑥)</td><td><span class="t-a5">動かす場所(Cloud Run)</span>(Google)</td></tr>
+          <tr><td>環境変数から鍵を読み、設定を開く(⑥)</td><td><span class="t-a2">Rails</span>。Rails が元から持つ仕組みで、私たちはコードを書かない</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>私たちがするのは、「誰に読ませるか」と「どの版を使うか」を決めることだけです。鍵を運ぶ処理は書きません。</p>
+
+    <h3>なぜ、鍵を金庫から渡すのか</h3>
+    <p>結論から言うと、<strong>鍵の値を手にできるのが、金庫が認めた身分だけになる</strong>からです。</p>
+    <ol class="flow">
+      <li><strong>イメージに入れると、イメージを取れる人がみな鍵を持てる。</strong>置き場からイメージを取り出せる人や仕組みは、中のファイルも読めます。古い版のイメージにも鍵が残り続けます。</li>
+      <li><strong>動かす場所の設定に値を直接書くと、設定を見られる人に鍵が見える。</strong>Heroku の Config Vars と同じやり方です。設定画面や、デプロイのコマンドの記録に、鍵がそのまま残ります。</li>
+      <li><strong>金庫を使っても、損は小さい。</strong>部品が1つ増え、権限を1つ設定する手間はかかります。料金は、無料枠(しまっておく版の数と、読み出しの回数に上限がある)の範囲に収まる見込みです。正確な枠は、作業のときに料金表で確かめます。</li>
+    </ol>
+    <p>つまり、得は「鍵が見える範囲を、金庫と1つの身分証に絞れる」こと、損は「部品と設定が1つずつ増える」ことです。仕様書の完了条件 AC-3 が、このことを確かめます。</p>
+
+    <h3>なぜ、Rails 専用の身分証(サービスアカウント)を作るのか</h3>
+    <p>結論から言うと、<strong>Rails が乗っ取られたときに、できることを「鍵を1本読む」だけに抑える</strong>ためです。</p>
+    <ol class="flow">
+      <li><strong>身分証を指定しないと、既定の身分証で動く。</strong>動かす場所は、何も指定しないと、Google Cloud が最初から用意している身分証(Compute Engine の既定のサービスアカウント)で Rails を動かします。この身分証には、プロジェクトの作り方によって、箱の中のほとんどを変更できる強い権限(編集者)が付いていることがあります。本番用の箱でどうなっているかは、作業のときに確かめます。</li>
+      <li><strong>Rails の身分証の権限は、そのまま攻撃者の権限になる。</strong>Rails に穴があって乗っ取られると、攻撃者は Rails の身分証で Google Cloud を操作できます。強い権限の身分証なら、データベースの削除や、別の部品の作成までできてしまいます。</li>
+      <li><strong>権限は、箱全体ではなく、鍵1本に付ける。</strong>「箱の中の鍵をすべて読める」権限にすると、#31 でデータベースのパスワードを金庫に足したとき、それも読めるようになります。必要になったら、そのときに1本ずつ足します。</li>
+      <li><strong>専用の身分証を作る損は小さい。</strong>作るのは1回だけで、料金もかかりません。イメージを取りに行くこととログを出すことは、動かす場所が自分の身分で行うので、専用の身分証に権限を足す必要はありません。</li>
+    </ol>
+    <p>つまり、手間は1回分で、得は「乗っ取られたときの被害が、鍵1本に限られる」ことです。仕様書の完了条件 AC-2 と AC-4 が、このことを確かめます。</p>
+
+    <h3>なぜ、鍵の版の番号を指定するのか</h3>
+    <p>結論から言うと、<strong>どの値で動いているかを、動かす場所の設定から1つに決められる</strong>からです。</p>
+    <ol class="flow">
+      <li><strong>「最新の版」を指定すると、値が混ざる。</strong>動かす場所は、起動のたびに金庫から鍵を受け取ります(⑤)。金庫の鍵を新しい版に変えると、その後に起動した Rails だけが新しい値を使い、前から動いている Rails は古い値のままになります。</li>
+      <li><strong>番号を指定すれば、値を変えるにはデプロイが要る。</strong>鍵を変えたいときは、金庫に新しい版を足し、その番号でデプロイし直します。動いている Rails は、すべて同じ版になります。</li>
+      <li><strong>損は、デプロイが1回増えること。</strong>鍵を変えるのはまれなので、手間は小さいです。</li>
+    </ol>
+    <p>仕様書の「判断したこと」の「シークレットは版の番号を指定して渡す」が、このことです。</p>
+  </section>
+
+  <section id="words">
+    <h2><span class="num">6</span>言葉:Google Cloud の名前と、AWS・Heroku で近いもの</h2>
+    <p>ここまでは、平易な呼び名にかっこで製品名を添えて書きました。コンソールや gcloud のコマンドでは、製品の中のもっと細かい名前(リビジョン、バージョンなど)も出てきます。対応は次のとおりです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>このノートの呼び名</th><th>Google Cloud の名前</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td><span class="t-a3">イメージの置き場</span></td><td>Artifact Registry(リポジトリ <code>knowledge-library</code>)</td><td>Docker のイメージを保管する場所。場所は東京(<code>asia-northeast1</code>)</td><td>図2、図3 の「置き場」</td></tr>
+          <tr><td>イメージ、その版</td><td>Docker イメージ、タグ</td><td>Rails・Ruby・gem をまとめたもの。タグには、git のコミットの短い ID を使う</td><td>図3 の ③④⑦</td></tr>
+          <tr><td><span class="t-a5">動かす場所</span></td><td>Cloud Run(サービス <code>api</code>)</td><td>イメージから Rails を起動し、<code>https://…run.app</code> の URL で公開する</td><td>図2、図3 の「動かす場所」</td></tr>
+          <tr><td>動かす場所の版</td><td>リビジョン</td><td>デプロイのたびに作られる版。イメージ、身分証、鍵の指し示しなどの設定を1組にしたもの</td><td>図3 の ⑤</td></tr>
+          <tr><td>0 台、最大 1 台</td><td>最小インスタンス数 0、最大インスタンス数 1</td><td>同時に起動する Rails の数の下限と上限</td><td>図3 の場面 5</td></tr>
+          <tr><td><span class="t-a4">鍵の金庫</span></td><td>Secret Manager(シークレット <code>rails-master-key</code>)</td><td>パスワードや鍵を暗号化して保管し、権限のある相手にだけ渡す</td><td>図2、図3 の「金庫」</td></tr>
+          <tr><td>鍵の版</td><td>シークレットのバージョン</td><td>鍵の値を変えるたびに増える版。Cloud Run には番号で指定する</td><td>5章の ②④</td></tr>
+          <tr><td>Rails 専用の身分証</td><td>サービスアカウント <code>api-runtime</code></td><td>人ではなくプログラムに渡す身分</td><td>図3 の ②⑧⑨</td></tr>
+          <tr><td>鍵を読む権限</td><td>IAM のロール「Secret Manager のシークレット アクセサー」(<code>roles/secretmanager.secretAccessor</code>)</td><td>シークレットの値を読める権限。シークレット1本に付ける</td><td>図3 の ②</td></tr>
+          <tr><td>部品を使えるようにする</td><td>API の有効化(<code>gcloud services enable</code>)</td><td>箱の中で、その部品を使えるようにするスイッチ</td><td>図では省略</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>AWS と Heroku で近いもの</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Google Cloud</th><th>AWS で近いもの</th><th>Heroku で近いもの</th></tr></thead>
+        <tbody>
+          <tr><td>Cloud Run</td><td>App Runner(使い勝手が近い)、ECS on Fargate(実務でよく使われる)</td><td>dyno</td></tr>
+          <tr><td>Artifact Registry</td><td>ECR(Elastic Container Registry)</td><td>Heroku Container Registry。<code>git push</code> で動かすときは、Heroku がビルドしたもの(slug)が置き場にあたる</td></tr>
+          <tr><td>Secret Manager</td><td>Secrets Manager、Systems Manager の Parameter Store</td><td>近いものはない。Config Vars は、値を設定に直接書くやり方</td></tr>
+          <tr><td>サービスアカウント</td><td>IAM ロール</td><td>近いものはない</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>使い勝手は Heroku に近いです。</strong>サーバーを管理せず、イメージ(Heroku ならコード)を渡せば URL が付いて動きます。違うのは、次の2点です。</p>
+    <ol class="flow">
+      <li><strong>台数と料金。</strong>Heroku の dyno は、1台ごとの月額で、基本的には常に起動しています。Cloud Run は、使われていない間は 0 台になり、リクエストを処理した分だけ課金されます(図3 の場面 5)。</li>
+      <li><strong>鍵の渡し方。</strong>Heroku の Config Vars は、設定画面に値がそのまま見えます。Issue #30 では、このやり方を選ばず、金庫から渡します(5章「なぜ、鍵を金庫から渡すのか」)。</li>
+    </ol>
+    <p><strong>AWS では、ECS on Fargate と比べられることが多いです。</strong>ECS on Fargate も、サーバーの管理は要りません。ただし、基本的に1台以上を常に動かす前提で、ロードバランサー(URL の受付)なども自分で組み合わせます。Cloud Run は、受付まで含めて1つの部品にまとまっています。</p>
+  </section>
+
+  <section id="steps">
+    <h2><span class="num">7</span>Issue #30 の作業と完了条件</h2>
+    <p>仕様書 <code>docs/specs/030-cloud-run-deploy.md</code> の作業の順番に並べました。図3 の番号と、完了条件の対応です。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>作業</th><th>誰が</th><th>図3</th><th>完了条件</th></tr></thead>
+        <tbody>
+          <tr><td>起動時のデータベースの準備を外す(<code>api/bin/docker-entrypoint</code>)</td><td>Claude(コード)</td><td>⑪</td><td>AC-1</td></tr>
+          <tr><td>部品を使えるようにする(API の有効化)、置き場を作る</td><td>Claude</td><td>(図では省略)</td><td>―</td></tr>
+          <tr><td>Rails 専用の身分証(サービスアカウント)を作る</td><td>Claude</td><td>(図では省略)</td><td>AC-2</td></tr>
+          <tr><td>鍵を金庫に登録する</td><td><span class="t-a1">オーナー</span></td><td>①</td><td>AC-3</td></tr>
+          <tr><td>イメージを作り、置き場に送る</td><td>Claude</td><td>③④</td><td>AC-3</td></tr>
+          <tr><td><strong>身分証に読む権限を付けずにデプロイし、失敗することを確かめる</strong></td><td>Claude</td><td>⑤〜⑨</td><td>AC-4</td></tr>
+          <tr><td>身分証に、鍵を読む権限だけを付ける</td><td>Claude</td><td>②</td><td>AC-2</td></tr>
+          <tr><td>もう一度デプロイする</td><td>Claude</td><td>⑤〜⑪</td><td>AC-3</td></tr>
+          <tr><td><code>/up</code> を開き、200 が返ることを確かめる</td><td>Claude</td><td>⑫〜⑮</td><td>AC-1</td></tr>
+          <tr><td>手順書 <code>docs/production-setup.md</code> に残す</td><td>Claude</td><td>―</td><td>―</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>太字の行では、図3 の ② より先に ⑤ を行い、順番をわざと逆にします。権限がないと鍵を受け取れないことを、実際に失敗させて確かめます。Claude の作業も、すべてオーナーの Mac で、オーナーのアカウントで行います。</p>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">8</span>確認用の問い</h2>
+    <ol class="check">
+      <li>Issue #30 で、オーナー(または Claude)が手を動かすのは、図3 のどの場面ですか。残りの場面は誰が行いますか。<span class="hint">4章の図3 と、その下の「今ここ」の注記です。</span></li>
+      <li>デプロイのとき、動かす場所に鍵の値そのものを渡しますか。渡さないなら、何を渡しますか。<span class="hint">5章「鍵の一生」の ④ です。</span></li>
+      <li>Rails 専用の身分証(サービスアカウント)に鍵を読む権限を付けずにデプロイすると、何が起きますか。それで何を確かめられますか。<span class="hint">4章の場面 3 の 9 と、7章の太字の行です。</span></li>
+      <li>Rails が乗っ取られたとき、専用の身分証を使っていると、既定の身分証を使う場合と比べて何が違いますか。<span class="hint">5章「なぜ、Rails 専用の身分証を作るのか」です。</span></li>
+      <li>「ECR + ECS on Fargate + Secrets Manager」を使っていた人に、このプロジェクトの構成をどう説明しますか。<span class="hint">6章の2つ目の表です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

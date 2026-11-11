@@ -21,7 +21,7 @@ Issue: #30
 - Cloud Run にデプロイし、`/up` が 200 を返すことを確かめる
 - `docs/production-setup.md` に「2. Cloud Run」の章を書く
 
-gcloud のコマンドは、Claude が1つずつ説明してから実行する。シークレットの値の登録だけは、オーナーが行う(CLAUDE.md の機密情報の扱い)。
+Google Cloud の操作は、オーナーがコンソールで行う。コンソールでできない、イメージのビルドと push だけは、オーナーが手元のターミナルで行う。Claude は、操作の前に手順と理由を説明し、操作の後に gcloud の読み取りだけのコマンドで結果を確かめる。シークレットの値は、Claude は読まない(CLAUDE.md の機密情報の扱い)。
 
 ## やらないこと
 
@@ -48,9 +48,10 @@ gcloud のコマンドは、Claude が1つずつ説明してから実行する�
 セットアップのタスクなので、テストを先に書く順番の対象外。
 
 1. `docs/specs/030-cloud-run-deploy.md`:この仕様書
-2. `api/bin/docker-entrypoint`:`rails db:prepare` を実行する処理を外す
-3. (ファイルではない操作)API の有効化 → Artifact Registry のリポジトリ → サービスアカウント → シークレット(オーナー)→ 権限を付けずにデプロイして失敗を確かめる(AC-4)→ 権限の付与 → デプロイ → 確認
-4. `docs/production-setup.md`:「2. Cloud Run」の章。3 で実際に行った手順を書く
+2. `docs/notes/cloud-run-deploy.html`:学習ノート。イメージの置き場、動かす場所、鍵の金庫の関係と、鍵がどう渡るかの図
+3. `api/bin/docker-entrypoint`:`rails db:prepare` を実行する処理を外す
+4. (ファイルではない操作)API の有効化 → Artifact Registry のリポジトリ → サービスアカウント → シークレット(オーナー)→ 権限を付けずにデプロイして失敗を確かめる(AC-4)→ 権限の付与 → デプロイ → 確認
+5. `docs/production-setup.md`:「2. Cloud Run」の章。4 で実際に行った手順を書く
 
 ### 本番の値
 
@@ -62,7 +63,7 @@ gcloud のコマンドは、Claude が1つずつ説明してから実行する�
 | Cloud Run のサービス | `api` |
 | サービスアカウント | `api-runtime@knowledge-library-prod.iam.gserviceaccount.com` |
 | シークレット | `rails-master-key`。Cloud Run には版の番号を指定して渡す |
-| インスタンス数 | 最小 0、最大 1 |
+| インスタンス数 | 最小 0、最大 1。最大は、サービス全体の値で 1 にする(版ごとの値より小さいほうが効く) |
 | CPU の割り当て | リクエストを処理している間だけ(リクエスト単位の課金) |
 | メモリ | 512MiB(Cloud Run の既定) |
 | 呼び出せる人 | 誰でも(認証なし) |

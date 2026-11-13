@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>データベースと、接続口と、2つの門</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Issue #31 の学習ノート(layered-tech-explanation スキルのひな形から作った)。
+   登場人物の色:1人に1色(a1〜a6)を割り当て、図と本文で同じ色を使う。
+   a2 は「私たちが書くコード」と「今ここ」に使う。ここに割り当てを書いておく:
+   a1=オーナー、a2=Rails(私たちのコード・今ここ)、a3=データベース(Cloud SQL)、a4=鍵の金庫、a5=動かす場所(接続口を含む)、a6=ブラウザ
+   Issue #30 のノート(cloud-run-deploy.html)と同じ色。a3 だけ、イメージの置き場からデータベースに回した */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .xs { font-size: 10.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+/* コードの字体は合字(=> が矢印になる、など)を切る。VS Code の見た目と食い違わないように */
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* コードを読むノートの部品(references/html-note.md の 5.5)。使わなければ消してよい */
+.route { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0 0 14px; }
+.route li { font-size: 12.5px; line-height: 1.7; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); white-space: nowrap; }
+.route li.on { border-color: var(--a2); color: var(--a2); background: var(--a2-soft); font-weight: 700; }
+.route li.on.rails { border-color: var(--a6); color: var(--a6); background: var(--a6-soft); }
+.io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.io > div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; line-height: 1.7; min-width: 0; }
+.io .k { display: block; font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+.role { font-size: 15.5px; }
+.file { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin: 18px 0 -6px; }
+pre.code { padding: 12px 0; }
+pre.code code { display: inline-block; min-width: 100%; }
+pre.code .l { display: block; padding-right: 16px; }
+pre.code .n { display: inline-block; width: 3.4em; padding-right: 1em; text-align: right; color: var(--muted); user-select: none; }
+pre.code .l.hl { background: var(--a2-soft); }
+pre.code.rails .l.hl { background: var(--a6-soft); }
+table.lines td:first-child { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; color: var(--a2); }
+table.lines.rails td:first-child { color: var(--a6); }
+table.lines td:last-child { font-size: 13px; color: var(--muted); min-width: 8.5em; }
+table.lines th, table.story th:first-child { white-space: nowrap; }
+table.routes td:first-child { white-space: nowrap; font-weight: 700; }
+.goto { margin: 18px 0 0; padding: 10px 14px; border: 1px dashed var(--a2); border-radius: 8px; font-size: 14.5px; line-height: 1.75; }
+.goto.rails { border-color: var(--a6); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+/* Issue #31 で足した図の部品:白地の箱(大きい箱の中の箱)と、門の箱 */
+svg .bx-a3w { fill: var(--surface); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a5w { fill: var(--surface); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-gate { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+
+@media (max-width: 640px) {
+  .cast, .io { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #31 · 学習メモ</p>
+    <h1>データベースと、接続口と、2つの門</h1>
+    <p class="lead">Issue #31 で、本番の Rails にデータベースを繋ぎます。新しく増える部品(データベース、接続口、表を作る係)が何で、Rails が記事の一覧を返すまでにどうつながるかを図にしたノートです。Issue #30 のノート「<a href="cloud-run-deploy.html">置き場と、動かす場所と、鍵の金庫</a>」の続きです。</p>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>なぜデータベースと、そこへの道と、表を作る係が要るのか(1章)</li>
+        <li>フェーズ2の中で、今どこにいるか(2章)</li>
+        <li>Issue #31 が終わった時点の構成(3章)</li>
+        <li>Rails が DB に繋ぎ、記事の一覧を返すまでの流れ(4章)</li>
+        <li>DB のパスワードを追うと分かる、2つの門と設定の理由(5章)</li>
+        <li>Google Cloud の名前と、AWS・Heroku で近いもの(6章)</li>
+        <li>Issue #31 の作業と完了条件の対応(7章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:なぜデータベースと、道と、表を作る係が要るのか</h2>
+    <p>Issue #30 で、Rails は本番の <span class="t-a5">動かす場所(Cloud Run)</span> で動き出しました。ただ、記事を覚えておく場所がありません。<code>/up</code>(Rails が起動しているかを答える入口)には答えられますが、記事の一覧を頼まれても、読む先がないのでエラーになります。</p>
+    <p>ローカルでは、Docker の中の PostgreSQL が記事を覚えていました。Issue #31 では、本番用の箱の中にデータベースを用意し、Rails から繋ぎます。そのためには、3つの問題を解く必要があります。</p>
+    <ol class="flow">
+      <li><strong>データベースを、どこに用意するか。</strong>自分でサーバーを借りて PostgreSQL を入れると、OS の更新やバックアップまで受け持つことになります。そこで、Google が管理してくれる <strong>データベース(Cloud SQL for PostgreSQL)</strong> を借ります。</li>
+      <li><strong>Rails からデータベースまでの道を、どう安全にするか。</strong>データベースがインターネットから誰でも繋げる状態だと、パスワードが漏れただけで中身を読まれます。そこで、<span class="t-a5">動かす場所(Cloud Run)</span> が用意する <strong>接続口(Cloud SQL 接続)</strong> を通り、<strong>2つの門</strong>(身分証を確かめる門と、パスワードを確かめる門)を抜けた相手だけが繋げるようにします。パスワードは、Issue #30 の鍵と同じく <span class="t-a4">鍵の金庫(Secret Manager)</span> から渡します。</li>
+      <li><strong>データベースの中の表を、誰がいつ作るか。</strong>借りたばかりのデータベースは空で、記事を入れる表(<code>members</code> と <code>articles</code>)がありません。表を作る・変える作業(マイグレーション)を、<strong>表を作る係(Cloud Run のジョブ)</strong> が、デプロイのたびに1回だけ行います。</li>
+    </ol>
+    <p>もう1つ、料金の問題があります。データベースは、このプロジェクトで初めて「使っていなくても料金がかかる」部品です。動かしたままで月約1,900円の見込みなので、使わない期間の扱いも決めました(4章の場面 6)。</p>
+    <p>Issue #31 のゴールは、本番の URL の <code>/api/articles</code> が 200 と記事の一覧を返すことです。記事はまだ入れないので、一覧は空です。記事の投稿にはログインが要るので、Issue #32 で行います。</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">2</span>フェーズ2の地図と今ここ</h2>
+    <p>フェーズ2は7つの Issue に分かれています。矢印は進める順番で、矢印の元が終わってから先に進みます。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 210" role="img" aria-label="フェーズ2の Issue の順番。Issue #29 土台(済み)、Issue #30 Rails(済み)、Issue #31 DB を繋ぐ(今ここ)、Issue #32 Vue を配信、Issue #33 自動デプロイの順に進む。Issue #30 の後に Issue #34 ログ、Issue #31 の後に Issue #35 スケール設定がある">
+          <defs>
+            <marker id="f1-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <rect x="20" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="80" y="57" text-anchor="middle" class="b">Issue #29</text>
+          <text x="80" y="77" text-anchor="middle" class="s">土台(済み)</text>
+          <rect x="170" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="230" y="57" text-anchor="middle" class="b">Issue #30</text>
+          <text x="230" y="77" text-anchor="middle" class="s">Rails(済み)</text>
+          <text x="380" y="24" text-anchor="middle" class="lab-here">今ここ</text>
+          <rect x="320" y="32" width="120" height="60" rx="8" class="bx-a2"/>
+          <text x="380" y="57" text-anchor="middle" class="b">Issue #31</text>
+          <text x="380" y="77" text-anchor="middle" class="s">DB を繋ぐ</text>
+          <rect x="470" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="530" y="57" text-anchor="middle" class="b">Issue #32</text>
+          <text x="530" y="77" text-anchor="middle" class="s">Vue を配信</text>
+          <rect x="620" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="680" y="57" text-anchor="middle" class="b">Issue #33</text>
+          <text x="680" y="77" text-anchor="middle" class="s">自動デプロイ</text>
+          <rect x="170" y="132" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="230" y="157" text-anchor="middle" class="b">Issue #34</text>
+          <text x="230" y="177" text-anchor="middle" class="s">ログとエラー</text>
+          <rect x="320" y="132" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="380" y="157" text-anchor="middle" class="b">Issue #35</text>
+          <text x="380" y="177" text-anchor="middle" class="s">スケール設定</text>
+          <line x1="140" y1="62" x2="166" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="290" y1="62" x2="316" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="440" y1="62" x2="466" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="590" y1="62" x2="616" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="230" y1="92" x2="230" y2="128" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="380" y1="92" x2="380" y2="128" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="470" y="160" class="s">Issue #31 で手で流すジョブを、</text>
+          <text x="470" y="180" class="s">Issue #33 で GitHub から自動にする</text>
+        </svg>
+      </div>
+      <figcaption>図1:<span class="t-a2">Issue #31</span> は、Issue #30 で動き出した Rails に、データベースを繋ぐ Issue です。Issue #35 では、ここで作るデータベースの接続数の上限と、Rails の台数の関係を決めます。</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Issue</th><th>本番用の箱に入るもの</th></tr></thead>
+        <tbody>
+          <tr><td>Issue #29(済み)</td><td>何も入らない。箱そのものと、財布と見張り(予算アラート)を用意した</td></tr>
+          <tr><td>Issue #30(済み)</td><td>イメージの置き場、動かす場所、鍵の金庫。動かす場所の中で Rails が動く</td></tr>
+          <tr class="now"><td>Issue #31</td><td>データベース。動かす場所の中に、接続口と表を作る係が加わる。金庫に DB のパスワードが加わる</td></tr>
+          <tr><td>Issue #32</td><td>Vue の配信と、本番のログイン</td></tr>
+          <tr><td>Issue #33</td><td>GitHub から自動でデプロイするための通行証</td></tr>
+          <tr><td>Issue #34、#35</td><td>新しい部品は入らない。ログの見え方と、スケールの設定を整える</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="cast">
+    <h2><span class="num">3</span>登場人物と、Issue #31 が終わった時点の構成</h2>
+    <p>登場人物は6つです。オーナーは手元の Mac に、ブラウザはインターネットのどこかに、残りの4つは Google の中(本番用の箱)にあります。色は、このページの図と本文で共通です。Issue #30 のノートと同じ色にそろえ、このノートで使わない <strong>イメージの置き場(Artifact Registry)</strong> の色を、<span class="t-a3">データベース(Cloud SQL)</span> に回しました。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 800 400" role="img" aria-label="Issue #31 が終わった時点の構成。オーナーは、データベースと利用者を作り、金庫にパスワードを登録し、動かす場所にデプロイとジョブの実行を頼む。金庫は動かす場所にパスワードを渡す。動かす場所の中には、サービスの Rails とジョブの Rails があり、どちらも接続口を通ってデータベースに繋ぐ。ブラウザはサービスの Rails に記事一覧を頼む">
+          <defs>
+            <marker id="f2-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f2-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f2-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+            <marker id="f2-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+          </defs>
+
+          <rect x="10" y="60" width="150" height="110" rx="12" class="bx-frame"/>
+          <rect x="25" y="72" width="120" height="56" rx="8" class="bx-a1"/>
+          <text x="85" y="96" text-anchor="middle" class="b">オーナー</text>
+          <text x="85" y="116" text-anchor="middle" class="s">コンソールで操作</text>
+          <text x="24" y="160" class="s">オーナーの Mac</text>
+
+          <rect x="10" y="250" width="150" height="110" rx="12" class="bx-frame"/>
+          <rect x="25" y="262" width="120" height="56" rx="8" class="bx-a6"/>
+          <text x="85" y="286" text-anchor="middle" class="b">ブラウザ</text>
+          <text x="85" y="306" text-anchor="middle" class="s">記事一覧を開く</text>
+          <text x="24" y="350" class="s">インターネット</text>
+
+          <rect x="175" y="4" width="620" height="392" rx="12" class="bx-frame"/>
+          <text x="189" y="386" class="s">Google の中(本番用の箱)</text>
+          <text x="380" y="386" class="lab-here">今ここ:Issue #31 で、DB・接続口・ジョブを足す</text>
+
+          <rect x="190" y="64" width="110" height="58" rx="8" class="bx-a4"/>
+          <text x="245" y="88" text-anchor="middle" class="b">鍵の金庫</text>
+          <text x="245" y="110" text-anchor="middle" class="s">Secret Manager</text>
+
+          <rect x="370" y="64" width="280" height="276" rx="10" class="bx-a5"/>
+          <text x="510" y="88" text-anchor="middle" class="b">動かす場所</text>
+          <text x="510" y="106" text-anchor="middle" class="s">Cloud Run</text>
+          <rect x="385" y="124" width="125" height="62" rx="8" class="bx-a2"/>
+          <text x="447" y="150" text-anchor="middle" class="b">Rails</text>
+          <text x="447" y="172" text-anchor="middle" class="s">サービス api</text>
+          <rect x="385" y="214" width="125" height="62" rx="8" class="bx-a2"/>
+          <text x="447" y="240" text-anchor="middle" class="b">Rails</text>
+          <text x="447" y="262" text-anchor="middle" class="s">ジョブ migrate</text>
+          <rect x="535" y="124" width="100" height="152" rx="8" class="bx-a5w"/>
+          <text x="585" y="190" text-anchor="middle" class="b">接続口</text>
+          <text x="585" y="210" text-anchor="middle" class="s">Cloud SQL</text>
+          <text x="585" y="228" text-anchor="middle" class="s">接続</text>
+          <text x="510" y="314" text-anchor="middle" class="s">2つの Rails は同じイメージ</text>
+
+          <rect x="670" y="170" width="115" height="62" rx="8" class="bx-a3"/>
+          <text x="727" y="196" text-anchor="middle" class="b">データベース</text>
+          <text x="727" y="218" text-anchor="middle" class="s">Cloud SQL</text>
+
+          <!-- オーナーから -->
+          <line x1="145" y1="100" x2="186" y2="100" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="166" y="92" text-anchor="middle" class="s">登録</text>
+          <path d="M120 72 V48 H510 V60" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="300" y="42" text-anchor="middle" class="s">デプロイ・ジョブを実行</text>
+          <path d="M85 72 V26 H727 V166" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="620" y="20" text-anchor="middle" class="s">DB と利用者を作る</text>
+
+          <!-- 金庫から -->
+          <line x1="300" y1="93" x2="366" y2="93" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="333" y="85" text-anchor="middle" class="s">パスワード</text>
+
+          <!-- Rails から接続口、接続口から DB -->
+          <line x1="510" y1="155" x2="531" y2="155" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <line x1="510" y1="245" x2="531" y2="245" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <line x1="635" y1="200" x2="666" y2="200" class="ln-a5" marker-end="url(#f2-a5)"/>
+
+          <!-- ブラウザ -->
+          <path d="M149 290 H330 V155 H381" class="ln-a6" marker-start="url(#f2-a6)" marker-end="url(#f2-a6)"/>
+          <text x="240" y="282" text-anchor="middle" class="s">記事一覧</text>
+        </svg>
+      </div>
+      <figcaption>図2:<span class="t-a2">Rails</span> から <span class="t-a3">データベース(Cloud SQL)</span> への線は、いつも <span class="t-a5">接続口(Cloud SQL 接続)</span> を通ります。<span class="t-a6">ブラウザ</span> から <span class="t-a3">データベース(Cloud SQL)</span> への線はありません。<span class="t-a1">オーナー</span> から <span class="t-a2">Rails</span> へパスワードを直接渡す線もなく、パスワードは <span class="t-a4">鍵の金庫(Secret Manager)</span> から <span class="t-a5">動かす場所(Cloud Run)</span> を通って届きます。<br>(簡略化:Issue #30 の <code>RAILS_MASTER_KEY</code> も同じ道で届きますが、描いていません。イメージの置き場(Artifact Registry)も省きました。サービスとジョブは、置き場の同じイメージから起動します)</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card a1"><p><span class="who t-a1">オーナー</span><span class="kind">手元の Mac · 人</span>コンソールで、データベースと、Rails が使う DB の利用者 <code>api</code> を作り、そのパスワードを決める。同じパスワードを鍵の金庫に登録する。Rails 専用の身分証に許可を足し、ジョブの実行とデプロイを頼む。</p></div>
+      <div class="card a3"><p><span class="who t-a3">データベース(Cloud SQL)</span><span class="kind">Google の中 · Issue #31 で作る</span>Google が管理する PostgreSQL のサーバー1台(インスタンス <code>db</code>)。中に、Rails の表が入るデータベース <code>api_production</code> がある。繋いでくる相手を、2つの門で確かめる。</p></div>
+      <div class="card a5"><p><span class="who t-a5">動かす場所(Cloud Run)と接続口</span><span class="kind">Google の中 · Issue #30 で作った</span>Rails を2つの形で動かす。ずっと受け付ける <strong>サービス <code>api</code></strong> と、1回処理して終わる <strong>ジョブ <code>migrate</code></strong>。どちらにも、データベースへの <strong>接続口(Cloud SQL 接続)</strong> を用意し、その先を暗号化して運ぶ。</p></div>
+      <div class="card a2"><p><span class="who t-a2">Rails</span><span class="kind">動かす場所の中 · 私たちが書いた</span>サービスの Rails は、記事の一覧を頼まれると、データベースから記事を読んで返す。ジョブの Rails は、<code>rails db:migrate</code> で表を作って終わる。どちらも同じイメージで、接続口に繋ぐだけで、その先のことは知らない。</p></div>
+      <div class="card a4"><p><span class="who t-a4">鍵の金庫(Secret Manager)</span><span class="kind">Google の中 · Issue #30 で作った</span>Issue #30 の鍵に加えて、DB のパスワード(<code>db-password</code>)をしまう。読む許可がある身分証にだけ渡す。</p></div>
+      <div class="card a6"><p><span class="who t-a6">ブラウザ</span><span class="kind">インターネット · 誰でも</span>本番の URL の <code>/api/articles</code> を開く。Issue #31 では、オーナーが curl で開いて、200 が返るかを確かめる。</p></div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">4</span>Rails が DB に繋ぎ、記事の一覧を返すまでの流れ</h2>
+    <p>6つの場面に分けました。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。破線は、ときどきしか起きないことです。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 26 810 1056" role="img" aria-label="流れ。場面1 準備する:オーナーが DB と利用者を作り、金庫にパスワードを登録し、身分証に許可を足す。場面2 起動する:動かす場所が金庫にパスワードを頼み、金庫が身分を確かめて渡し、動かす場所がパスワードを渡して Rails を起動する。場面3 繋ぐ:Rails が接続口に繋ぎ、動かす場所が DB に身分証を見せて1つ目の門を通り、Rails が利用者とパスワードを見せて2つ目の門を通り、繋がる。場面4 表を作る:オーナーがジョブを実行し、ジョブの Rails が表を作って終わり、成功が返る。場面5 応答する:ブラウザの GET /api/articles を Rails が受け、DB から記事を読み、200 を返す。場面6 使わない期間:オーナーが DB を止める、または削除して作り直す">
+          <defs>
+            <marker id="f3-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f3-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f3-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f3-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f3-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+            <marker id="f3-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+          </defs>
+
+          <rect x="0" y="96" width="810" height="120" class="band-here"/>
+          <rect x="0" y="220" width="810" height="150" class="band"/>
+          <rect x="0" y="374" width="810" height="210" class="band"/>
+          <rect x="0" y="588" width="810" height="180" class="band-here"/>
+          <rect x="0" y="772" width="810" height="210" class="band"/>
+          <rect x="0" y="986" width="810" height="90" class="band"/>
+
+          <text x="12" y="120" class="scene">場面 1</text>
+          <text x="12" y="138" class="a">準備する</text>
+          <text x="12" y="153" class="lab-here">今ここ(手で)</text>
+          <text x="12" y="244" class="scene">場面 2</text>
+          <text x="12" y="262" class="a">起動する</text>
+          <text x="12" y="277" class="s">Google が行う</text>
+          <text x="12" y="398" class="scene">場面 3</text>
+          <text x="12" y="416" class="a">繋ぐ</text>
+          <text x="12" y="431" class="s">DB を使うとき</text>
+          <text x="12" y="612" class="scene">場面 4</text>
+          <text x="12" y="630" class="a">表を作る</text>
+          <text x="12" y="645" class="lab-here">今ここ(手で)</text>
+          <text x="12" y="796" class="scene">場面 5</text>
+          <text x="12" y="814" class="a">応答する</text>
+          <text x="12" y="829" class="s">アクセスのたび</text>
+          <text x="12" y="1010" class="scene">場面 6</text>
+          <text x="12" y="1028" class="a">使わない期間</text>
+          <text x="12" y="1043" class="s">ADR 0007</text>
+
+          <line x1="175" y1="86" x2="175" y2="1076" class="life"/>
+          <line x1="290" y1="86" x2="290" y2="1076" class="life"/>
+          <line x1="405" y1="86" x2="405" y2="1076" class="life"/>
+          <line x1="520" y1="86" x2="520" y2="1076" class="life"/>
+          <line x1="635" y1="86" x2="635" y2="1076" class="life"/>
+          <line x1="750" y1="86" x2="750" y2="1076" class="life"/>
+
+          <rect x="125" y="34" width="100" height="52" rx="7" class="bx-a1"/>
+          <text x="175" y="65" text-anchor="middle" class="b a">オーナー</text>
+          <rect x="240" y="34" width="100" height="52" rx="7" class="bx-a4"/>
+          <text x="290" y="55" text-anchor="middle" class="b a">金庫</text>
+          <text x="290" y="75" text-anchor="middle" class="xs">Secret Manager</text>
+          <rect x="355" y="34" width="100" height="52" rx="7" class="bx-a2"/>
+          <text x="405" y="55" text-anchor="middle" class="b a">Rails</text>
+          <text x="405" y="75" text-anchor="middle" class="xs">サービス・ジョブ</text>
+          <rect x="465" y="34" width="110" height="52" rx="7" class="bx-a5"/>
+          <text x="520" y="55" text-anchor="middle" class="b a">動かす場所</text>
+          <text x="520" y="75" text-anchor="middle" class="xs">Cloud Run・接続口</text>
+          <rect x="585" y="34" width="100" height="52" rx="7" class="bx-a3"/>
+          <text x="635" y="55" text-anchor="middle" class="b a">DB</text>
+          <text x="635" y="75" text-anchor="middle" class="xs">Cloud SQL</text>
+          <rect x="700" y="34" width="100" height="52" rx="7" class="bx-a6"/>
+          <text x="750" y="65" text-anchor="middle" class="b a">ブラウザ</text>
+
+          <!-- 場面 1 -->
+          <line x1="175" y1="126" x2="631" y2="126" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="403" y="118" text-anchor="middle" class="a">① DB と利用者を作る</text>
+          <line x1="175" y1="156" x2="286" y2="156" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="232" y="148" text-anchor="middle" class="a">② パスワードを登録</text>
+          <rect x="113" y="173" width="124" height="26" rx="6" class="bx-a1"/>
+          <text x="175" y="191" text-anchor="middle" class="a">③ 身分証に許可</text>
+
+          <!-- 場面 2 -->
+          <line x1="520" y1="250" x2="294" y2="250" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="407" y="242" text-anchor="middle" class="a">④ パスワードを頼む</text>
+          <rect x="228" y="267" width="124" height="26" rx="6" class="bx-a4"/>
+          <text x="290" y="285" text-anchor="middle" class="a">⑤ 身分を確かめる</text>
+          <line x1="290" y1="310" x2="516" y2="310" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="403" y="302" text-anchor="middle" class="a">⑥ パスワード</text>
+          <line x1="520" y1="340" x2="409" y2="340" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="462" y="332" text-anchor="middle" class="a">⑦ 渡して起動</text>
+
+          <!-- 場面 3 -->
+          <line x1="405" y1="404" x2="516" y2="404" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="462" y="396" text-anchor="middle" class="a">⑧ 接続口へ</text>
+          <line x1="520" y1="434" x2="631" y2="434" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="577" y="426" text-anchor="middle" class="a">⑨ 身分証を見せる</text>
+          <rect x="573" y="451" width="124" height="26" rx="6" class="bx-a3"/>
+          <text x="635" y="469" text-anchor="middle" class="a">⑩ 1つ目の門</text>
+          <line x1="405" y1="494" x2="631" y2="494" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="488" y="486" text-anchor="middle" class="a">⑪ 利用者とパスワード</text>
+          <rect x="573" y="511" width="124" height="26" rx="6" class="bx-a3"/>
+          <text x="635" y="529" text-anchor="middle" class="a">⑫ 2つ目の門</text>
+          <line x1="635" y1="554" x2="409" y2="554" class="ln-a3" marker-end="url(#f3-a3)"/>
+          <text x="518" y="546" text-anchor="middle" class="a">⑬ 繋がった</text>
+
+          <!-- 場面 4 -->
+          <line x1="175" y1="618" x2="516" y2="618" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="345" y="610" text-anchor="middle" class="a">⑭ ジョブを実行</text>
+          <rect x="340" y="635" width="130" height="26" rx="6" class="bx-a2"/>
+          <text x="405" y="653" text-anchor="middle" class="a">場面 2・3 と同じ</text>
+          <line x1="405" y1="678" x2="631" y2="678" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="518" y="670" text-anchor="middle" class="a">⑮ 表を作る</text>
+          <line x1="405" y1="708" x2="516" y2="708" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="462" y="700" text-anchor="middle" class="a">⑯ 終わった</text>
+          <line x1="520" y1="738" x2="179" y2="738" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="345" y="730" text-anchor="middle" class="a">⑰ 成功</text>
+
+          <!-- 場面 5 -->
+          <line x1="750" y1="802" x2="524" y2="802" class="ln-a6" marker-end="url(#f3-a6)"/>
+          <text x="637" y="794" text-anchor="middle" class="a">⑱ GET /api/articles</text>
+          <line x1="520" y1="832" x2="409" y2="832" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="462" y="824" text-anchor="middle" class="a">⑲ 渡す</text>
+          <line x1="405" y1="862" x2="631" y2="862" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="518" y="854" text-anchor="middle" class="a">⑳ 記事を読む</text>
+          <line x1="635" y1="892" x2="409" y2="892" class="ln-a3" marker-end="url(#f3-a3)"/>
+          <text x="518" y="884" text-anchor="middle" class="a">㉑ 記事</text>
+          <line x1="405" y1="922" x2="516" y2="922" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="462" y="914" text-anchor="middle" class="a">㉒ 200</text>
+          <line x1="520" y1="952" x2="746" y2="952" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <text x="637" y="944" text-anchor="middle" class="a">㉓ 200 と記事</text>
+
+          <!-- 場面 6 -->
+          <line x1="175" y1="1016" x2="631" y2="1016" class="ln-a1 dash" marker-end="url(#f3-a1)"/>
+          <text x="403" y="1008" text-anchor="middle" class="a">㉔ 止める(応急処置)</text>
+          <line x1="175" y1="1046" x2="631" y2="1046" class="ln-a1 dash" marker-end="url(#f3-a1)"/>
+          <text x="403" y="1038" text-anchor="middle" class="a">㉕ 削除する・作り直す</text>
+        </svg>
+      </div>
+      <figcaption>図3:<span class="t-a2">Rails</span> から <span class="t-a3">DB(Cloud SQL)</span> への矢印(⑪⑮⑳)は、図では直接届いていますが、実際はすべて <span class="t-a5">接続口</span> を通り、暗号化されています。<span class="t-a1">オーナー</span> の矢印は、場面 1、4、6 にしかありません。<span class="t-a6">ブラウザ</span> から <span class="t-a3">DB(Cloud SQL)</span> への矢印はありません。</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 1:準備する<span class="tag">Issue #31 で1回だけ。作り直すときも</span></h3>
+    <ol class="flow">
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a3">データベース(Cloud SQL)</span> のインスタンス <code>db</code> を作り、その中にデータベース <code>api_production</code> と、Rails が使う利用者 <code>api</code> を作る。<code>api</code> のパスワードは、<span class="t-a1">オーナー</span> が決める。このとき、裏口の名簿(承認済みネットワーク)は空のままにする(5章の図4)</li>
+      <li><span class="t-a1">オーナー</span> が、同じパスワードを <span class="t-a4">鍵の金庫(Secret Manager)</span> に <code>db-password</code> として登録する。この作業は Claude ではなくオーナーが行い、Claude はパスワードを見ない</li>
+      <li><span class="t-a1">オーナー</span> が、Rails 専用の身分証(<code>api-runtime</code>)に、2つの許可を足す。「<code>db-password</code> を読んでよい」と「データベースに繋いでよい」</li>
+    </ol>
+    <div class="note"><p>簡略化:図では、部品を使えるようにする設定(Cloud SQL Admin API の有効化)と、データベースの作成を待つ時間(数分〜十数分)を省いています。7章の表に入れています。</p></div>
+
+    <h3 class="scene-h">場面 2:起動する<span class="tag">サービスのデプロイ・0 台からの起動、ジョブの実行のたび</span></h3>
+    <ol class="flow" start="4">
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、Rails 専用の身分証を名乗って、<span class="t-a4">鍵の金庫(Secret Manager)</span> にパスワードを頼む</li>
+      <li><span class="t-a4">鍵の金庫(Secret Manager)</span> が、その身分証に読む許可があるかを確かめる</li>
+      <li><span class="t-a4">鍵の金庫(Secret Manager)</span> が、<span class="t-a5">動かす場所(Cloud Run)</span> にパスワードを渡す</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、パスワードを環境変数 <code>DB_PASSWORD</code> に入れて、<span class="t-a2">Rails</span> を起動する。同時に、接続口(<code>/cloudsql/…</code>)をコンテナの中に用意する</li>
+    </ol>
+    <div class="note"><p>Issue #30 の場面 3 と同じ流れです。Issue #30 では金庫から受け取るのが <code>RAILS_MASTER_KEY</code> だけでしたが、Issue #31 からは <code>DB_PASSWORD</code> も一緒に受け取ります。</p></div>
+
+    <h3 class="scene-h">場面 3:繋ぐ<span class="tag">Rails が初めて DB を使うとき</span></h3>
+    <ol class="flow" start="8">
+      <li><span class="t-a2">Rails</span> が、<span class="t-a5">接続口</span> に繋ぐ。<span class="t-a2">Rails</span> から見ると、接続口は <code>/cloudsql/knowledge-library-prod:asia-northeast1:db</code> という名前のファイルで、ここに繋ぐだけで、その先のことは知らない</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> の中の運び役(Cloud SQL Auth Proxy)が、Rails 専用の身分証を名乗って、<span class="t-a3">データベース(Cloud SQL)</span> に繋ぐ。ここからの通信は暗号化される</li>
+      <li><span class="t-a3">データベース(Cloud SQL)</span> が、<strong>1つ目の門</strong>で、その身分証に「データベースに繋いでよい」許可があるかを確かめる。なければ、ここで断る</li>
+      <li><span class="t-a2">Rails</span> が、利用者名 <code>api</code> とパスワードを、接続口を通して見せる</li>
+      <li><span class="t-a3">データベース(Cloud SQL)</span> の中の PostgreSQL が、<strong>2つ目の門</strong>で、利用者とパスワードが合っているかを確かめる。合わなければ、ここで断る</li>
+      <li><span class="t-a3">データベース(Cloud SQL)</span> が、<span class="t-a2">Rails</span> との接続を開く。<span class="t-a2">Rails</span> は、この接続を手元に取っておき、次からは使い回す(場面 5 の ⑳ では、もう門を通り直さない)</li>
+    </ol>
+    <div class="note"><p>簡略化:⑨⑩ は、実際には、運び役が身分証を使って Google から短い期限の証明書を受け取り、それをデータベースに見せる、という2段階です。図では「身分証を見せる」の1本にまとめました。</p></div>
+
+    <h3 class="scene-h">場面 4:表を作る<span class="tag">デプロイのたび、サービスより先に。Issue #33 から自動</span></h3>
+    <ol class="flow" start="14">
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a5">動かす場所(Cloud Run)</span> に「ジョブ <code>migrate</code> を実行して」と頼む。<span class="t-a5">動かす場所(Cloud Run)</span> は、サービスと同じイメージで、ジョブの <span class="t-a2">Rails</span> を起動する(場面 2・3 と同じ)</li>
+      <li>ジョブの <span class="t-a2">Rails</span> が、<code>rails db:migrate</code> で、<span class="t-a3">データベース(Cloud SQL)</span> に <code>members</code> と <code>articles</code> の表を作る。表がもうあれば、まだ流していないマイグレーションだけを流す</li>
+      <li>ジョブの <span class="t-a2">Rails</span> が、終わったことを <span class="t-a5">動かす場所(Cloud Run)</span> に伝えて、止まる</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、<span class="t-a1">オーナー</span> に「成功」を返す(コンソールのジョブの画面に出る)。成功したら、<span class="t-a1">オーナー</span> はサービス <code>api</code> をデプロイする(場面 2 へ)</li>
+    </ol>
+    <div class="note here"><p>Issue #31 で手を動かすのは、場面 1 と 4 と、サービスのデプロイ(場面 2 のきっかけ)です。場面 4 とデプロイは、Issue #33 で GitHub Actions が受け持つようになります。マイグレーションをジョブで流す理由は、<a href="../adr/0006-run-migrations-with-cloud-run-jobs.md">ADR 0006</a> にあります。</p></div>
+    <div class="note"><p>マイグレーションが作るのは、表(入れ物の形)だけです。記事(中身)を入れるのは、会員が記事を投稿したときの <span class="t-a2">Rails</span> です。Issue #31 では記事を入れないので、表は空のままです。</p></div>
+
+    <h3 class="scene-h">場面 5:応答する<span class="tag">アクセスのたび</span></h3>
+    <ol class="flow" start="18">
+      <li><span class="t-a6">ブラウザ</span> が、本番の URL の <code>/api/articles</code> を開く。リクエストは、まず <span class="t-a5">動かす場所(Cloud Run)</span> の受付に届く</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、サービスの <span class="t-a2">Rails</span> にリクエストを渡す</li>
+      <li><span class="t-a2">Rails</span> が、取っておいた接続を使って、<span class="t-a3">データベース(Cloud SQL)</span> に記事を新しい順に頼む</li>
+      <li><span class="t-a3">データベース(Cloud SQL)</span> が、<span class="t-a2">Rails</span> に記事を渡す(Issue #31 の時点では0件)</li>
+      <li><span class="t-a2">Rails</span> が、<span class="t-a5">動かす場所(Cloud Run)</span> に 200 と <code>{ "articles": [] }</code> を返す</li>
+      <li><span class="t-a5">動かす場所(Cloud Run)</span> が、<span class="t-a6">ブラウザ</span> に 200 と記事の一覧を返す(完了条件 AC-1)</li>
+    </ol>
+
+    <h3 class="scene-h">場面 6:使わない期間<span class="tag">ときどき</span></h3>
+    <ol class="flow" start="24">
+      <li><strong>止める(応急処置)</strong>:予算アラートのメールが来て、原因を調べる間に費用の増え方を抑えたいときだけ、<span class="t-a1">オーナー</span> がインスタンスを止める。止めている間も、<span class="t-a2">Rails</span> は動いていて <code>/up</code> には 200 を返すが、⑳ で記事を読めないので、<code>/api/articles</code> は 500(エラー)を返す見込み。作業で実際に確かめる(完了条件 AC-6)</li>
+      <li><strong>削除する・作り直す</strong>:1か月以上使わない見込みのときは、<span class="t-a1">オーナー</span> がインスタンスを削除する。データとバックアップも消える。使うときは、手順書(<code>docs/production-setup.md</code>)で、場面 1 と 4 をやり直す</li>
+    </ol>
+    <div class="note"><p>なぜ「止める」を普段使わないのか:止めている間も、ディスク(約330円)と公開 IP アドレス(約1,100円)の料金が月にかかり、動かしたまま(約1,900円)より月500円ほどしか下がらないからです。削除すれば0円になり、データはテスト用なので失っても困りません。金額は概算です。詳しくは <a href="../adr/0007-cloud-sql-idle-periods.md">ADR 0007</a> にあります。</p></div>
+  </section>
+
+  <section id="object">
+    <h2><span class="num">5</span>DB のパスワードを追う</h2>
+    <p>Issue #31 で増える危険は、「データベースに誰が入れるか」です。DB のパスワードが、どこに生まれ、誰の手を通り、どこで使われるかを追うと、設定の理由が分かります。</p>
+
+    <h3>2つの門</h3>
+    <p>先に、パスワードが使われる場所を見ます。<span class="t-a3">データベース(Cloud SQL)</span> に入るには、門を2つ通る必要があります。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 780 330" role="img" aria-label="2つの門。Rails は接続口を通り、1つ目の門で身分証の許可を、2つ目の門で利用者とパスワードを確かめられて、記事の表に届く。インターネットの誰かが直接繋ごうとすると、承認済みネットワークの名簿が空なので通さない">
+          <defs>
+            <marker id="f4-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f4-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+            <marker id="f4-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <rect x="330" y="20" width="440" height="296" rx="12" class="bx-a3"/>
+          <text x="344" y="44" class="b">データベース(Cloud SQL のインスタンス db)</text>
+
+          <rect x="20" y="64" width="100" height="62" rx="8" class="bx-a2"/>
+          <text x="70" y="90" text-anchor="middle" class="b">Rails</text>
+          <text x="70" y="112" text-anchor="middle" class="s">サービス・ジョブ</text>
+
+          <rect x="150" y="64" width="150" height="62" rx="8" class="bx-a5"/>
+          <text x="225" y="90" text-anchor="middle" class="b">接続口</text>
+          <text x="225" y="112" text-anchor="middle" class="s">Cloud SQL Auth Proxy</text>
+
+          <rect x="345" y="64" width="120" height="62" rx="8" class="bx-gate"/>
+          <text x="405" y="90" text-anchor="middle" class="b">1つ目の門</text>
+          <text x="405" y="112" text-anchor="middle" class="s">身分証の許可</text>
+          <text x="405" y="146" text-anchor="middle" class="xs">Cloud SQL クライアント</text>
+          <text x="405" y="162" text-anchor="middle" class="xs">の許可がある身分証だけ</text>
+
+          <rect x="495" y="64" width="130" height="62" rx="8" class="bx-gate"/>
+          <text x="560" y="90" text-anchor="middle" class="b">2つ目の門</text>
+          <text x="560" y="112" text-anchor="middle" class="s">パスワード</text>
+          <text x="560" y="146" text-anchor="middle" class="xs">利用者 api と照合</text>
+          <text x="560" y="162" text-anchor="middle" class="xs">合わなければ通さない</text>
+
+          <rect x="655" y="64" width="100" height="62" rx="8" class="bx-a3w"/>
+          <text x="705" y="90" text-anchor="middle" class="b">記事の表</text>
+          <text x="705" y="112" text-anchor="middle" class="m">articles</text>
+
+          <line x1="120" y1="95" x2="146" y2="95" class="ln-a2" marker-end="url(#f4-a2)"/>
+          <line x1="300" y1="95" x2="341" y2="95" class="ln-a5" marker-end="url(#f4-a5)"/>
+          <line x1="465" y1="95" x2="491" y2="95" class="ln-a5" marker-end="url(#f4-a5)"/>
+          <line x1="625" y1="95" x2="651" y2="95" class="ln-a5" marker-end="url(#f4-a5)"/>
+          <text x="225" y="146" text-anchor="middle" class="xs">ここから先は暗号化</text>
+
+          <rect x="20" y="240" width="130" height="62" rx="8" class="bx-a1"/>
+          <text x="85" y="266" text-anchor="middle" class="b">インターネット</text>
+          <text x="85" y="288" text-anchor="middle" class="s">の誰か</text>
+
+          <line x1="150" y1="271" x2="341" y2="271" class="ln dash" marker-end="url(#f4-mk)"/>
+          <text x="245" y="263" text-anchor="middle" class="xs">パスワードを知っていても</text>
+
+          <rect x="345" y="240" width="180" height="62" rx="8" class="bx-gate"/>
+          <text x="435" y="266" text-anchor="middle" class="b">承認済みネットワーク</text>
+          <text x="435" y="288" text-anchor="middle" class="s">名簿が空なので通さない</text>
+          <text x="545" y="276" class="b">× 入れない</text>
+          <text x="545" y="206" class="xs">裏口:IP アドレスで直接繋ぐ道</text>
+          <text x="545" y="222" class="xs">Issue #31 では使わない</text>
+        </svg>
+      </div>
+      <figcaption>図4:上の段が正規の道、下の段が裏口です。正規の道では、<span class="t-a5">接続口</span> が身分証を名乗り(1つ目の門)、<span class="t-a2">Rails</span> がパスワードを見せます(2つ目の門)。裏口は、「この IP アドレスからなら、身分証なしでパスワードだけで繋いでよい」という名簿(承認済みネットワーク)で開く道です。名簿を空にしているので、パスワードを盗んだだけの人は、どちらの門にもたどり着けません。<br>(簡略化:1つ目の門は、実際には、Google が身分証の許可を確かめて短い期限の証明書を出し、データベースがその証明書を確かめる、という2段階です)</figcaption>
+    </figure>
+
+    <h3>パスワードの一生</h3>
+    <p>右の列は、その時点でパスワードがある場所です。番号は、図3 の番号とは別に振っています。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>誰が、何をするか</th><th>ある場所</th></tr></thead>
+        <tbody>
+          <tr><td class="step">①</td><td><span class="t-a1">オーナー</span> が、コンソールで利用者 <code>api</code> を作るときに、パスワードを決めて入れる(図3 の ①)。<span class="t-a3">データベース(Cloud SQL)</span> は、パスワードそのものではなく、照合するための形(ハッシュ)で覚える</td><td><span class="loc a1">オーナーの手元(画面)</span><span class="loc a3">DB(照合用の形)</span></td></tr>
+          <tr><td class="step">②</td><td><span class="t-a1">オーナー</span> が、同じパスワードを <span class="t-a4">鍵の金庫(Secret Manager)</span> の <code>db-password</code> に、1つ目の版として登録する(図3 の ②)。その後、手元には残さない</td><td><span class="loc a4">鍵の金庫(Secret Manager)</span><span class="loc a3">DB(照合用の形)</span></td></tr>
+          <tr><td class="step">③</td><td><span class="t-a1">オーナー</span> が、サービス <code>api</code> とジョブ <code>migrate</code> の設定に、「金庫の <code>db-password</code> の 1 つ目の版を、環境変数 <code>DB_PASSWORD</code> に入れる」という指し示しを書く。値は書かない</td><td><span class="loc a4">鍵の金庫(Secret Manager)</span><span class="loc a3">DB(照合用の形)</span></td></tr>
+          <tr><td class="step">④</td><td>起動のとき、<span class="t-a5">動かす場所(Cloud Run)</span> が身分証を名乗って金庫に頼み、パスワードを受け取って、環境変数に入れて <span class="t-a2">Rails</span> を起動する(図3 の ④〜⑦)</td><td><span class="loc a4">鍵の金庫(Secret Manager)</span><span class="loc a2">Rails(動いている間だけ)</span></td></tr>
+          <tr><td class="step">⑤</td><td><span class="t-a2">Rails</span> が、<code>api/config/database.yml</code> の <code>password: ENV["DB_PASSWORD"]</code> でパスワードを読み、接続口を通して <span class="t-a3">データベース(Cloud SQL)</span> に見せる。<span class="t-a3">データベース(Cloud SQL)</span> が照合する(図3 の ⑪⑫)</td><td><span class="loc a4">鍵の金庫(Secret Manager)</span><span class="loc a2">Rails(動いている間だけ)</span></td></tr>
+          <tr><td class="step">⑥</td><td>サービスが 0 台に戻るとき、またはジョブが終わったとき、<span class="t-a2">Rails</span> と一緒に、受け取ったパスワードも消える。次の起動では ④ からやり直す</td><td><span class="loc a4">鍵の金庫(Secret Manager)</span><span class="loc a3">DB(照合用の形)</span></td></tr>
+          <tr><td class="step">⑦</td><td>データベースを削除して作り直すとき(図3 の ㉕)、<span class="t-a1">オーナー</span> が新しいパスワードを決め、金庫に2つ目の版として足し、③ の指し示しを2つ目の版に変える</td><td><span class="loc a4">鍵の金庫(Secret Manager)。版 1 と 2</span><span class="loc a3">新しい DB(照合用の形)</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>表のとおり、パスワードがずっと残っている場所は、<span class="t-a4">鍵の金庫(Secret Manager)</span> だけです。<span class="t-a3">データベース(Cloud SQL)</span> にあるのは照合用の形で、そこからパスワードを取り出すことはできません。イメージにも、<span class="t-a5">動かす場所(Cloud Run)</span> の設定にも、リポジトリにも、パスワードの値は一度も入りません(完了条件 AC-3)。</p>
+
+    <h3>受け持ちの分け方</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>すること</th><th>誰がするか</th></tr></thead>
+        <tbody>
+          <tr><td>パスワードを決め、DB と金庫に登録する(①②)</td><td><span class="t-a1">オーナー</span>。秘密の値を扱うので、Claude は行わない</td></tr>
+          <tr><td>身分証に許可を足す、どの版を使うか・どの接続口を開くかを設定する(③)</td><td><span class="t-a1">オーナー</span>(コンソール)。Claude は手順を説明し、後から確かめる</td></tr>
+          <tr><td>身分証を確かめてパスワードを渡す(④)</td><td><span class="t-a4">鍵の金庫(Secret Manager)</span>(Google)</td></tr>
+          <tr><td>パスワードを環境変数に入れる、接続口を用意し暗号化して運ぶ(④⑤)</td><td><span class="t-a5">動かす場所(Cloud Run)</span>(Google)</td></tr>
+          <tr><td>1つ目の門(身分証の許可)、2つ目の門(パスワードの照合)</td><td><span class="t-a3">データベース(Cloud SQL)</span>(Google と PostgreSQL)</td></tr>
+          <tr><td>環境変数を読んで、接続口に繋ぐ(⑤)</td><td><span class="t-a2">Rails</span>。Rails が元から持つ仕組み(Active Record)で、私たちが書くのは <code>database.yml</code> の環境変数の名前だけ</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>私たちのコードで変えるのは、<code>api/config/database.yml</code> の本番の設定だけです。Rails が生成したままだと、本番だけパスワードを <code>API_DATABASE_PASSWORD</code> という名前で受け取るので、開発と同じ <code>DB_PASSWORD</code> にそろえます(仕様書 031 の「判断したこと」)。</p>
+
+    <h3>なぜ、公開 IP のままで安全と言えるのか</h3>
+    <p>結論から言うと、<strong>パスワードだけでは入れず、Rails 専用の身分証も要る</strong>からです。</p>
+    <ol class="flow">
+      <li><strong>データベースには公開 IP アドレスが付くが、裏口の名簿は空。</strong>IP アドレスはインターネット上の住所です。住所があっても、承認済みネットワークが空なので、身分証を持たない相手は門の前に立てません(図4 の下の段)。</li>
+      <li><strong>1つ目の門を通れるのは、このプロジェクトで許可を持つ身分だけ。</strong>Rails 専用の身分証のほかに、プロジェクトの「オーナー」や「編集者」の身分も通れます。オーナーの Google アカウントと、Issue #30 で見つけた既定の身分証(<code>…-compute@developer.gserviceaccount.com</code>。編集者が付いている)がこれにあたります。パスワードが漏れても、こうした身分がなければ1つ目の門で止まります。身分が乗っ取られても、パスワードがなければ2つ目の門で止まります。</li>
+      <li><strong>内部 IP で繋ぐ方式は、もっと閉じられるが、部品が3つ増える。</strong>データベースを、インターネットから見えない Google の中の網(VPC)にだけ置く方式です。網、網とデータベースを繋ぐ設定(プライベート サービス アクセス)、Cloud Run から網への出口(Direct VPC egress)を作ることになり、作り直しの手順も長くなります。</li>
+    </ol>
+    <p>つまり、得は「部品が一番少ないまま、門が2つになる」こと、損は「止めている間も公開 IP の料金がかかる」ことと「インターネットから見える住所が1つある」ことです。仕様書 031 の「判断したこと」の「公開 IP と、Cloud Run の Cloud SQL 接続で繋ぐ」が、このことです。完了条件 AC-2 が、名簿が空であることを確かめます。</p>
+    <div class="note"><p>オーナーの Google アカウントは、プロジェクトのオーナーなので、1つ目の門の許可を持っています。手元の Mac で運び役(Cloud SQL Auth Proxy)を動かせば、Mac からも繋げます。Issue #31 では使いません(マイグレーションはジョブで流すため)。</p></div>
+
+    <h3>なぜ、身分証の「繋いでよい」許可を、プロジェクト全体に付けるのか</h3>
+    <p>結論から言うと、<strong>データベースは1つだけなので、プロジェクトに付けても、繋げる範囲は変わらない</strong>からです。</p>
+    <ol class="flow">
+      <li><strong>Cloud SQL には、1つのデータベースにだけ許可を付ける画面がない。</strong>Issue #30 では、鍵の金庫の画面から、鍵1本にだけ「読んでよい」を付けました。Cloud SQL には同じ画面がなく、許可はプロジェクトに付けます。</li>
+      <li><strong>この許可でできることは小さい。</strong>「データベースに繋いでよい」(Cloud SQL クライアント)でできるのは、インスタンスの情報を読むことと、1つ目の門を通ることだけです。中身を読むには、さらにパスワード(2つ目の門)が要ります。データベースを消したり設定を変えたりはできません。</li>
+      <li><strong>条件で絞る方法もあるが、得がない。</strong>許可に「インスタンス <code>db</code> だけ」という条件を付ける方法もありますが、インスタンスは1つしかないので、範囲は同じまま、設定だけが増えます。</li>
+    </ol>
+    <p>つまり、Issue #30 の完了条件 AC-2「プロジェクト全体への権限は持たない」は、この許可の分だけ変わります。仕様書 031 の完了条件 AC-4 が、身分証の許可がこの3つ(鍵2本を読む、データベースに繋ぐ)だけであることを確かめます。</p>
+  </section>
+
+  <section id="words">
+    <h2><span class="num">6</span>言葉:Google Cloud の名前と、AWS・Heroku で近いもの</h2>
+    <p>ここまでは、平易な呼び名にかっこで製品名を添えて書きました。コンソールや仕様書で出てくる名前との対応は、次のとおりです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>このノートの呼び名</th><th>Google Cloud・Rails の名前</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td><span class="t-a3">データベース</span></td><td>Cloud SQL for PostgreSQL のインスタンス <code>db</code></td><td>Cloud SQL が貸してくれる DB サーバー1台。中に複数のデータベースを置ける。料金は、この1台ごとにかかる</td><td>図2、図3 の「DB」</td></tr>
+          <tr><td>Rails のデータベース</td><td>データベース <code>api_production</code></td><td>インスタンスの中の1つのデータベース。Rails の表が入る</td><td>図4 の「記事の表」</td></tr>
+          <tr><td>DB の利用者</td><td>PostgreSQL のユーザー <code>api</code></td><td>データベースに繋ぐときに名乗る名前。パスワードと組で、2つ目の門で確かめられる</td><td>図3 の ①⑪⑫</td></tr>
+          <tr><td>インスタンスの住所</td><td>接続名 <code>knowledge-library-prod:asia-northeast1:db</code></td><td>プロジェクト・場所・インスタンス名を <code>:</code> でつないだもの。Cloud Run の設定と <code>DB_HOST</code> に使う</td><td>図3 の ⑧</td></tr>
+          <tr><td><span class="t-a5">接続口</span></td><td>Cloud Run の Cloud SQL 接続(Unix ソケット <code>/cloudsql/接続名</code>)</td><td>同じコンピューターの中だけで使う、ファイルの形をした接続口。Rails はここに繋ぐだけで、その先は Cloud Run が運ぶ</td><td>図2 の「接続口」、図3 の ⑧</td></tr>
+          <tr><td>運び役</td><td>Cloud SQL Auth Proxy</td><td>身分証を名乗ってから、データベースまで暗号化して運ぶ中継役。接続口の中で Google が動かすので、私たちは入れない</td><td>図3 の ⑨、図4</td></tr>
+          <tr><td>「データベースに繋いでよい」許可</td><td>IAM のロール「Cloud SQL クライアント」(<code>roles/cloudsql.client</code>)</td><td>IAM のロールは、Google Cloud の「誰が何をしてよいか」の許可の種類。これはプロジェクトに付ける</td><td>図3 の ③⑩、図4 の1つ目の門</td></tr>
+          <tr><td>「パスワードを読んでよい」許可</td><td>IAM のロール「Secret Manager のシークレット アクセサー」</td><td>Issue #30 と同じ許可。シークレット <code>db-password</code> 1本に付ける</td><td>図3 の ③⑤</td></tr>
+          <tr><td>裏口の名簿</td><td>承認済みネットワーク</td><td>「この IP アドレスからなら、直接繋いでよい」という名簿。Issue #31 では空にする</td><td>図4 の下の段</td></tr>
+          <tr><td>表を作る係</td><td>Cloud Run のジョブ <code>migrate</code></td><td>URL を持たず、実行すると最後まで処理して終わる Cloud Run の形。サービスと同じイメージで、<code>bin/rails db:migrate</code> を実行する</td><td>図2、図3 の場面 4</td></tr>
+          <tr><td>表を作る・変える</td><td>マイグレーション(<code>rails db:migrate</code>)</td><td>表(入れ物の形)を作る・変える。記事(中身)を入れるのは、アプリとしての Rails</td><td>図3 の ⑮</td></tr>
+          <tr><td>環境変数として渡す</td><td>Cloud Run の「変数とシークレット」</td><td>Cloud Run がコンテナを起動するときに、金庫から値を取り出し、Rails が <code>ENV["DB_PASSWORD"]</code> で読める場所に置く</td><td>図3 の ⑦</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>AWS と Heroku で近いもの</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Google Cloud</th><th>AWS で近いもの</th><th>Heroku で近いもの</th></tr></thead>
+        <tbody>
+          <tr><td>Cloud SQL for PostgreSQL</td><td>RDS for PostgreSQL</td><td>Heroku Postgres</td></tr>
+          <tr><td>接続口と運び役(Cloud SQL 接続、Auth Proxy)</td><td>そのまま近いものはない。DB を VPC の中に置き、セキュリティグループで繋げる相手を絞るのが一般的(このノートの「内部 IP で繋ぐ方式」に近い)</td><td>近いものはない。<code>DATABASE_URL</code> の利用者とパスワードだけで、インターネットから繋げる(門はパスワードの1つ)</td></tr>
+          <tr><td>Cloud Run のジョブ</td><td>ECS のタスクを1回だけ動かす(RunTask)</td><td>release phase(デプロイのたびに自動で流す仕組み)、または <code>heroku run rails db:migrate</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Heroku との一番の違いは、門の数です。</strong>Heroku Postgres は、<code>DATABASE_URL</code>(利用者とパスワード)を知っていれば、どこからでも繋げます。Issue #31 の構成では、パスワードに加えて、Rails 専用の身分証も要ります(5章)。</p>
+  </section>
+
+  <section id="steps">
+    <h2><span class="num">7</span>Issue #31 の作業と完了条件</h2>
+    <p>仕様書 <code>docs/specs/031-cloud-sql.md</code> の作業の順番に並べました。図3 の番号と、完了条件の対応です。コンソールの操作はオーナーが行い、Claude は操作の前に手順を説明し、操作の後に読み取りだけのコマンドで確かめます。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>作業</th><th>誰が</th><th>図3</th><th>完了条件</th></tr></thead>
+        <tbody>
+          <tr><td>本番のパスワードの環境変数の名前を、開発とそろえる(<code>api/config/database.yml</code>)</td><td>Claude(コード)</td><td>⑪</td><td>AC-3</td></tr>
+          <tr><td>部品を使えるようにする(Cloud SQL Admin API の有効化)</td><td><span class="t-a1">オーナー</span></td><td>(図では省略)</td><td>―</td></tr>
+          <tr><td>インスタンス <code>db</code> を作る(公開 IP、名簿は空)</td><td><span class="t-a1">オーナー</span></td><td>①</td><td>AC-2</td></tr>
+          <tr><td>データベース <code>api_production</code> と、利用者 <code>api</code> を作る</td><td><span class="t-a1">オーナー</span></td><td>①</td><td>AC-3</td></tr>
+          <tr><td>パスワードを金庫の <code>db-password</code> に登録する</td><td><span class="t-a1">オーナー</span></td><td>②</td><td>AC-3</td></tr>
+          <tr><td>身分証に、2つの許可を足す</td><td><span class="t-a1">オーナー</span></td><td>③</td><td>AC-4</td></tr>
+          <tr><td>イメージを作り直し、置き場に送る(手元のターミナル)</td><td><span class="t-a1">オーナー</span></td><td>(図では省略)</td><td>―</td></tr>
+          <tr class="now"><td>ジョブ <code>migrate</code> を作って実行し、表を作る</td><td><span class="t-a1">オーナー</span></td><td>⑭〜⑰</td><td>AC-5</td></tr>
+          <tr><td>サービス <code>api</code> に、接続口・<code>DB_HOST</code>・<code>DB_USERNAME</code>・<code>DB_PASSWORD</code> を足してデプロイする</td><td><span class="t-a1">オーナー</span></td><td>④〜⑦</td><td>AC-3</td></tr>
+          <tr><td><code>/api/articles</code> を開き、200 が返ることを確かめる</td><td>Claude(curl)</td><td>⑱〜㉓</td><td>AC-1</td></tr>
+          <tr><td>名簿、パスワードの渡し方、身分証の許可を確かめる</td><td>Claude(読み取りだけのコマンド)</td><td>―</td><td>AC-2、AC-3、AC-4</td></tr>
+          <tr><td>インスタンスを止めて、<code>/up</code> と <code>/api/articles</code> を確かめ、動かし直す</td><td><span class="t-a1">オーナー</span>(操作)、Claude(確認)</td><td>㉔</td><td>AC-6</td></tr>
+          <tr><td>手順書 <code>docs/production-setup.md</code> に残す</td><td>Claude</td><td>―</td><td>―</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>色を付けた行が、Issue #31 で初めて行う種類の作業(ジョブで表を作る)です。サービスのデプロイは、必ずジョブが成功した後に行います(<a href="../adr/0006-run-migrations-with-cloud-run-jobs.md">ADR 0006</a>)。</p>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">8</span>確認用の問い</h2>
+    <ol class="check">
+      <li>Rails がデータベースに入るまでに通る2つの門は何で、それぞれ何を確かめますか。パスワードだけを盗んだ人は、どこで止まりますか。<span class="hint">5章の図4 と「なぜ、公開 IP のままで安全と言えるのか」です。</span></li>
+      <li>Cloud Run のサービスとジョブの設定に書くのは、パスワードの値ですか。違うなら、何を書きますか。<span class="hint">5章「パスワードの一生」の ③ です。</span></li>
+      <li>表(<code>members</code> と <code>articles</code>)を作るのは誰で、いつですか。記事を保存するのは誰ですか。<span class="hint">4章の場面 4 と、その下の注記です。</span></li>
+      <li>データベースを止めると、<code>/up</code> と <code>/api/articles</code> はそれぞれ何を返す見込みですか。なぜ違うのですか。<span class="hint">4章の場面 6 の 24 です。</span></li>
+      <li>1か月使わないとき、止めるのではなく削除するのはなぜですか。<span class="hint">4章の場面 6 の注記と、ADR 0007 です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

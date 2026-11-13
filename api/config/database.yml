@@ -18,7 +18,7 @@ default: &default
   # For details on connection pooling, see Rails configuration guide
   # https://guides.rubyonrails.org/configuring.html#database-pooling
   max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  # 接続先は環境変数で渡す(開発は compose.yaml、本番はフェーズ2で設定する)
+  # 接続先は環境変数で渡す(開発は compose.yaml、本番は Cloud Run の設定。docs/production-setup.md)
   host: <%= ENV["DB_HOST"] %>
   username: <%= ENV["DB_USERNAME"] %>
   password: <%= ENV["DB_PASSWORD"] %>
@@ -85,5 +85,3 @@ test:
 production:
   <<: *default
   database: api_production
-  username: api
-  password: <%= ENV["API_DATABASE_PASSWORD"] %>

@@ -34,7 +34,8 @@
 ```
 
 - 環境:Google Cloud / Firebase のプロジェクトを、開発用 `knowledge-library-dev` と本番用 `knowledge-library-prod` に分ける。料金がかかるのは本番用だけ([ADR 0005](adr/0005-separate-dev-prod-projects.md))
-- 本番:Rails は Cloud Run のサービス `api`(東京)で、専用のサービスアカウント `api-runtime` の身分で動く。`RAILS_MASTER_KEY` は Secret Manager から受け取る。DB はまだ繋いでいない(#31)。作り方は [production-setup.md](production-setup.md)
+- 本番:Rails は Cloud Run のサービス `api`(東京)で、専用のサービスアカウント `api-runtime` の身分で動く。`RAILS_MASTER_KEY` は Secret Manager から受け取る。作り方は [production-setup.md](production-setup.md)
+- 本番の DB:Cloud SQL for PostgreSQL のインスタンス `db`(東京)。公開 IP を持つが、承認済みネットワークは空にし、Rails は Cloud Run の Cloud SQL 接続(Unix ソケット)を通って繋ぐ。DB のパスワードは Secret Manager の `db-password` から受け取る。表は、サービスと同じイメージで動く Cloud Run のジョブ `migrate` で作る([ADR 0006](adr/0006-run-migrations-with-cloud-run-jobs.md))。#31 では30日間の無料お試しで動かし、切れる前に一番小さい DB に作り直す。使わない期間の扱いは [ADR 0007](adr/0007-cloud-sql-idle-periods.md)、仕組みの図は [notes/cloud-sql-connection.html](notes/cloud-sql-connection.html)
 - 配信:Vue は Firebase Hosting から配信し、`/api` を Cloud Run へ転送する(優先度 B)
 - CI:PR の作成・更新と main への push のたびに、GitHub Actions が RSpec、RuboCop、Brakeman、bundler-audit、Vitest、vue-tsc を実行する。main の Ruleset で、その成功をマージの条件にしている([ADR 0003](adr/0003-ci-environment.md))
 - デプロイ:今は手元でイメージをビルドし、Artifact Registry に push して、コンソールで Cloud Run にデプロイする。#33 で GitHub Actions → Artifact Registry → Cloud Run に自動化する。Workload Identity 連携を使い、鍵ファイルを使わない

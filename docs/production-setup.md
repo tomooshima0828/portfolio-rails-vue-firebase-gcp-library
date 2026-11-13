@@ -21,6 +21,10 @@
 | Rails 専用の身分証(サービスアカウント) | `api-runtime@knowledge-library-prod.iam.gserviceaccount.com` |
 | 鍵の金庫(Secret Manager) | シークレット `rails-master-key`。中身は `api/config/master.key` |
 | API の URL | `https://api-656607631341.asia-northeast1.run.app` |
+| DB(Cloud SQL) | インスタンス `db`。接続名 `knowledge-library-prod:asia-northeast1:db`。#31 では30日間の無料お試し(2026-11-11 作成、2026-12-11 に切れる) |
+| データベース、DB の利用者 | `api_production`、`api`(パスワードで認証する) |
+| 鍵の金庫(Secret Manager) | シークレット `db-password`。中身は利用者 `api` のパスワード |
+| 表を作るジョブ(Cloud Run) | ジョブ `migrate`。`bin/rails db:migrate` を実行する |
 
 ## 1. プロジェクトと課金(#29)
 
@@ -83,7 +87,7 @@ gcloud services list --enabled --project=knowledge-library-prod \
 
 - 費用が予算に反映されるまで、数時間かかる。24 時間以上かかることもある(予算の画面の説明より)。予算のメールは即時ではない
 - 予算アラートはメールを送るだけで、課金は止めない。止めるのは、メールを見たオーナーが手で行う(Cloud SQL を止める・削除する)
-- 「予算と上限」の画面の「利用額上限」は、予算に達したら一部のサービスを一時停止する仕組み。#29 では使わない。Cloud SQL が対象かは、#31 で確かめる
+- 「予算と上限」の画面の「利用額上限」は、予算に達したら一部のサービスを一時停止する仕組み。#29 では使わない。Cloud SQL は対象外だった(#31 で確かめた。ADR 0007)
 - #29 の時点では、本番用のプロジェクトに部品がないので、料金はかからない。課金が始まるのは #31(Cloud SQL)から
 
 ## 2. Cloud Run(#30)
@@ -337,4 +341,360 @@ gcloud run services describe api --region=$R --project=$P \
 - **置き場の無料枠は 0.5GB**:イメージ1つで約 192MB なので、置けるのは2つほど。新しいイメージを送ったら、動いていない古いイメージは手で消す(クリーンアップ ポリシーは「テストを実行」で、自動では消えない)
 - **最大数は作成の後に確かめる**:2.8 のとおり、作成の画面で入れたつもりでも、既定の `20` が残ることがある
 - **鍵を変えたら、デプロイし直す**:鍵は版の番号(`1`)で渡しているので、新しい版を作っても、デプロイし直すまで Rails は古い値を使う
-- **DB はまだない**:`/up` 以外のパスはエラーになる。マイグレーションをどこで流すかは #31 で決める(起動時の `rails db:prepare` は `api/bin/docker-entrypoint` から外した)
+- **DB はまだない**:`/up` 以外のパスはエラーになる。マイグレーションをどこで流すかは #31 で決める(起動時の `rails db:prepare` は `api/bin/docker-entrypoint` から外した)。→ #31 で DB を繋いだ(3 章)
+
+## 3. Cloud SQL(#31)
+
+作業した日:2026-11-11〜2026-11-13
+
+本番の DB(Cloud SQL for PostgreSQL)を作り、Cloud Run の Rails から繋いで、`GET /api/articles` が 200 を返すところまでを手で通す。仕様は [docs/specs/031-cloud-sql.md](specs/031-cloud-sql.md)、仕組みの図は [docs/notes/cloud-sql-connection.html](notes/cloud-sql-connection.html)。表をジョブで作る理由は [ADR 0006](adr/0006-run-migrations-with-cloud-run-jobs.md)、使わない期間の扱いは [ADR 0007](adr/0007-cloud-sql-idle-periods.md)。
+
+#31 では、Cloud SQL の30日間の無料お試しで DB を作った。お試しが切れる前に、お試しの DB を削除し、小さい DB を作り直す(3.12)。この章は、そのときの作り直しの手順書も兼ねる。
+
+2 章と同じく、各節の最後に、同じことをする gcloud のコマンドを添える。#31 では、3.7 のコマンド以外は実行していない。
+
+### 3.1 API を有効にする
+
+1. 「API とサービス」の「ライブラリ」を開き(https://console.cloud.google.com/apis/library?project=knowledge-library-prod)、画面の上が `knowledge-library-prod` であることを確かめる
+2. `Cloud SQL Admin` で検索し、「Cloud SQL Admin API」を開いて「有効にする」を押す
+
+似た名前の「Cloud SQL」(`sql-component.googleapis.com`)は、#29 で Firebase を追加したときに有効になっている。今回有効にするのは、「Admin」が付いている方。
+
+```bash
+gcloud services enable sqladmin.googleapis.com --project=knowledge-library-prod
+```
+
+### 3.2 インスタンス `db` を無料お試しで作る
+
+1. 「Cloud SQL」を開き(https://console.cloud.google.com/sql/instances?project=knowledge-library-prod)、「インスタンスを作成」を押す
+2. 「Cloud SQL を 30 日間無料でお試しください」という案内の画面が出る。上のフォームに、次のように入れる
+
+| 項目 | 値 | 理由 |
+|---|---|---|
+| データベース エンジン | PostgreSQL(初めは MySQL) | ローカルと同じ DB |
+| インスタンス ID | `db`(初めは `free-trial-first-project`) | 作り直すときも同じ名前にして、Cloud Run の接続先を変えずに済ませる。後から変えられない |
+| パスワード | 「生成」を押す。どこにも控えない | 管理用の利用者 `postgres` のもので、Rails は使わない。必要になったら、コンソールで設定し直せる |
+| リージョン | `asia-northeast1`(初めは `us-east1`) | ほかの部品と同じ場所。後から変えられない |
+
+3. 右の「含まれるもの」の欄で、版を確かめる。フォームには版を選ぶ欄がない。#31 では「PostgreSQL 18」だった
+4. 「無料インスタンスを作成」を押す。作成には数分かかる(#31 では、22:18 に作成を始め、22:22 に完了の通知が出た)
+5. 作成日を1日目として、29日目の予定をカレンダーに入れる(#31 では 2026-12-09。お試しが切れるのは 2026-12-11)
+
+作った結果(お試しで決まった値):
+
+| 項目 | 値 |
+|---|---|
+| 接続名 | `knowledge-library-prod:asia-northeast1:db` |
+| 版 | PostgreSQL 18(`POSTGRES_18_6`)。ローカルの `compose.yaml` は 17 |
+| エディション、マシン | Enterprise Plus、8 vCPU(`db-perf-optimized-N-8`)、データ キャッシュあり |
+| ゾーン | 単一ゾーン(`asia-northeast1-b`)。高可用性なし |
+| ストレージ | SSD 100GB、自動増加なし |
+| 公開 IP | あり |
+| 承認済みネットワーク | 空 |
+| 内部 IP | なし |
+| 自動バックアップ | なし(お試しでは選べない) |
+| 削除からの保護 | 作成直後は無効。3.3 で有効にする |
+
+お試しは1つのプロジェクトで1回だけなので、gcloud のコマンドは載せない。お試しの後に作る小さい DB のコマンドは、3.12 にある。
+
+### 3.3 削除からの保護を有効にする
+
+誤操作で DB を消さないための安全装置。有効の間は、削除の頼みを Cloud SQL が断る。権限ではないので、DB を変更できる人は、保護を外してから削除できる。
+
+1. インスタンス `db` を開き、上の「編集」を押す
+2. 「データ保護」の中で、「インスタンスの削除を防止する」にだけチェックを入れる。「インスタンスの削除後もバックアップを保持する」と「インスタンス削除時の最終バックアップ」には入れない(ADR 0007)。お試しでは、バックアップの欄は灰色で選べない
+3. 画面のいちばん下の「保存」を押す。再起動はされない
+
+```bash
+gcloud sql instances patch db --deletion-protection --project=knowledge-library-prod
+```
+
+### 3.4 データベース `api_production` を作る
+
+データベースはコンソールで作り、ジョブでは `rails db:migrate` だけを流す。データベースを作る権限を、Rails に持たせないため(仕様書 031)。
+
+1. インスタンス `db` の左のメニューの「データベース」を押し、「データベースを作成」を押す
+2. 名前に `api_production` と入れる。文字セットなどは初めの値のまま(UTF8)
+3. 「作成」を押す
+
+```bash
+gcloud sql databases create api_production --instance=db --project=knowledge-library-prod
+```
+
+### 3.5 パスワードを作り、利用者 `api` と金庫 `db-password` に入れる
+
+パスワードは、利用者の設定と金庫(Secret Manager)の2か所に、同じ値で入れる。値はオーナーの Mac のターミナルだけで扱い、この文書にも、Claude との会話にも出さない。
+
+1. オーナーが自分で開いたターミナルで、パスワードを作ってファイルに入れる
+
+   ```bash
+   # この後に作るファイルを、自分だけが読めるようにする(このターミナルの中だけで効く)
+   umask 077
+   # 48文字のランダムなパスワードを作り、ファイルに入れる。画面には出さない
+   # 英小文字と数字だけにして、記号で困らないようにする。末尾の改行は取り除く
+   openssl rand -hex 24 | tr -d '\n' > ~/db-password.txt
+   # 文字数だけを確かめる。48 と出れば正しい(値は出ない)
+   wc -c < ~/db-password.txt
+   # 中身をクリップボードに入れる(2 で貼り付けるため)
+   pbcopy < ~/db-password.txt
+   ```
+
+   末尾の改行を取り除くのは、金庫に「パスワード+改行」が入り、利用者の設定の値と食い違うのを防ぐため(2.4 の master.key と同じ理由)
+
+2. インスタンス `db` の左のメニューの「ユーザー」を押し、「ユーザー アカウントを追加」を押す。「組み込み認証」を選び(「Cloud IAM」は選ばない)、ユーザー名に `api` と入れ、パスワードの欄に Command + V で貼り付けて、「追加」を押す。「パスワードを表示」は押さない
+3. 「Secret Manager」を開き(https://console.cloud.google.com/security/secret-manager?project=knowledge-library-prod)、「シークレットを作成」を押す。次のように入れて、「シークレットを作成」を押す
+
+| 欄 | 値 |
+|---|---|
+| 名前 | `db-password` |
+| シークレットの値 | 「ファイルをアップロード」で `~/db-password.txt` を選ぶ(見つからなければ、ファイルを選ぶ画面で Command + Shift + G を押し、`~/db-password.txt` と入れる) |
+| レプリケーション ポリシー | 「ロケーションを手動で管理する」、`asia-northeast1` だけ |
+| 暗号化 | Google が管理する暗号鍵(初めの値のまま) |
+| ローテーション、有効期限、通知、ラベルなど | 設定しない |
+
+4. 1 と同じターミナルで、ファイルとクリップボードを消す
+
+   ```bash
+   /bin/rm ~/db-password.txt
+   ls ~/db-password.txt     # 「No such file or directory」と出れば消えている
+   pbcopy < /dev/null
+   ```
+
+パスワードが合っているかは、この時点では分からない。3.8 のジョブが DB に繋げたときに分かる。合わなければ、1〜4 をやり直して新しいパスワードにする。
+
+```bash
+# 2 と 3。値を直接書かず、ファイルから読ませる(履歴には $(cat …) の文字だけが残る)
+gcloud sql users create api --instance=db --password="$(cat ~/db-password.txt)" --project=knowledge-library-prod
+gcloud secrets create db-password --replication-policy=user-managed \
+  --locations=asia-northeast1 --data-file=$HOME/db-password.txt --project=knowledge-library-prod
+```
+
+### 3.6 Rails 専用の身分証に、2つの権限を足す
+
+`api-runtime` に、「`db-password` を読む」権限と「Cloud SQL に繋ぐ」権限を足す。付ける場所が、それぞれ違う。
+
+**`db-password` を読む権限(鍵1本にだけ付ける)**
+
+1. 「Secret Manager」で `db-password` を開き、「権限」タブを開く
+2. 「アクセスを許可」を押す。新しいプリンシパルに `api-runtime@knowledge-library-prod.iam.gserviceaccount.com`、ロールに「Secret Manager のシークレット アクセサー」を選び、「保存」を押す
+
+一覧には、プロジェクトの既定の身分証(編集者)とオーナーの行も出るが、「継承」の欄にあるとおり、プロジェクト全体に付いている役割が表示されているだけ。既定の身分証の「編集者」には、シークレットの値を読む権限は含まれない。
+
+**Cloud SQL に繋ぐ権限(プロジェクトに付ける)**
+
+Cloud SQL には、インスタンス1つにだけ権限を付ける画面がないので、プロジェクトの「IAM」の画面で付ける(仕様書 031)。
+
+1. 「IAM と管理」の「IAM」を開き(https://console.cloud.google.com/iam-admin/iam?project=knowledge-library-prod)、「アクセス権を付与」を押す
+2. 新しいプリンシパルに `api-runtime@knowledge-library-prod.iam.gserviceaccount.com`、ロールに「Cloud SQL クライアント」を選ぶ。似た名前の「Cloud SQL 管理者」「Cloud SQL 編集者」は選ばない(DB を消したり、設定を変えたりできてしまう)
+3. 条件は付けずに、「保存」を押す
+
+```bash
+gcloud secrets add-iam-policy-binding db-password \
+  --member=serviceAccount:api-runtime@knowledge-library-prod.iam.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor --project=knowledge-library-prod
+gcloud projects add-iam-policy-binding knowledge-library-prod \
+  --member=serviceAccount:api-runtime@knowledge-library-prod.iam.gserviceaccount.com \
+  --role=roles/cloudsql.client --condition=None
+```
+
+### 3.7 イメージを作り直して、置き場に送る
+
+`api/config/database.yml` の本番の設定を、開発と同じ環境変数(`DB_USERNAME`、`DB_PASSWORD`)で受け取るように変えたので、イメージを作り直す。手順は 2.5 と同じ。`gcloud auth configure-docker` は済んでいるので要らない。
+
+ビルドの前に `git status` で、コミットしていない変更がないことを確かめる。#31 では、タグは `fcf8acc`、置き場では約 192MB、digest は `sha256:80e01bc5…` だった。
+
+### 3.8 表を作るジョブ `migrate` を作って、実行する
+
+ジョブは、サービス `api` と同じイメージ・身分証・設定で Rails を起動し、`rails db:migrate` だけを実行して終わる(ADR 0006)。
+
+1. 「Cloud Run」の「ジョブ」を開き(https://console.cloud.google.com/run/jobs?project=knowledge-library-prod)、「ジョブを作成」を押す
+2. 次のように入れて、「作成」を押す
+
+| 画面の場所 | 項目 | 値 | 理由 |
+|---|---|---|---|
+| 上 | コンテナ イメージの URL | 「選択」で `knowledge-library` → `api` → `fcf8acc` | 3.7 で送ったイメージ |
+| 上 | ジョブ名、リージョン | `migrate`、`asia-northeast1` | |
+| 上 | タスク数 | `1` | 1回だけ流す |
+| コンテナ | コンテナのコマンド | 空のまま | イメージの起動の仕組み(`bin/docker-entrypoint`)を、サービスと同じに保つ |
+| コンテナ | コンテナの引数 | `./bin/rails` と `db:migrate` の2つ | イメージの初めの値(`./bin/rails server`)の代わりに、マイグレーションを流す |
+| コンテナ | メモリ、CPU | 初めの値のまま(512MiB、1) | |
+| 変数とシークレット | 環境変数 | `DB_HOST` = `/cloudsql/knowledge-library-prod:asia-northeast1:db`、`DB_USERNAME` = `api` | |
+| 変数とシークレット →「シークレットを参照」 | | `RAILS_MASTER_KEY` ← `rails-master-key` の版 `1`、`DB_PASSWORD` ← `db-password` の版 `1`。どちらも環境変数として公開 | 版は番号で指定する(`latest` にしない) |
+| 接続 | Cloud SQL 接続 | 「接続を追加」で `knowledge-library-prod:asia-northeast1:db` | Cloud Run が、コンテナの中に接続口(`/cloudsql/…`)を用意する |
+| セキュリティ | サービス アカウント | `api-runtime` | 変えないと、既定の身分証で動き、パスワードを読めずに失敗する |
+| 設定 | 再試行の最大回数 | `0` | 失敗したら繰り返さずに止めて、原因を見る |
+| 下 | ジョブをすぐに実行する | チェックを入れない | 作成と実行を分けて、それぞれ確かめる |
+
+シークレットを選んだときに「付与」のボタンが出ても、押さない。権限は 3.6 で付けてある。
+
+3. ジョブ `migrate` を開き、「実行」を押す。状態が緑のチェック(成功)になるまで待つ
+
+#31 では、実行 `migrate-tlj8b` が約16秒で成功した。ただ、ログには「Container called exit(0).」の1行しか残らず、表を作ったときに Rails が書き出すはずの行(`== CreateMembers: migrated` など)は見えなかった。表ができたことは、3.9 の後に `/api/articles` が 200 を返したことで確かめた。
+
+```bash
+gcloud run jobs create migrate \
+  --image=asia-northeast1-docker.pkg.dev/knowledge-library-prod/knowledge-library/api:fcf8acc \
+  --region=asia-northeast1 --project=knowledge-library-prod \
+  --service-account=api-runtime@knowledge-library-prod.iam.gserviceaccount.com \
+  --set-cloudsql-instances=knowledge-library-prod:asia-northeast1:db \
+  --set-env-vars=DB_HOST=/cloudsql/knowledge-library-prod:asia-northeast1:db,DB_USERNAME=api \
+  --set-secrets=RAILS_MASTER_KEY=rails-master-key:1,DB_PASSWORD=db-password:1 \
+  --args=./bin/rails,db:migrate --tasks=1 --max-retries=0
+gcloud run jobs execute migrate --wait --region=asia-northeast1 --project=knowledge-library-prod
+```
+
+### 3.9 サービス `api` に DB の設定を足して、デプロイし直す
+
+イメージも `fcf8acc` に替える。前のイメージ `cc1e273` の `database.yml` は、パスワードを `API_DATABASE_PASSWORD` という別の名前で探すので、設定を足しても DB に繋げない。
+
+サービスの設定は、詳細ページのタブ(コンテナ、ネットワーキング、セキュリティ、スケーリング)で直し、最後にまとめてデプロイする。何も変えずに右上の「再デプロイ」を押すと、「サービス構成は変更されていません」と出て、同じ設定の版を作るだけになる。
+
+1. 「Cloud Run」でサービス `api` を開き、「コンテナ」タブを開く
+2. 次のように直す。表にない項目は変えない
+
+| 画面の場所 | 項目 | 値 |
+|---|---|---|
+| コンテナ設定 | コンテナ イメージの URL | 「選択」で `fcf8acc` |
+| 変数とシークレット →「変数を追加」 | 環境変数 | `DB_HOST` = `/cloudsql/knowledge-library-prod:asia-northeast1:db`、`DB_USERNAME` = `api` |
+| 環境変数として公開されるシークレット | | `DB_PASSWORD` ← `db-password` の版 `1` |
+| 同上 | `RAILS_MASTER_KEY` | 変えない |
+| 「コンテナ」タブの下の方 | Cloud SQL 接続 | 「接続を追加」で `knowledge-library-prod:asia-northeast1:db` |
+
+ネットワーキングタブには、Cloud SQL 接続の欄はない。直している間、タブの名前は「コンテナ \*」になり、右上のボタンは「差分を表示して再デプロイ」に変わる。
+
+3. 「差分を表示して再デプロイ」を押し、変わるのが表の4点(イメージ、環境変数2つ、シークレット1つ、Cloud SQL 接続)だけであることを確かめて、デプロイする
+
+#31 では、版 `api-00003-w6j` が起動し、リクエストの 100% が届くようになった。
+
+```bash
+gcloud run deploy api \
+  --image=asia-northeast1-docker.pkg.dev/knowledge-library-prod/knowledge-library/api:fcf8acc \
+  --region=asia-northeast1 --project=knowledge-library-prod \
+  --add-cloudsql-instances=knowledge-library-prod:asia-northeast1:db \
+  --update-env-vars=DB_HOST=/cloudsql/knowledge-library-prod:asia-northeast1:db,DB_USERNAME=api \
+  --update-secrets=DB_PASSWORD=db-password:1
+```
+
+### 3.10 DB を止めて確かめ、動かし直す
+
+DB を止めたときに、DB を使わない `/up` は動き続け、DB を使う `/api/articles` だけがエラーになることを確かめる(仕様書の AC-6)。ADR 0007 で、予算アラートが来たときの応急処置として「止める」を使うため。
+
+1. 「Cloud SQL」でインスタンス `db` を開き、「停止」を押す。状態が停止になるまで待つ
+2. 3.11 の curl で、`/up` が 200、`/api/articles` が 500 であることを確かめる
+3. 「開始」を押し、状態が実行中に戻るまで待つ
+4. もう一度 curl で、`/api/articles` が 200 に戻ったことを確かめる。Rails を作り直さなくても、Rails が自分で DB に繋ぎ直す
+
+止めている間、Cloud Run のログには次の行が出る。Cloud Run の接続口が、止まっている DB への通り道を開けなかったという記録。
+
+```
+Cloud SQL connection failed. ... fetch ephemeral cert failed: refresh err
+```
+
+#31 で、お試しの DB も止められることを確かめた。
+
+```bash
+gcloud sql instances patch db --activation-policy=NEVER --project=knowledge-library-prod   # 止める
+gcloud sql instances patch db --activation-policy=ALWAYS --project=knowledge-library-prod  # 動かす
+```
+
+### 3.11 確かめる
+
+読み取りだけのコマンドで確かめる。
+
+```bash
+P=knowledge-library-prod; R=asia-northeast1
+U=https://api-656607631341.asia-northeast1.run.app
+
+# 記事の一覧が 200 と {"articles":[...]} を返す。/up も 200(AC-1、AC-6)
+curl -s -w "\n%{http_code}\n" $U/api/articles
+curl -s -o /dev/null -w "%{http_code}\n" $U/up
+
+# インスタンスの設定。承認済みネットワーク(authorizedNetworks)が出なければ空(AC-2)
+gcloud sql instances describe db --project=$P \
+  --format="yaml(state,databaseVersion,settings.edition,settings.tier,settings.dataDiskSizeGb,settings.ipConfiguration.ipv4Enabled,settings.ipConfiguration.authorizedNetworks,settings.backupConfiguration.enabled,settings.deletionProtectionEnabled,settings.activationPolicy)"
+
+# データベースと利用者
+gcloud sql databases list --instance=db --project=$P --format="value(name)"
+gcloud sql users list --instance=db --project=$P --format="value(name)"
+
+# サービスの設定。DB_PASSWORD は値ではなく、db-password の版 1 への参照(AC-3)
+gcloud run services describe api --region=$R --project=$P \
+  --format="yaml(spec.template.metadata.annotations.'run.googleapis.com/cloudsql-instances',spec.template.spec.containers[0].image,spec.template.spec.containers[0].env)"
+
+# api-runtime の権限は、鍵2本を読むことと、Cloud SQL クライアントだけ(AC-4)
+gcloud secrets get-iam-policy db-password --project=$P
+gcloud secrets get-iam-policy rails-master-key --project=$P
+gcloud projects get-iam-policy $P --flatten="bindings[].members" \
+  --filter="bindings.members:api-runtime@" --format="value(bindings.role)"
+
+# ジョブの実行の結果(AC-5)
+gcloud run jobs executions list --job=migrate --region=$R --project=$P
+```
+
+2026-11-13 の結果:
+
+| 確かめたこと | 結果 |
+|---|---|
+| `/api/articles` | 200、`{"articles":[]}`(記事はまだ入れていない) |
+| `/up` | 200 |
+| DB を止めている間 | `/api/articles` は 500、`/up` は 200 |
+| DB を動かし直した後 | `/api/articles` は 200 |
+| インスタンス | `RUNNABLE`、PostgreSQL 18、Enterprise Plus、SSD 100GB、公開 IP あり、承認済みネットワークなし、自動バックアップなし、削除からの保護あり |
+| データベース、利用者 | `api_production` と `api`(ほかに Cloud SQL が作った `postgres`) |
+| サービスの設定 | イメージ `fcf8acc`、Cloud SQL 接続 `db`、`DB_HOST`、`DB_USERNAME`、`DB_PASSWORD` は `db-password` の版 `1` への参照 |
+| 権限 | `db-password` と `rails-master-key` を読めるのは `api-runtime` だけ。プロジェクトで `api-runtime` が持つのは `roles/cloudsql.client` だけ |
+| ジョブ | 実行 `migrate-tlj8b` が成功(1 / 1) |
+
+### 3.12 お試しが切れる前に、小さい DB に作り直す
+
+お試しを有料に切り替えると、ストレージ 100GB を減らせず、月約3,300円かかって予算を超える。そのため、お試しの DB を削除して、小さい DB を作り直す(仕様書 031、ADR 0007)。作り直しの間(1時間ほど)は、本番の API が止まり、DB のデータは消える。1か月以上使わない見込みで DB を削除した後に、使い直すときも、この手順で作る。
+
+**この節は、#31 の時点ではまだ行っていない**。小さい DB の画面の項目は、Google の文書から書いたもの。初めて行ったときに、実際の画面の名前と結果に直す。
+
+1. インスタンス `db` を開き、「編集」の「データ保護」で、「インスタンスの削除を防止する」のチェックを外して保存する
+2. 「削除」を押し、インスタンス ID `db` を入れて削除する。最終バックアップは取らない
+3. 「インスタンスを作成」を押す。お試しの案内が出ても「無料インスタンスを作成」は押さず、PostgreSQL を選んで、次のように入れる
+
+| 見出し | 項目 | 値 | 理由 |
+|---|---|---|---|
+| エディション | エディション | Enterprise | 初めの値は Enterprise Plus。共有コアのマシンを選べるのは Enterprise だけ |
+| インスタンスの情報 | データベースのバージョン | PostgreSQL 17 | ローカルと同じ版。後から変えられない |
+| インスタンスの情報 | インスタンス ID | `db` | 同じ名前にすると、接続名が変わらず、Cloud Run の接続先を変えなくてよい |
+| インスタンスの情報 | パスワード(`postgres`) | 「生成」を押す。どこにも控えない | |
+| リージョンとゾーン | リージョン、ゾーンの可用性 | `asia-northeast1`、シングルゾーン | 高可用性は料金が約2倍になる |
+| マシンの構成 | マシンタイプ | 共有コア、1 vCPU・0.614 GB(`db-f1-micro`) | 一番小さいマシン |
+| ストレージ | 種類、容量、自動増量 | SSD、10 GB、自動増量なし | 後から HDD には変えられない。思わぬ費用を防ぐ |
+| 接続 | プライベート IP、パブリック IP | プライベート IP は選ばない。パブリック IP は選ぶ | |
+| 接続 | 承認済みネットワーク | 何も足さない | |
+| データ保護 | 自動バックアップ | 有効、7個まで保持 | |
+| データ保護 | ポイントインタイム リカバリ | 使わない | 変更の記録を保存する分の料金がかかる |
+| データ保護 | 削除からの保護 | 有効 | |
+| データ保護 | 削除後もバックアップを保持 | 有効にしない | ADR 0007 |
+
+4. 作成を押す前に、画面に出る月額の見積もりを確かめる(ADR 0007 の見積もりは、月約1,900円)
+5. 3.4 でデータベース `api_production` を作る
+6. 3.5 で新しいパスワードを作り、利用者 `api` を作る。金庫は作り直さず、`db-password` を開いて「新しいバージョン」を押し、ファイルをアップロードして版 `2` を足す
+7. ジョブ `migrate` とサービス `api` の、`DB_PASSWORD` の版を `2` に変える。ジョブを先に実行して表を作り、その後にサービスをデプロイする
+8. 3.11 で確かめる。版 `1` は、「無効にする」で使えなくしておく
+
+```bash
+# 3 にあたるコマンド。#31 の時点では実行していない下書き
+# ポイントインタイム リカバリは、--enable-point-in-time-recovery を付けなければ使わない
+gcloud sql instances create db --project=knowledge-library-prod \
+  --region=asia-northeast1 --database-version=POSTGRES_17 --edition=ENTERPRISE \
+  --tier=db-f1-micro --availability-type=ZONAL \
+  --storage-type=SSD --storage-size=10 --no-storage-auto-increase \
+  --backup --retained-backups-count=7 --deletion-protection
+```
+
+作った後に、3.11 の `describe` で `pointInTimeRecoveryEnabled` が `false` であることを確かめる。
+
+### 3.13 注意点
+
+- **料金**:お試しの間は、DB の料金はかからない。30日たっても自動で有料にはならず、DB が止まるだけで、データは90日残る。お試しは、有料に切り替えない(3.12)
+- **版の違い**:本番は PostgreSQL 18、ローカルは 17。このアプリは普通の列と外部キーしか使わないので、版の違いの影響を受けない見込み。3.12 で 17 に作り直せば、そろう
+- **暗号化しない接続も受け付ける設定**:お試しの DB は `sslMode: ALLOW_UNENCRYPTED_AND_ENCRYPTED` になっている。承認済みネットワークが空なので、直接繋ぐ道はなく、Rails は Cloud Run の接続口を通るので、通信は暗号化される。変えていない
+- **ジョブの出力がログに残らない**:3.8 のとおり、`db:migrate` の出力はログに見えなかった。ジョブが成功しても、表ができたかは `/api/articles` で確かめる
+- **サービスとジョブは、同じイメージで動かす**:イメージを作り直したら、ジョブとサービスの両方を新しいイメージに替える。`database.yml` が違うイメージでは、同じ環境変数を渡しても DB に繋げないことがある
+- **古いイメージを消す**:置き場の無料枠は 0.5GB。サービスとジョブが `fcf8acc` を使うようになったので、`cc1e273` は使われていない。「Artifact Registry」の `knowledge-library` → `api` で、タグ `cc1e273` のイメージを選んで削除する。#31 では 2026-11-13 に消し、`fcf8acc` だけが残った
+- **パスワードを変えたら、ジョブとサービスの版の番号を変える**:2.10 の鍵と同じく、新しい版を足しても、版の番号を変えてデプロイし直すまで、Rails は古いパスワードを使う

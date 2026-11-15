@@ -4,7 +4,7 @@ Issue: #32
 
 ## 目的
 
-本番で、会員が画面からログインし、記事を投稿して、一覧で見られるようにする。#31 で、本番の Rails は DB に繋がり、`GET /api/articles` が応答するようになった。ただ、利用者が開く画面(Vue)がまだ本番にない。
+本番で、会員が画面からログインし、記事を投稿して、一覧で見られるようにする。#31 で、本番の Rails は DB に繋がり、`GET /api/articles` が 200 を返すようになった。ただ、利用者が開く画面(Vue)がまだ本番にない。
 
 Vue をビルドしたファイル(HTML、JavaScript、CSS)を Firebase Hosting から配り、ブラウザから Rails を呼ぶ道を作る。本番の Firebase でログインできるようにし、Rails がそのログインを確かめられるようにする。
 
@@ -38,7 +38,7 @@ Google Cloud と Firebase の画面の操作は、オーナーがコンソール
 
 - AC-1:利用者が本番の URL(`https://knowledge-library-prod.web.app/`)を開いたとき、Firebase Hosting は Vue の画面を返し、画面は記事の一覧を表示する
 - AC-2:利用者が Vue Router の画面の URL(`/articles/new` など)を直接開いたとき、Firebase Hosting は 404 ではなく `index.html` を返し、Vue Router がその画面を表示する
-- AC-3:ブラウザが `https://knowledge-library-prod.web.app/api/articles` を呼んだとき、Firebase Hosting はリクエストを Cloud Run のサービス `api` に転送し、Rails の応答(200 と `{ "articles": [...] }`)を返す。応答は `Cache-Control: private` を持ち、Firebase Hosting の CDN に保存されない
+- AC-3:ブラウザが `https://knowledge-library-prod.web.app/api/articles` を呼んだとき、Firebase Hosting はリクエストを Cloud Run のサービス `api` に転送し、Rails のレスポンス(200 と `{ "articles": [...] }`)を返す。レスポンスは `Cache-Control: private` を持ち、Firebase Hosting の CDN にキャッシュされない
 - AC-4:会員が本番の画面で Google でログインし、記事を投稿したとき、Rails はその会員の記事として本番の DB に保存し、画面の一覧に表示される
 - AC-5:ログインしていない人が `POST /api/articles` を送ったとき、Rails は 401 と `{ "error": "unauthorized" }` を返す
 
@@ -50,10 +50,12 @@ Google Cloud と Firebase の画面の操作は、オーナーがコンソール
 
 1. `docs/specs/032-firebase-hosting.md`:この仕様書
 2. `docs/adr/0008-proxy-api-through-firebase-hosting.md`:`/api` を Firebase Hosting から Cloud Run へ転送する判断
-3. `firebase.json`:Firebase Hosting の設定
-4. (ファイルではない操作)Authentication と Google ログイン → ウェブアプリの登録 → `web/.env.production.local`(オーナー)→ Cloud Run に `FIREBASE_PROJECT_ID` → Vue のビルドとデプロイ(オーナー)→ 確認
-5. `docs/production-setup.md`:「4. Firebase Hosting」の章。4 で実際に行った手順を書く
-6. `docs/architecture.md`:配信の行を、今の姿に直す
+3. `docs/notes/vue-firebase-hosting.html`:学習ノート。Rails と Vue の置き方の違い、`docker build` と `npm run build` の違い、3つのつなぎ(`/api` の取り次ぎ、設定値の埋め込み、Rails の `FIREBASE_PROJECT_ID`)の図
+4. `firebase.json`:Firebase Hosting の設定
+5. (ファイルではない操作)Authentication と Google ログイン → ウェブアプリの登録 → `web/.env.production.local`(オーナー)→ Cloud Run に `FIREBASE_PROJECT_ID` → Vue のビルドとデプロイ(オーナー)→ 確認
+6. `docs/production-setup.md`:「4. Firebase Hosting」の章。5 で実際に行った手順を書く
+7. `docs/architecture.md`:配信の行を、今の姿に直す
+8. `README.md`:技術一覧の rack-cors の行を、今の使い方(本番でも使わない)に直す(ADR 0008)
 
 ### 本番の値
 
@@ -94,6 +96,6 @@ Google Cloud と Firebase の画面の操作は、オーナーがコンソール
 - **Firebase CLI は、版を決めて `npx` で使う**。Mac に入れたままにしないので、ほかのプロジェクトに影響しない。版を決めると、手順書の通りに動く。ログイン(`firebase login`)は、オーナーの Google アカウントで行う
 - **`.firebaserc` は作らない**。デプロイのコマンドに、毎回 `--project knowledge-library-prod` を付ける。本番用のプロジェクトしかデプロイ先がないので、別名を付ける意味がない。毎回書くことで、どこにデプロイするかがコマンドから分かる
 - **Rails の `FIREBASE_PROJECT_ID` は、普通の環境変数で渡す**。プロジェクト ID は、ブラウザに配る JavaScript にも入る公開の値で、秘密ではない。Rails は、この値で、ID トークンが本番の Firebase のものかを確かめる。開発用のプロジェクトの ID トークンは、本番の Rails では通らない
-- **API の応答は、CDN に保存されない**。Firebase Hosting の CDN は、`Cache-Control` に `public` や `s-maxage` が付いた応答だけを保存する。Rails の応答には `Cache-Control: max-age=0, private, must-revalidate` が付いている(2026-11-13 に、本番の `/api/articles` で確かめた)。AC-3 で、転送の後も同じであることを確かめる
+- **API のレスポンスは、CDN にキャッシュされない**。CDN は、Firebase Hosting が世界各地に持つキャッシュで、同じリクエストには Rails まで転送せずに、キャッシュしたレスポンスを返す。Firebase の文書によると、Cloud Run へ転送したリクエストのレスポンスは、初めの値では CDN にキャッシュされず、`Cache-Control` に `public` や `s-maxage` を付けたときだけキャッシュされる。`private` なら、キャッシュしてよいのはリクエストした人のブラウザだけになる。Rails のレスポンスには `Cache-Control: max-age=0, private, must-revalidate` が付いている(2026-11-13 に、本番の `/api/articles` で確かめた)。AC-3 で、転送の後も同じであることを確かめる
 - **Firebase Hosting の転送は、60秒で打ち切られる**。このアプリの API は、1秒もかからないので困らない
 - **ログインを許すドメインは、初めの値を確かめるだけにする**。Firebase Authentication は、初めから `localhost`、`knowledge-library-prod.firebaseapp.com`、`knowledge-library-prod.web.app` を許す。足すものはない。作業の後に、画面で確かめる

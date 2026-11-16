@@ -50,7 +50,7 @@ Google Cloud と Firebase の画面の操作は、オーナーがコンソール
 
 1. `docs/specs/032-firebase-hosting.md`:この仕様書
 2. `docs/adr/0008-proxy-api-through-firebase-hosting.md`:`/api` を Firebase Hosting から Cloud Run へ転送する判断
-3. `docs/notes/vue-firebase-hosting.html`:学習ノート。Rails と Vue の置き方の違い、`docker build` と `npm run build` の違い、3つのつなぎ(`/api` の取り次ぎ、設定値の埋め込み、Rails の `FIREBASE_PROJECT_ID`)の図
+3. `docs/notes/032-vue-firebase-hosting.html`:学習ノート。Rails と Vue の置き方の違い、`docker build` と `npm run build` の違い、3つのつなぎ(`/api` の取り次ぎ、設定値の埋め込み、Rails の `FIREBASE_PROJECT_ID`)の図
 4. `firebase.json`:Firebase Hosting の設定
 5. (ファイルではない操作)Authentication と Google ログイン → ウェブアプリの登録 → `web/.env.production.local`(オーナー)→ Cloud Run に `FIREBASE_PROJECT_ID` → Vue のビルドとデプロイ(オーナー)→ 確認
 6. `docs/production-setup.md`:「4. Firebase Hosting」の章。5 で実際に行った手順を書く

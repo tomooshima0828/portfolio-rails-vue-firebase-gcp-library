@@ -50,5 +50,5 @@
 
 - 仕様書:[docs/specs/032-firebase-hosting.md](../specs/032-firebase-hosting.md)
 - 判断の材料:[docs/notes/vue-production-hosting.html](../notes/vue-production-hosting.html)
-- 学習ノート:[docs/notes/vue-firebase-hosting.html](../notes/vue-firebase-hosting.html)
+- 学習ノート:[docs/notes/032-vue-firebase-hosting.html](../notes/032-vue-firebase-hosting.html)
 - Firebase の文書:[Serve dynamic content and host microservices with Cloud Run](https://firebase.google.com/docs/hosting/cloud-run)、[Manage cache behavior](https://firebase.google.com/docs/hosting/manage-cache)

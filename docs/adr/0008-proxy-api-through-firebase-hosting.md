@@ -30,7 +30,7 @@
 - **api と web を分けた構成のまま見せられる**。3 は、部品が一番少ないが、画面を直すだけでも Rails のイメージを作り直す必要があり、CDN もない。README の「api/ と web/ を分ける」構成とずれる。
 - **1 の損は、このアプリでは困らない**。損は次の2つ。
   - Firebase Hosting からの取り次ぎは、60秒で打ち切られる。このアプリの API は、1秒もかからない。
-  - Firebase Hosting の CDN が、API の答えを保存して、ほかの人に返すおそれがある。Firebase の文書によると、取り次いだ先(Cloud Run)の答えは、初めの値では CDN に保存されない。保存されるのは、答えに `Cache-Control: public` や `s-maxage` を付けたときで、`private` なら、保存してよいのは頼んだ人のブラウザだけになる。また、Firebase Hosting は、取り次いだ答えの `Vary` に `Authorization` を足すので、ID トークンが違えば、同じ答えは返らない。Rails の答えには `Cache-Control: max-age=0, private, must-revalidate` が付いている(2026-11-13 に、本番の `/api/articles` で確かめた)。取り次いだ後も同じであることを、仕様書 032 の AC-3 で確かめる。
+  - Firebase Hosting の CDN が、API のレスポンスをキャッシュして、ほかの人に返すおそれがある。Firebase の文書によると、Cloud Run に取り次いだリクエストのレスポンスは、初めの値では CDN にキャッシュされない。キャッシュされるのは、レスポンスの `Cache-Control` に `public` を付けたときで、`private` なら、キャッシュしてよいのはリクエストした人のブラウザだけになる。また、Firebase Hosting は、取り次いだレスポンスの `Vary` に `Authorization` を足すので、ID トークンが違えば、同じキャッシュは返らない。Rails のレスポンスには `Cache-Control: max-age=0, private, must-revalidate` が付いている(2026-11-13 に、本番の `/api/articles` で確かめた)。取り次いだ後も同じであることを、仕様書 032 の AC-3 で確かめる。
 
 4 は、取り次ぎの60秒の上限がなく、Firebase Hosting を通らない分だけ通り道が短い。2 は、Google Cloud だけで完結する。3 は、デプロイするものが1つで済む。1 を選ぶことで、これらの利点は捨てる。
 
@@ -38,7 +38,7 @@
 
 - rack-cors は、本番でも使わない。`api/Gemfile` の `gem "rack-cors"` は、コメントのまま残す。README の技術一覧で rack-cors を「Vue(別オリジン)からの呼び出し」としている行は、#32 の PR で直す。
 - 本番の URL は `https://knowledge-library-prod.web.app` になる。Cloud Run の URL(`run.app`)も、これまでどおり直接開ける。ブラウザの Vue は、`run.app` を使わない。
-- 今後、API の答えにキャッシュの指定を付けるときは、ログインした会員ごとに中身が変わる答えに `public` を付けない。付けると、Firebase Hosting の CDN が、ある会員の答えを別の人に返すおそれがある。
+- 今後、API のレスポンスにキャッシュの指定を付けるときは、ログインした会員ごとに中身が変わるレスポンスに `public` を付けない。付けると、Firebase Hosting の CDN が、ある会員あてのレスポンスを別の人に返すおそれがある。
 - 画面の URL(`/articles/new` など)を直接開いても、Firebase Hosting は `/index.html` を返し、Vue Router が画面を出す。`/api/**` の取り次ぎを先に書くので、API のリクエストは `/index.html` にならない。
 - Firebase Hosting は、取り次ぐリクエストから cookie を取り除く(`__session` という名前のものだけを通す)。今の Rails の API は、ログインを cookie ではなく `Authorization` ヘッダーの ID トークンで確かめるので、影響はない。今後 cookie を使うときは、この制約に合わせる。
 - Firebase Hosting を通ると、Rails が受け取るほかのヘッダー(送り主の IP など)が変わる可能性がある。今の Rails はそれを使っていないので、影響はない。どう変わるかは、確かめていない。

@@ -4,7 +4,7 @@
 
 - 作業はオーナーがコンソールで行う。画面の名前は、作業した日のもの。コンソールは見た目が変わることがあるので、名前が違ったら、意味の近いものを探す
 - カード番号や請求先アカウントの ID など、支払いの情報はこの文書に書かない
-- 開発用と本番用でプロジェクトを分ける理由は [ADR 0005](adr/0005-separate-dev-prod-projects.md)、全体の図は [docs/notes/gcp-projects-and-billing.html](notes/gcp-projects-and-billing.html)
+- 開発用と本番用でプロジェクトを分ける理由は [ADR 0005](adr/0005-separate-dev-prod-projects.md)、全体の図は [docs/notes/029-gcp-projects-and-billing.html](notes/029-gcp-projects-and-billing.html)
 
 ## 本番の値
 
@@ -94,7 +94,7 @@ gcloud services list --enabled --project=knowledge-library-prod \
 
 作業した日:2026-11-10〜2026-11-11
 
-Rails のイメージを Artifact Registry に置き、Cloud Run で動かし、`/up` が 200 を返すところまでを手で通す。DB はまだ繋がない(#31)。仕様は [docs/specs/030-cloud-run-deploy.md](specs/030-cloud-run-deploy.md)、仕組みの図は [docs/notes/cloud-run-deploy.html](notes/cloud-run-deploy.html)。
+Rails のイメージを Artifact Registry に置き、Cloud Run で動かし、`/up` が 200 を返すところまでを手で通す。DB はまだ繋がない(#31)。仕様は [docs/specs/030-cloud-run-deploy.md](specs/030-cloud-run-deploy.md)、仕組みの図は [docs/notes/030-cloud-run-deploy.html](notes/030-cloud-run-deploy.html)。
 
 各節の最後に、同じことをする gcloud のコマンドを添える。#30 では、2.5 のコマンド以外は実行していない(作業はコンソールで行った)。#33 で自動にするときの下書きとして残す。
 
@@ -347,7 +347,7 @@ gcloud run services describe api --region=$R --project=$P \
 
 作業した日:2026-11-11〜2026-11-13
 
-本番の DB(Cloud SQL for PostgreSQL)を作り、Cloud Run の Rails から繋いで、`GET /api/articles` が 200 を返すところまでを手で通す。仕様は [docs/specs/031-cloud-sql.md](specs/031-cloud-sql.md)、仕組みの図は [docs/notes/cloud-sql-connection.html](notes/cloud-sql-connection.html)。表をジョブで作る理由は [ADR 0006](adr/0006-run-migrations-with-cloud-run-jobs.md)、使わない期間の扱いは [ADR 0007](adr/0007-cloud-sql-idle-periods.md)。
+本番の DB(Cloud SQL for PostgreSQL)を作り、Cloud Run の Rails から繋いで、`GET /api/articles` が 200 を返すところまでを手で通す。仕様は [docs/specs/031-cloud-sql.md](specs/031-cloud-sql.md)、仕組みの図は [docs/notes/031-cloud-sql-connection.html](notes/031-cloud-sql-connection.html)。表をジョブで作る理由は [ADR 0006](adr/0006-run-migrations-with-cloud-run-jobs.md)、使わない期間の扱いは [ADR 0007](adr/0007-cloud-sql-idle-periods.md)。
 
 #31 では、Cloud SQL の30日間の無料お試しで DB を作った。お試しが切れる前に、お試しの DB を削除し、小さい DB を作り直す(3.12)。この章は、そのときの作り直しの手順書も兼ねる。
 

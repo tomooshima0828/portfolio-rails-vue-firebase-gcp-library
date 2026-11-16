@@ -16,6 +16,7 @@ Vue をビルドしたファイル(HTML、JavaScript、CSS)を Firebase Hosting 
   - Authentication を始め、ログインの方法に Google を足す
   - ウェブアプリを登録し、設定値(`apiKey` など)を控える
 - オーナーが、控えた設定値を `web/.env.production.local` に書く
+- イメージを作り直して Artifact Registry に push し、ジョブ `migrate` とサービス `api` を新しいイメージに替える。puma を 8.0.3 に上げた分を、本番に入れる(Issue #40)
 - Cloud Run のサービス `api` に、環境変数 `FIREBASE_PROJECT_ID` を足してデプロイし直す
 - オーナーが、手元のターミナルで Vue をビルドし、Firebase Hosting にデプロイする
 - ブラウザで、ログイン → 記事の投稿 → 一覧の表示を確かめる

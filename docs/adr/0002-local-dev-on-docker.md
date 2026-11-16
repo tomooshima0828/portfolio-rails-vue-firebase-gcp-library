@@ -39,4 +39,4 @@
 
 ## 参考
 
-- 2つの構成の比較:[docs/notes/local-dev-docker.html](../notes/local-dev-docker.html)
+- 2つの構成の比較:[docs/notes/005-local-dev-docker.html](../notes/005-local-dev-docker.html)

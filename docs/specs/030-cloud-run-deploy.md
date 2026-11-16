@@ -48,7 +48,7 @@ Google Cloud の操作は、オーナーがコンソールで行う。コンソ�
 セットアップのタスクなので、テストを先に書く順番の対象外。
 
 1. `docs/specs/030-cloud-run-deploy.md`:この仕様書
-2. `docs/notes/cloud-run-deploy.html`:学習ノート。イメージの置き場、動かす場所、鍵の金庫の関係と、鍵がどう渡るかの図
+2. `docs/notes/030-cloud-run-deploy.html`:学習ノート。イメージの置き場、動かす場所、鍵の金庫の関係と、鍵がどう渡るかの図
 3. `api/bin/docker-entrypoint`:`rails db:prepare` を実行する処理を外す
 4. (ファイルではない操作)API の有効化 → Artifact Registry のリポジトリ → サービスアカウント → シークレット(オーナー)→ 権限を付けずにデプロイして失敗を確かめる(AC-4)→ 権限の付与 → デプロイ → 確認
 5. `docs/production-setup.md`:「2. Cloud Run」の章。4 で実際に行った手順を書く

@@ -22,6 +22,7 @@
 | Issue #29 | 本番の箱と、財布と、見張り | 本番の Google Cloud プロジェクト、請求先アカウント、予算アラートの関係 | [029-gcp-projects-and-billing.html](029-gcp-projects-and-billing.html) |
 | Issue #30 | 置き場と、動かす場所と、鍵の金庫 | Rails を Cloud Run で動かすまでの流れと、master.key の渡り方 | [030-cloud-run-deploy.html](030-cloud-run-deploy.html) |
 | Issue #31 | データベースと、接続口と、2つの門 | Rails から Cloud SQL までの繋がり方と、DB のパスワードの渡り方 | [031-cloud-sql-connection.html](031-cloud-sql-connection.html) |
+| Issue #32 | Firebase Hosting と、3つのつなぎ | Vue を Firebase Hosting で本番に置き、ログイン → 投稿 → 一覧を通す流れ。`docker build` と `npm run build` の違い | [032-vue-firebase-hosting.html](032-vue-firebase-hosting.html) |
 
 ## Issue に紐づかないもの
 

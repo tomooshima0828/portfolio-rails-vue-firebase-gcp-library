@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firebase と Google Cloud の関係</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Issue に紐づかない学習ノート(layered-tech-explanation スキルのひな形から作った)。
+   色の割り当て:a1=オーナー、a2=私たちのコード(Vue、Rails)と「このアプリで使う」、a3=Firebase の機能とコンソール、
+   a4=共通の仕組み(IAM、課金)、a5=Google Cloud の機能とコンソール、a6=ブラウザ。
+   bx-later は「後で使う」、bx-off は「使わない」 */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .xs { font-size: 10.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .bx-a5w { fill: var(--surface); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-n { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+table.story th:first-child { white-space: nowrap; }
+table.rowhead td:first-child { white-space: nowrap; font-weight: 700; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+/* コードの字体は合字(=> が矢印になる、など)を切る。VS Code の見た目と食い違わないように */
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+
+svg .bx-a3w { fill: var(--surface); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-on { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-later { fill: var(--surface); stroke: var(--a2); stroke-width: 1.5; stroke-dasharray: 5 3; }
+svg .bx-off { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+svg .bx-common { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">全体の位置づけ · 学習メモ</p>
+    <h1>Firebase と Google Cloud の関係</h1>
+    <p class="lead">このアプリは、Firebase のコンソールと Google Cloud のコンソールの両方で設定を行います。2つは別のサービスに見えますが、中身は同じ1つのプロジェクトです。このノートは、2つの関係と、このアプリでどちらの機能をどう使っているかを、1枚にまとめたものです。特定の Issue のためではなく、フェーズ2以降の作業で迷ったときに戻る地図として使います。</p>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>なぜ Firebase と Google Cloud の関係を知っておくと迷わないのか(1章)</li>
+        <li>1つのプロジェクトを、2つのコンソールから見ている構造(2章)</li>
+        <li>ブラウザから直接呼ぶ機能と、Rails から使う機能の分かれ方(3章)</li>
+        <li>Firebase の機能と、Google Cloud 側の中身の対応(4章)</li>
+        <li>このアプリで使う機能と、使わない機能(5章)</li>
+        <li>どちらのコンソールで操作するか(6章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:なぜ関係を知っておくと迷わないのか</h2>
+    <p>このアプリの本番環境は、Issue #29 で作ったプロジェクト <code>knowledge-library-prod</code> の中にあります。ところが、作業によって開くコンソールが違います。</p>
+    <ul>
+      <li>Issue #29 では、Firebase のコンソールでプロジェクトを作り、Blaze プランに上げた</li>
+      <li>Issue #30・#31 では、Google Cloud のコンソールで Cloud Run と Cloud SQL を作った</li>
+      <li>Issue #32 では、Firebase のコンソールで Firebase Auth を設定し、Firebase Hosting にデプロイする</li>
+    </ul>
+    <p>そのため、「Firebase のプロジェクトと Google Cloud のプロジェクトは別のものなのか」「どの機能をどちらで操作するのか」「料金はどちらにかかるのか」で迷いやすくなります。答えは1つで、<strong>Firebase のプロジェクトは、Firebase の機能を足した Google Cloud のプロジェクトそのもの</strong> です。プロジェクト ID も、課金も、権限(IAM)も、1つを共有しています。</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">2</span>1つのプロジェクトと、2つのコンソール</h2>
+    <p>Google Cloud のプロジェクトは、機能(Cloud Run、Firestore など)と、共通の仕組み(権限、課金、API の有効化)を入れる箱です。この箱に「Firebase を使う」という印を付けると、Firebase のコンソールからも開けるようになります。Issue #29 で Firebase のコンソールからプロジェクトを作ったので、<code>knowledge-library-prod</code> には、初めからこの印(<code>firebase=enabled</code> のラベル)が付いています。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 760 380" role="img" aria-label="1つのプロジェクト knowledge-library-prod の中に、Firebase の機能(Firebase Auth、Firebase Hosting、Firestore、ほかの Firebase の機能)と、Google Cloud の機能(Cloud Run、Cloud SQL、Secret Manager、Artifact Registry)と、共通の仕組み(IAM、課金、API の有効化)がある。Firebase のコンソールは主に Firebase の機能を開き、Google Cloud のコンソールはプロジェクト全体を開く">
+          <defs>
+            <marker id="f1-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f1-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+          <rect x="60" y="20" width="220" height="56" rx="8" class="bx-a3"/>
+          <text x="170" y="44" text-anchor="middle" class="b">Firebase のコンソール</text>
+          <text x="170" y="64" text-anchor="middle" class="m">console.firebase.google.com</text>
+          <rect x="480" y="20" width="220" height="56" rx="8" class="bx-a5"/>
+          <text x="590" y="44" text-anchor="middle" class="b">Google Cloud のコンソール</text>
+          <text x="590" y="64" text-anchor="middle" class="m">console.cloud.google.com</text>
+
+          <rect x="20" y="110" width="720" height="252" rx="12" class="bx-frame"/>
+          <text x="380" y="132" class="b a">プロジェクト knowledge-library-prod(1つだけ)</text>
+
+          <rect x="40" y="145" width="310" height="150" rx="10" class="bx-a3"/>
+          <text x="195" y="167" text-anchor="middle" class="b a">Firebase の機能</text>
+          <rect x="55" y="180" width="135" height="44" rx="7" class="bx-a3w"/>
+          <text x="122" y="207" text-anchor="middle" class="b a">Firebase Auth</text>
+          <rect x="205" y="180" width="135" height="44" rx="7" class="bx-a3w"/>
+          <text x="272" y="207" text-anchor="middle" class="b a">Firebase Hosting</text>
+          <rect x="55" y="236" width="135" height="44" rx="7" class="bx-a3w"/>
+          <text x="122" y="263" text-anchor="middle" class="b a">Firestore</text>
+          <rect x="205" y="236" width="135" height="44" rx="7" class="bx-off"/>
+          <text x="272" y="263" text-anchor="middle" class="s">ほかの機能</text>
+
+          <rect x="410" y="145" width="310" height="150" rx="10" class="bx-a5"/>
+          <text x="565" y="167" text-anchor="middle" class="b a">Google Cloud の機能</text>
+          <rect x="425" y="180" width="135" height="44" rx="7" class="bx-a5w"/>
+          <text x="492" y="207" text-anchor="middle" class="b a">Cloud Run</text>
+          <rect x="575" y="180" width="135" height="44" rx="7" class="bx-a5w"/>
+          <text x="642" y="207" text-anchor="middle" class="b a">Cloud SQL</text>
+          <rect x="425" y="236" width="135" height="44" rx="7" class="bx-a5w"/>
+          <text x="492" y="263" text-anchor="middle" class="b a">Secret Manager</text>
+          <rect x="575" y="236" width="135" height="44" rx="7" class="bx-a5w"/>
+          <text x="642" y="263" text-anchor="middle" class="b a">Artifact Registry</text>
+
+          <rect x="40" y="308" width="680" height="40" rx="8" class="bx-common"/>
+          <text x="380" y="333" text-anchor="middle" class="a">共通:IAM(誰が何をしてよいか)、課金(請求先アカウント・予算)、API の有効化</text>
+
+          <line x1="170" y1="76" x2="170" y2="141" class="ln-a3" marker-end="url(#f1-a3)"/>
+          <text x="180" y="98" class="s">主に Firebase の機能を開く</text>
+          <line x1="590" y1="76" x2="590" y2="106" class="ln-a5" marker-end="url(#f1-a5)"/>
+          <text x="600" y="96" class="s">箱の全体を開く</text>
+        </svg>
+      </div>
+      <figcaption>図1:箱は1つで、窓が2つあります。<span class="t-a5">Google Cloud のコンソール</span> は、Firebase の機能が使っている API や権限、課金も含めて、箱の全体を開けます。<span class="t-a3">Firebase のコンソール</span> は、Firebase の機能を使いやすくまとめた窓で、Cloud Run や Cloud SQL の画面はありません。<br>(簡略化:機能は、このアプリに関係するものだけを描きました)</figcaption>
+    </figure>
+    <div class="note">
+      <p><strong>Firebase の料金プランと課金の関係:</strong>Firebase の「Spark プラン」(無料)と「Blaze プラン」(従量課金)は、プロジェクトに Google Cloud の請求先アカウントをつないでいるかどうかの違いです。Issue #29 で Blaze に上げたことは、Google Cloud の側から見ると、請求先アカウントをつないだことと同じです。そのため、Firebase の機能の料金も、Cloud Run や Cloud SQL の料金も、同じ請求先アカウントに請求され、同じ予算アラート(月 3,000円)で見張られます。</p>
+    </div>
+  </section>
+
+  <section id="callers">
+    <h2><span class="num">3</span>ブラウザから直接呼ぶ機能と、Rails から使う機能</h2>
+    <p>Firebase の機能と Google Cloud の機能は、「誰が呼ぶか」で分けると覚えやすくなります。Firebase の機能の多くは、ブラウザの JavaScript から、Firebase の SDK(Firebase が配るライブラリ)を使って直接呼ぶように作られています。Google Cloud の機能は、サーバー(このアプリでは Rails)から使うものが中心です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 800 340" role="img" aria-label="ブラウザの中の Vue は、Firebase Auth にログインを、Firebase Hosting に画面と /api を、フェーズ4では Firestore に読み書きを頼む。Firebase Hosting は /api を Cloud Run に転送する。Cloud Run の Rails は Cloud SQL、Secret Manager を使い、将来は Active Storage で Cloud Storage を使う">
+          <defs>
+            <marker id="f2-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f2-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+          <rect x="10" y="100" width="140" height="110" rx="12" class="bx-frame"/>
+          <rect x="25" y="125" width="110" height="56" rx="8" class="bx-a2"/>
+          <text x="80" y="149" text-anchor="middle" class="b">Vue</text>
+          <text x="80" y="169" text-anchor="middle" class="s">画面</text>
+          <text x="22" y="200" class="s">ブラウザ</text>
+
+          <rect x="230" y="20" width="180" height="300" rx="10" class="bx-a3"/>
+          <text x="320" y="42" text-anchor="middle" class="b a">ブラウザから直接呼ぶ</text>
+          <text x="320" y="60" text-anchor="middle" class="s">Firebase の機能</text>
+          <rect x="245" y="80" width="150" height="50" rx="7" class="bx-a3w"/>
+          <text x="320" y="102" text-anchor="middle" class="b a">Firebase Auth</text>
+          <text x="320" y="120" text-anchor="middle" class="xs">ログイン</text>
+          <rect x="245" y="150" width="150" height="50" rx="7" class="bx-a3w"/>
+          <text x="320" y="172" text-anchor="middle" class="b a">Firebase Hosting</text>
+          <text x="320" y="190" text-anchor="middle" class="xs">ファイルを配る</text>
+          <rect x="245" y="245" width="150" height="50" rx="7" class="bx-later"/>
+          <text x="320" y="267" text-anchor="middle" class="b a">Firestore</text>
+          <text x="320" y="285" text-anchor="middle" class="xs">コメント(フェーズ4)</text>
+
+          <rect x="450" y="20" width="340" height="300" rx="10" class="bx-a5"/>
+          <text x="620" y="42" text-anchor="middle" class="b a">Rails から使う</text>
+          <text x="620" y="60" text-anchor="middle" class="s">Google Cloud の機能</text>
+          <rect x="470" y="150" width="130" height="50" rx="7" class="bx-a5w"/>
+          <text x="535" y="172" text-anchor="middle" class="b a">Cloud Run</text>
+          <text x="535" y="190" text-anchor="middle" class="xs">Rails が動く</text>
+          <rect x="650" y="80" width="125" height="50" rx="7" class="bx-a5w"/>
+          <text x="712" y="102" text-anchor="middle" class="b a">Cloud SQL</text>
+          <text x="712" y="120" text-anchor="middle" class="xs">データベース</text>
+          <rect x="650" y="150" width="125" height="50" rx="7" class="bx-a5w"/>
+          <text x="712" y="172" text-anchor="middle" class="b a">Secret Manager</text>
+          <text x="712" y="190" text-anchor="middle" class="xs">鍵とパスワード</text>
+          <rect x="650" y="245" width="125" height="50" rx="7" class="bx-later"/>
+          <text x="712" y="267" text-anchor="middle" class="b a">Cloud Storage</text>
+          <text x="712" y="285" text-anchor="middle" class="xs">画像(未実装)</text>
+
+          <path d="M135 138 H160 V105 H241" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="200" y="99" text-anchor="middle" class="xs">ログイン</text>
+          <path d="M135 160 H175 V175 H241" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="208" y="169" text-anchor="middle" class="xs">画面・/api</text>
+          <path d="M135 172 H150 V270 H241" class="ln-a2 dash" marker-end="url(#f2-a2)"/>
+          <text x="196" y="264" text-anchor="middle" class="xs">読み書き</text>
+
+          <line x1="395" y1="175" x2="466" y2="175" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="430" y="167" text-anchor="middle" class="xs">転送</text>
+
+          <line x1="600" y1="162" x2="646" y2="110" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <line x1="600" y1="175" x2="646" y2="175" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <line x1="600" y1="188" x2="646" y2="265" class="ln-a5 dash" marker-end="url(#f2-a5)"/>
+        </svg>
+      </div>
+      <figcaption>図2:破線は、まだ作っていないもの(フェーズ4の Firestore、未実装の画像)です。<span class="t-a2">Vue</span> から Cloud Run への直接の線はなく、API のリクエストは <span class="t-a3">Firebase Hosting</span> を通ります(Issue #32 の ADR 0008)。<span class="t-a2">Vue</span> から Cloud SQL への線もありません。データベースに触れるのは、いつも Rails です。</figcaption>
+    </figure>
+    <p>この分かれ方には理由があります。Firebase の機能は、サーバーを書かずにアプリを作れるように、ブラウザから安全に呼べる仕組み(Firebase Auth の ID トークン、Firestore のセキュリティルール)を持っています。一方、Cloud SQL のようなデータベースは、ブラウザから直接触らせず、サーバーが間に立って中身を確かめてから読み書きします。このアプリは、記事などのデータを Rails(Cloud SQL)に置き、リアルタイムに反映したいコメントとリアクションだけを Firestore に置く、と決めています(<a href="../architecture.md">architecture.md</a>)。</p>
+    <div class="note">
+      <p><strong>例外:Firebase Hosting は SDK で呼ばない。</strong>ブラウザは、普通の Web サイトと同じように、URL を開いて Firebase Hosting からファイルをもらいます。図2 では「ブラウザが直接やりとりする」という意味で、左の列に入れています。</p>
+    </div>
+  </section>
+
+  <section id="mapping">
+    <h2><span class="num">4</span>Firebase の機能と、Google Cloud 側の中身</h2>
+    <p>Firebase の機能の多くは、Google Cloud の機能に、ブラウザから使いやすい SDK と、Firebase のコンソールの画面をかぶせたものです。そのため、同じものが、Google Cloud のコンソールからも見えます。</p>
+    <div class="tablewrap">
+      <table class="rowhead">
+        <thead><tr><th>Firebase の機能</th><th>Google Cloud 側の中身</th><th>Google Cloud のコンソールでの見え方</th></tr></thead>
+        <tbody>
+          <tr><td>Firebase Authentication(Firebase Auth)</td><td>Identity Platform と同じ仕組み。API は Identity Toolkit API</td><td>「API とサービス」の一覧に Identity Toolkit API として出る。設定は Firebase のコンソールで行う</td></tr>
+          <tr><td>Firebase Hosting</td><td>Firebase 独自。Google Cloud に同じ名前の製品はない</td><td>「API とサービス」の一覧に Firebase Hosting API として出るだけ。設定は Firebase のコンソールと <code>firebase.json</code> で行う</td></tr>
+          <tr><td>Cloud Firestore</td><td>Google Cloud の Firestore そのもの</td><td>「Firestore」の画面で、同じデータベースが見える</td></tr>
+          <tr><td>Cloud Storage for Firebase</td><td>Google Cloud の Cloud Storage のバケット</td><td>「Cloud Storage」の画面で、同じバケットが見える</td></tr>
+          <tr><td>Cloud Functions for Firebase</td><td>Cloud Run functions(第2世代は Cloud Run の上で動く)</td><td>「Cloud Run」の画面に出る</td></tr>
+          <tr><td>Blaze プラン</td><td>プロジェクトに、Cloud Billing の請求先アカウントをつないだ状態</td><td>「お支払い」の画面</td></tr>
+          <tr><td>プロジェクトのメンバー</td><td>IAM(誰に、どの役割を付けるか)</td><td>「IAM と管理」の画面</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>反対に、Cloud Run、Cloud SQL、Secret Manager、Artifact Registry には、Firebase の名前の付いた版はありません。Google Cloud のコンソールで操作します。</p>
+    <div class="note">
+      <p><strong>確かめていないこと:</strong>Firebase Auth と Identity Platform の関係は、Google の文書の説明によるものです。このプロジェクトでは、Firebase Auth を Identity Platform に切り替える(アップグレードする)操作はしていません。Identity Toolkit API が有効になっていることだけを、gcloud で確かめました(2026-11-16)。</p>
+    </div>
+  </section>
+
+  <section id="use">
+    <h2><span class="num">5</span>このアプリで使う機能と、使わない機能</h2>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 760 360" role="img" aria-label="このアプリで使う機能。Firebase の機能では、Authentication と Hosting を使い、Firestore はフェーズ4で使う。Cloud Storage for Firebase、Cloud Functions、Realtime Database、Analytics などは使わない。Google Cloud の機能では、Cloud Run、Cloud SQL、Secret Manager、Artifact Registry を使い、Cloud Storage と Cloud Logging は後で使う">
+          <text x="20" y="24" class="b a">Firebase の機能</text>
+          <rect x="20" y="34" width="170" height="56" rx="8" class="bx-on"/>
+          <text x="105" y="58" text-anchor="middle" class="b a">Authentication</text>
+          <text x="105" y="78" text-anchor="middle" class="xs">使う(Issue #11・#32)</text>
+          <rect x="202" y="34" width="170" height="56" rx="8" class="bx-on"/>
+          <text x="287" y="58" text-anchor="middle" class="b a">Hosting</text>
+          <text x="287" y="78" text-anchor="middle" class="xs">使う(Issue #32)</text>
+          <rect x="384" y="34" width="170" height="56" rx="8" class="bx-later"/>
+          <text x="469" y="58" text-anchor="middle" class="b a">Firestore</text>
+          <text x="469" y="78" text-anchor="middle" class="xs">後で使う(フェーズ4)</text>
+          <rect x="566" y="34" width="170" height="56" rx="8" class="bx-off"/>
+          <text x="651" y="58" text-anchor="middle" class="b a">Cloud Storage</text>
+          <text x="651" y="78" text-anchor="middle" class="xs">for Firebase:使わない</text>
+          <rect x="20" y="102" width="170" height="56" rx="8" class="bx-off"/>
+          <text x="105" y="126" text-anchor="middle" class="b a">Cloud Functions</text>
+          <text x="105" y="146" text-anchor="middle" class="xs">使わない</text>
+          <rect x="202" y="102" width="170" height="56" rx="8" class="bx-off"/>
+          <text x="287" y="126" text-anchor="middle" class="b a">Realtime Database</text>
+          <text x="287" y="146" text-anchor="middle" class="xs">使わない</text>
+          <rect x="384" y="102" width="170" height="56" rx="8" class="bx-off"/>
+          <text x="469" y="126" text-anchor="middle" class="b a">Analytics</text>
+          <text x="469" y="146" text-anchor="middle" class="xs">使わない</text>
+          <rect x="566" y="102" width="170" height="56" rx="8" class="bx-off"/>
+          <text x="651" y="126" text-anchor="middle" class="b a">Remote Config など</text>
+          <text x="651" y="146" text-anchor="middle" class="xs">使わない</text>
+
+          <text x="20" y="196" class="b a">Google Cloud の機能</text>
+          <rect x="20" y="206" width="170" height="56" rx="8" class="bx-on"/>
+          <text x="105" y="230" text-anchor="middle" class="b a">Cloud Run</text>
+          <text x="105" y="250" text-anchor="middle" class="xs">使う(Issue #30)</text>
+          <rect x="202" y="206" width="170" height="56" rx="8" class="bx-on"/>
+          <text x="287" y="230" text-anchor="middle" class="b a">Cloud SQL</text>
+          <text x="287" y="250" text-anchor="middle" class="xs">使う(Issue #31)</text>
+          <rect x="384" y="206" width="170" height="56" rx="8" class="bx-on"/>
+          <text x="469" y="230" text-anchor="middle" class="b a">Secret Manager</text>
+          <text x="469" y="250" text-anchor="middle" class="xs">使う(Issue #30・#31)</text>
+          <rect x="566" y="206" width="170" height="56" rx="8" class="bx-on"/>
+          <text x="651" y="230" text-anchor="middle" class="b a">Artifact Registry</text>
+          <text x="651" y="250" text-anchor="middle" class="xs">使う(Issue #30)</text>
+          <rect x="20" y="274" width="170" height="56" rx="8" class="bx-later"/>
+          <text x="105" y="298" text-anchor="middle" class="b a">Cloud Storage</text>
+          <text x="105" y="318" text-anchor="middle" class="xs">後で使う(画像)</text>
+          <rect x="202" y="274" width="170" height="56" rx="8" class="bx-later"/>
+          <text x="287" y="298" text-anchor="middle" class="b a">Cloud Logging</text>
+          <text x="287" y="318" text-anchor="middle" class="xs">後で使う(Issue #34)</text>
+
+          <rect x="420" y="282" width="22" height="14" rx="3" class="bx-on"/>
+          <text x="450" y="294" class="s">使う</text>
+          <rect x="500" y="282" width="22" height="14" rx="3" class="bx-later"/>
+          <text x="530" y="294" class="s">後で使う</text>
+          <rect x="600" y="282" width="22" height="14" rx="3" class="bx-off"/>
+          <text x="630" y="294" class="s">使わない</text>
+        </svg>
+      </div>
+      <figcaption>図3:Firebase の機能で使うのは、Authentication と Hosting と、フェーズ4の Firestore の3つだけです。<br>(簡略化:Firebase の機能はほかにもあります。使わないものは、名前を知っておくと迷わないものだけを並べました。Cloud Logging は、Cloud Run を使うと自動でログが入るので、設定の作業は Issue #34 で行います)</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table class="rowhead">
+        <thead><tr><th>機能</th><th>使わない理由</th></tr></thead>
+        <tbody>
+          <tr><td>Cloud Storage for Firebase</td><td>画像は、Rails の Active Storage から、Google Cloud の Cloud Storage に置く予定。ブラウザから直接ファイルを置く形にはしない</td></tr>
+          <tr><td>Cloud Functions for Firebase</td><td>サーバーの処理は、Cloud Run の Rails で書く</td></tr>
+          <tr><td>Realtime Database</td><td>リアルタイムに反映するデータは、Firestore に置く(<a href="../architecture.md">architecture.md</a>)</td></tr>
+          <tr><td>Analytics、Remote Config など</td><td>このアプリの目的に要らない。Issue #29 でプロジェクトを作るときに、Google アナリティクスは使わないと決めた</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Firebase の機能の API の一部(Remote Config など)は、使っていなくても、Firebase を足したときに自動で有効になっています。有効になっているだけでは料金はかかりません。</p>
+  </section>
+
+  <section id="where">
+    <h2><span class="num">6</span>どちらのコンソールで操作するか</h2>
+    <p>このアプリの作業で、どちらのコンソールを開くかの一覧です。手順は <a href="../production-setup.md">production-setup.md</a> にあります。</p>
+    <div class="tablewrap">
+      <table class="rowhead">
+        <thead><tr><th>作業</th><th>開くコンソール</th><th>Issue</th></tr></thead>
+        <tbody>
+          <tr><td>プロジェクトを作る、Blaze プランに上げる</td><td>Firebase のコンソール</td><td>Issue #29</td></tr>
+          <tr><td>予算アラートを直す</td><td>Google Cloud のコンソール(「お支払い」)</td><td>Issue #29</td></tr>
+          <tr><td>API を有効にする、IAM の権限を付ける</td><td>Google Cloud のコンソール</td><td>Issue #30・#31</td></tr>
+          <tr><td>Cloud Run、Artifact Registry、Secret Manager、Cloud SQL</td><td>Google Cloud のコンソール</td><td>Issue #30・#31</td></tr>
+          <tr class="now"><td>Google ログインを有効にする、ウェブアプリを登録する</td><td>Firebase のコンソール(「Authentication」「プロジェクトの設定」)</td><td>Issue #32</td></tr>
+          <tr class="now"><td>Vue のファイルをデプロイする</td><td>コンソールではなく、手元のターミナルの Firebase CLI(<code>firebase deploy</code>)</td><td>Issue #32</td></tr>
+          <tr><td>Firestore のデータベースとセキュリティルール</td><td>Firebase のコンソール(ルールは Firebase CLI でもデプロイできる)</td><td>フェーズ4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>迷ったら、「名前に Firebase が付く機能(または Firestore)なら Firebase のコンソール、それ以外は Google Cloud のコンソール」と覚えておけば、ほぼ合います。権限と課金は、どの機能のものでも Google Cloud のコンソールで扱います。</p>
+    <div class="note">
+      <p><strong>開発用のプロジェクトとの違い:</strong>開発用の <code>knowledge-library-dev</code> も、同じ形の Google Cloud のプロジェクトです。ただ、Spark プラン(請求先アカウントをつないでいない)のままで、使っているのは Firebase Auth だけです。Cloud Run や Cloud SQL は請求先アカウントがないと使えないので、本番用にだけあります(<a href="../adr/0005-separate-dev-prod-projects.md">ADR 0005</a>)。</p>
+    </div>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">7</span>確認用の問い</h2>
+    <ol class="check">
+      <li>Firebase のプロジェクト <code>knowledge-library-prod</code> と、Google Cloud のプロジェクト <code>knowledge-library-prod</code> は、別のものですか。<span class="hint">1章と2章の図1 です。</span></li>
+      <li>Firebase Hosting の料金と Cloud SQL の料金は、どこに請求され、何で見張られていますか。<span class="hint">2章の「Firebase の料金プランと課金の関係」です。</span></li>
+      <li>ブラウザの Vue から直接呼ぶ機能と、Rails から使う機能を、それぞれ2つずつ挙げてください。Cloud SQL をブラウザから直接呼ばないのはなぜですか。<span class="hint">3章の図2 と、その下の説明です。</span></li>
+      <li>Firestore のデータは、Google Cloud のコンソールから見えますか。<span class="hint">4章の表です。</span></li>
+      <li>Google ログインを有効にするのは、どちらのコンソールですか。IAM の権限を付けるのは、どちらですか。<span class="hint">6章の表です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

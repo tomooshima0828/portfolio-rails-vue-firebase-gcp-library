@@ -41,5 +41,5 @@ Cloud Run や Cloud SQL を使うには、プロジェクトに請求先アカ�
 ## 参考
 
 - 仕様書:[docs/specs/029-gcp-project.md](../specs/029-gcp-project.md)
-- 図つきの説明:[docs/notes/gcp-projects-and-billing.html](../notes/gcp-projects-and-billing.html)
+- 図つきの説明:[docs/notes/029-gcp-projects-and-billing.html](../notes/029-gcp-projects-and-billing.html)
 - ローカルのログインに開発用のプロジェクトを使う判断:[ADR 0004](0004-local-firebase-auth.md)

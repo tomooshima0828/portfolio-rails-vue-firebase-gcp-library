@@ -230,9 +230,9 @@ table.routes td:first-child { white-space: nowrap; font-weight: 700; }
 
 <main>
   <header class="top">
-    <p class="eyebrow">Issue #11 · 学習メモ · <a href="vue-google-login.html">全体のノート</a>と<a href="vue-login-files.html">ファイルのノート</a>の続き</p>
+    <p class="eyebrow">Issue #11 · 学習メモ · <a href="011-vue-google-login.html">全体のノート</a>と<a href="011-vue-login-files.html">ファイルのノート</a>の続き</p>
     <h1>コードで追うログイン</h1>
-    <p class="lead"><a href="vue-google-login.html">全体のノート</a>(vue-google-login.html)で、ログインの流れを見ました。<a href="vue-login-files.html">ファイルのノート</a>(vue-login-files.html)で、ファイルどうしのつながりを見ました。このページでは、実際のコードを、ものが渡る順番に6か所読みます。どの行が、ノートの図のどの矢印にあたるかを、1行ずつ対応させます。</p>
+    <p class="lead"><a href="011-vue-google-login.html">全体のノート</a>(011-vue-google-login.html)で、ログインの流れを見ました。<a href="011-vue-login-files.html">ファイルのノート</a>(011-vue-login-files.html)で、ファイルどうしのつながりを見ました。このページでは、実際のコードを、ものが渡る順番に6か所読みます。どの行が、ノートの図のどの矢印にあたるかを、1行ずつ対応させます。</p>
     <div class="answer">
       <p>このページで分かること</p>
       <ul>
@@ -354,7 +354,7 @@ table.routes td:first-child { white-space: nowrap; font-weight: 700; }
   <section id="stop1">
     <h2><span class="num">3</span>順1 firebase.ts:ログインの窓口を作る</h2>
     <ol class="route" aria-label="今ここ"><li class="on">順1 firebase.ts</li><li>順2 stores/auth.ts</li><li>順3 App.vue</li><li>順4 api/client.ts</li><li>順5 vite.config.ts</li><li>順6 Rails</li></ol>
-    <div class="io"><div><span class="k">前の順から受け取るもの</span><code>.env</code> に書いた4つの設定値。Docker Compose がコンテナの環境変数にし、Vite が <code>import.meta.env</code> に入れたもの(<a href="vue-login-files.html#config">ファイルのノートの図2</a>)</div><div><span class="k">次の順へ渡すもの</span>ログインの窓口 <code>auth</code>。順2 の <code>stores/auth.ts</code> と、順4 の <code>api/client.ts</code> が受け取る。どちらも同じ1つ</div></div>
+    <div class="io"><div><span class="k">前の順から受け取るもの</span><code>.env</code> に書いた4つの設定値。Docker Compose がコンテナの環境変数にし、Vite が <code>import.meta.env</code> に入れたもの(<a href="011-vue-login-files.html#config">ファイルのノートの図2</a>)</div><div><span class="k">次の順へ渡すもの</span>ログインの窓口 <code>auth</code>。順2 の <code>stores/auth.ts</code> と、順4 の <code>api/client.ts</code> が受け取る。どちらも同じ1つ</div></div>
     <p class="role"><span class="t-a2">firebase.ts</span> は、Firebase の SDK に「どのプロジェクトとやりとりするか」を伝え、ログインの窓口を1つ作って書き出します。Rails でいうと、<code>config/initializers/</code> に置く初期化のファイルに近いものです。</p>
     <p class="file">web/src/firebase.ts</p>
 <pre class="code"><code><span class="l"><span class="n">1</span>import { initializeApp } from 'firebase/app'</span><span class="l"><span class="n">2</span>import { getAuth } from 'firebase/auth'</span><span class="l"><span class="n">3</span></span><span class="l"><span class="n">4</span>// .env の設定値を渡して、どの Firebase のプロジェクトとやりとりするかを覚えた app を作る</span><span class="l hl"><span class="n">5</span>const app = initializeApp({</span><span class="l hl"><span class="n">6</span>  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,</span><span class="l hl"><span class="n">7</span>  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,</span><span class="l hl"><span class="n">8</span>  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,</span><span class="l hl"><span class="n">9</span>  appId: import.meta.env.VITE_FIREBASE_APP_ID,</span><span class="l hl"><span class="n">10</span>})</span><span class="l"><span class="n">11</span></span><span class="l"><span class="n">12</span>// ログインの窓口。ストアと apiFetch が同じ1つの auth を見るように、ここで1回だけ作る</span><span class="l hl"><span class="n">13</span>export const auth = getAuth(app)</span></code></pre>
@@ -461,7 +461,7 @@ table.routes td:first-child { white-space: nowrap; font-weight: 700; }
       <li><strong>私たちのコードには、取り直す手段がない。</strong>取り直すための情報も、Google とのやりとりも、SDK が持っています。</li>
       <li><strong>毎回もらっても、損はない。</strong>期限内なら、SDK は通信せずにすぐ返します。</li>
     </ol>
-    <p>まとめると、取っておく得はなく、古くなる損だけがあります。詳しくは<a href="vue-google-login.html#token">全体のノートの4章</a>にあります。</p>
+    <p>まとめると、取っておく得はなく、古くなる損だけがあります。詳しくは<a href="011-vue-google-login.html#token">全体のノートの4章</a>にあります。</p>
     <p>もう1つ、未ログインのときも、<code>Authorization</code> を付けずに送ります(7行目の <code>if</code> を通らない)。記事の一覧(<code>GET /api/articles</code>)のように、ログインしなくても呼べる API があるためです(完了条件 AC-7)。</p>
     <h3>確かめ方</h3>
     <ul>
@@ -526,7 +526,7 @@ table.routes td:first-child { white-space: nowrap; font-weight: 700; }
     <p class="file">api/app/lib/firebase_id_token_verifier.rb</p>
 <pre class="code rails"><code><span class="l"><span class="n">28</span>    # Google から公開鍵の一覧と、キャッシュの期間(秒)を取ってくる。テストでは差し替える</span><span class="l"><span class="n">29</span>    def download_jwks</span><span class="l hl"><span class="n">30</span>      response = Net::HTTP.get_response(JWKS_URL)</span><span class="l"><span class="n">31</span>      response.value</span><span class="l"><span class="n">32</span>      [ JSON.parse(response.body), response["Cache-Control"][/max-age=(\d+)/, 1].to_i ]</span><span class="l"><span class="n">33</span>    end</span></code></pre>
     <div class="tablewrap"><table class="lines rails"><thead><tr><th>行</th><th>何をしているか</th><th>ノートとの対応</th></tr></thead><tbody><tr><td>1</td><td><code>Net::HTTP</code> を読み込む。この PR で足した行</td><td></td></tr><tr><td>30</td><td>Google の公開鍵の URL(8行目の <code>JWKS_URL</code>)に取りに行く</td><td></td></tr><tr><td>31</td><td>失敗(200 以外)なら、例外にする</td><td></td></tr><tr><td>32</td><td>公開鍵の一覧と、何秒取っておいてよいか(<code>max-age</code>)を返す</td><td></td></tr></tbody></table></div>
-    <div class="note"><p>署名と公開鍵の仕組みは、<a href="id-token-signature.html">id-token-signature.html</a> と <a href="firebase-public-key.html">firebase-public-key.html</a> に詳しくあります。</p></div>
+    <div class="note"><p>署名と公開鍵の仕組みは、<a href="008-id-token-signature.html">008-id-token-signature.html</a> と <a href="008-firebase-public-key.html">008-firebase-public-key.html</a> に詳しくあります。</p></div>
 
     <h3>なぜ1行目が抜けていたのに、テストは通っていたのか</h3>
     <p>Issue #8 のテストは、外へ通信しないように、<code>download_jwks</code>(29行目)を偽物に差し替えていました。そのため、30行目の <code>Net::HTTP</code> は、テストでは一度も動いていませんでした。本物の Google に通信したのは今回の手動確認が初めてで、そこで 500(<code>NameError</code>)になりました。偽物に差し替えた部分は、手動確認でしか確かめられません。</p>

@@ -56,7 +56,7 @@ Google Cloud の操作は、オーナーがコンソールで行う。コンソ�
 1. `docs/specs/031-cloud-sql.md`:この仕様書
 2. `docs/adr/0006-run-migrations-with-cloud-run-jobs.md`:マイグレーションを Cloud Run のジョブで流す判断
 3. `docs/adr/0007-cloud-sql-idle-periods.md`:使わない期間の扱い(止める・削除する)の判断
-4. `docs/notes/cloud-sql-connection.html`:学習ノート。Rails から DB までの繋がり方、パスワードがどう渡るか、ジョブとサービスの役割の図
+4. `docs/notes/031-cloud-sql-connection.html`:学習ノート。Rails から DB までの繋がり方、パスワードがどう渡るか、ジョブとサービスの役割の図
 5. `api/config/database.yml`:本番の `username` と `password` の上書きを消し、開発と同じ環境変数で受け取る
 6. (ファイルではない操作)API の有効化 → インスタンス → データベースと利用者 → シークレット(オーナー)→ 権限 → イメージのビルドと push → ジョブの作成と実行 → サービスのデプロイ → 確認 → 止めて確かめ、動かし直す
 7. `docs/production-setup.md`:「3. Cloud SQL」の章。6 で実際に行った手順を書く

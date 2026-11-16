@@ -294,7 +294,7 @@ ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
     <p>「Rails を本番に置いたのと同じことを、Vue でも行う」という見方は、半分合っています。手元で作って本番に送るところは同じです。違うのは、送った後に <strong>どこで動くか</strong> です。</p>
     <figure>
       <div class="figbox">
-        <svg class="mid" viewBox="0 0 760 240" role="img" aria-label="Rails と Vue の比較。Rails は、手元でイメージを作り、Artifact Registry に送り、Cloud Run で動き続け、ブラウザに答えを返す。Vue は、手元でファイルを作り、Firebase Hosting に送り、Firebase Hosting がファイルをそのままブラウザに渡し、Vue はブラウザの中で動く。Vue には Cloud Run が要らない">
+        <svg class="mid" viewBox="0 0 760 240" role="img" aria-label="Rails と Vue の比較。Rails は、手元でイメージを作り、Artifact Registry に送り、Cloud Run で動き続け、ブラウザにレスポンスを返す。Vue は、手元でファイルを作り、Firebase Hosting に送り、Firebase Hosting がファイルをそのままブラウザに渡し、Vue はブラウザの中で動く。Vue には Cloud Run が要らない">
           <defs>
             <marker id="f2-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
           </defs>
@@ -310,7 +310,7 @@ ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
           <text x="485" y="84" text-anchor="middle" class="s">Rails が動き続ける</text>
           <rect x="610" y="36" width="130" height="64" rx="8" class="bx-a6"/>
           <text x="675" y="62" text-anchor="middle" class="b">ブラウザ</text>
-          <text x="675" y="84" text-anchor="middle" class="s">答えを受け取る</text>
+          <text x="675" y="84" text-anchor="middle" class="s">レスポンスを受け取る</text>
           <line x1="170" y1="68" x2="206" y2="68" class="ln" marker-end="url(#f2-mk)"/>
           <line x1="360" y1="68" x2="396" y2="68" class="ln" marker-end="url(#f2-mk)"/>
           <line x1="570" y1="68" x2="606" y2="68" class="ln" marker-end="url(#f2-mk)"/>
@@ -331,7 +331,7 @@ ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
           <line x1="360" y1="188" x2="606" y2="188" class="ln" marker-end="url(#f2-mk)"/>
         </svg>
       </div>
-      <figcaption>図2:Rails は、Google の中の <span class="t-a5">Cloud Run</span> で動き続け、ブラウザには答えだけを返します。Vue は、<span class="t-a3">Firebase Hosting</span> からファイルのままブラウザに渡り、<span class="t-a6">ブラウザ</span> の中で動きます。</figcaption>
+      <figcaption>図2:Rails は、Google の中の <span class="t-a5">Cloud Run</span> で動き続け、ブラウザにはレスポンスだけを返します。Vue は、<span class="t-a3">Firebase Hosting</span> からファイルのままブラウザに渡り、<span class="t-a6">ブラウザ</span> の中で動きます。</figcaption>
     </figure>
     <div class="tablewrap">
       <table>
@@ -453,7 +453,7 @@ Vue:   docker run(作業台を借りる)の中で npm run build
     <div class="cast">
       <div class="card a6"><p><span class="who t-a6">ブラウザ</span><span class="kind">インターネット · 会員が使う</span>本番の URL(<code>knowledge-library-prod.web.app</code>)を開き、Firebase Hosting から画面のファイルをもらう。もらったファイルの中で Vue が動く。</p></div>
       <div class="card a2"><p><span class="who t-a2">Vue</span><span class="kind">ブラウザの中 · 私たちが書いた</span>画面を出し、Firebase Auth にログインを頼み、<code>/api</code> に記事の一覧や投稿を頼む。Issue #32 でコードは変えない。本番の設定値を埋め込んでビルドし直す。</p></div>
-      <div class="card a3"><p><span class="who t-a3">Firebase Hosting</span><span class="kind">Google の中 · Issue #32 で作る</span>Vue のファイルを置いておき、ブラウザに配る。<code>/api</code> へのリクエストは、自分では答えずに Rails へ取り次ぐ。</p></div>
+      <div class="card a3"><p><span class="who t-a3">Firebase Hosting</span><span class="kind">Google の中 · Issue #32 で作る</span>Vue のファイルを置いておき、ブラウザに配る。<code>/api</code> へのリクエストは、自分ではレスポンスを作らずに Rails へ取り次ぐ。</p></div>
       <div class="card a4"><p><span class="who t-a4">Firebase Auth</span><span class="kind">Google の中 · Issue #32 で設定する</span>Google でのログインを受け持ち、ログインした会員に ID トークン(本人であることを示す、期限1時間の札)を発行する。本番用のプロジェクトの Firebase Auth は、開発用とは別のもの。</p></div>
       <div class="card a5"><p><span class="who t-a5">Rails(Cloud Run の中)</span><span class="kind">Google の中 · Issue #30・#31 で済み</span>ID トークンを確かめて、記事を読み書きする。Issue #32 では、どの Firebase Auth の札を信じるかを、設定で教える。</p></div>
       <div class="card a1"><p><span class="who t-a1">オーナー</span><span class="kind">手元の Mac · 人</span>コンソールで、Firebase Auth と Rails の設定をする。手元で Vue をビルドし、Firebase Hosting にデプロイする。</p></div>
@@ -593,10 +593,10 @@ Vue:   docker run(作業台を借りる)の中で npm run build
     <h3 class="scene-h">場面 3:一覧を見る<span class="tag">一覧の画面を出すたび</span></h3>
     <ol class="flow" start="9">
       <li><span class="t-a2">Vue</span> が、<span class="t-a3">Firebase Hosting</span> に、<code>/api/articles</code>(記事の一覧)を頼む。Vue から見ると、画面をもらったのと同じ相手に頼んでいる。</li>
-      <li><span class="t-a3">Firebase Hosting</span> は自分では答えず、<span class="t-a5">Rails</span> に取り次ぐ。</li>
+      <li><span class="t-a3">Firebase Hosting</span> は自分ではレスポンスを作らず、<span class="t-a5">Rails</span> に取り次ぐ。</li>
       <li><span class="t-a5">Rails</span> が、データベースから記事を読む。</li>
       <li><span class="t-a5">Rails</span> が、<span class="t-a3">Firebase Hosting</span> に記事の一覧を返す。</li>
-      <li><span class="t-a3">Firebase Hosting</span> が、その答えを <span class="t-a2">Vue</span> にそのまま渡す。Vue が一覧を画面に出す。</li>
+      <li><span class="t-a3">Firebase Hosting</span> が、そのレスポンスを <span class="t-a2">Vue</span> にそのまま渡す。Vue が一覧を画面に出す。</li>
     </ol>
 
     <h3 class="scene-h">場面 4:ログインする<span class="tag">ログインのボタンを押したとき</span></h3>
@@ -630,7 +630,7 @@ Vue:   docker run(作業台を借りる)の中で npm run build
       <table>
         <thead><tr><th>来たリクエストのパス</th><th>Firebase Hosting がすること</th><th>図4</th></tr></thead>
         <tbody>
-          <tr><td><code>/api/</code> で始まる</td><td>自分では答えず、東京の <span class="t-a5">Rails</span>(Cloud Run のサービス <code>api</code>)に取り次ぎ、その答えを返す</td><td>⑨〜⑬、⑯〜㉑</td></tr>
+          <tr><td><code>/api/</code> で始まる</td><td>自分ではレスポンスを作らず、東京の <span class="t-a5">Rails</span>(Cloud Run のサービス <code>api</code>)に取り次ぎ、そのレスポンスを返す</td><td>⑨〜⑬、⑯〜㉑</td></tr>
           <tr><td>それ以外で、ファイルがある(<code>/assets/…js</code> など)</td><td>そのファイルを返す</td><td>⑦</td></tr>
           <tr><td>それ以外で、ファイルがない(<code>/articles/new</code> など)</td><td><code>index.html</code> を返す。Vue が起動して URL を見て、画面を出す</td><td>⑦</td></tr>
         </tbody>
@@ -643,7 +643,7 @@ Vue:   docker run(作業台を借りる)の中で npm run build
     <ol class="flow">
       <li><strong>直接呼ぶ案では、2つの手間が増える。</strong>ブラウザが <code>web.app</code> から画面をもらい、<code>run.app</code>(Rails の URL)を直接呼ぶと、ブラウザから見て相手が2つになります。ブラウザは、画面をくれた相手と違う相手への呼び出しを、相手が許可したときだけ通します(CORS という仕組み)。そのため Rails に許可の設定が要り、Vue にも Rails の URL を教える必要があります。</li>
       <li><strong>取り次がせると、ローカルと同じ形になる。</strong>ローカルでは、Vite の開発サーバーが <code>/api</code> を Rails に取り次いでいます。本番では、Firebase Hosting が同じことをします。Vue は今も <code>/api/articles</code> のように同じ相手の <code>/api</code> を呼んでいるので、コードを変えずに済みます。</li>
-      <li><strong>取り次がせる損は、このアプリでは小さい。</strong>損は2つあります。1つは、取り次ぎが60秒で打ち切られること。このアプリの API は1秒もかかりません。もう1つは、Firebase Hosting が答えを手元に保存して(キャッシュ)、ほかの人に同じ答えを返してしまうおそれです。Firebase Hosting は、答えに「保存してよい」(<code>Cache-Control: public</code>)と書かれたときだけ保存します。Rails の答えには「この人専用、保存しない」(<code>Cache-Control: private</code>)と書かれていることを、2026-11-13 に本番で確かめました。</li>
+      <li><strong>取り次がせる損は、このアプリでは小さい。</strong>損は2つあります。1つは、取り次ぎが60秒で打ち切られること。このアプリの API は1秒もかかりません。もう1つは、Firebase Hosting の CDN(世界各地に持つキャッシュ)がレスポンスをキャッシュして、ほかの人に同じレスポンスを返してしまうおそれです。Firebase Hosting は、Cloud Run から返ったレスポンスを、<code>Cache-Control: public</code> などが付いたときだけキャッシュします。Rails のレスポンスには <code>Cache-Control: private</code>(リクエストした人のブラウザだけがキャッシュしてよい)が付いていることを、2026-11-13 に本番で確かめました。</li>
     </ol>
     <p>まとめ:取り次がせると、許可の設定と URL の受け渡しがいらず、Vue のコードもローカルと同じまま動きます。損は60秒の上限と保存のおそれで、どちらもこのアプリでは困りません。判断は ADR 0008 に、設定は <code>firebase.json</code> に書きます。</p>
 

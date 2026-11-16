@@ -28,4 +28,5 @@
 | 題名 | 何が分かるか | ファイル |
 |---|---|---|
 | Vue の本番配信と Firebase Hosting | 本番で Vue をどこから配り、ブラウザから Rails をどう呼ぶかの選択肢(roadmap.md のフェーズ2の判断材料) | [vue-production-hosting.html](vue-production-hosting.html) |
+| Firebase と Google Cloud の関係 | Firebase のプロジェクトと Google Cloud のプロジェクトが同じ1つであること。ブラウザから呼ぶ機能と Rails から使う機能、使う機能と使わない機能、どちらのコンソールで操作するか | [firebase-and-google-cloud.html](firebase-and-google-cloud.html) |
 | テーブルと関連の全体像(ERD) | Rails のテーブルどうしのつながり(予定のテーブルを含む) | [erd.md](erd.md) |

@@ -360,7 +360,7 @@ svg .bx-common { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
           <line x1="600" y1="188" x2="646" y2="265" class="ln-a5 dash" marker-end="url(#f2-a5)"/>
         </svg>
       </div>
-      <figcaption>図2:破線は、まだ作っていないもの(フェーズ4の Firestore、未実装の画像)です。<span class="t-a2">Vue</span> から Cloud Run への直接の線はなく、API のリクエストは <span class="t-a3">Firebase Hosting</span> を通ります(Issue #32 の ADR 0008)。<span class="t-a2">Vue</span> から Cloud SQL への線もありません。データベースに触れるのは、いつも Rails です。</figcaption>
+      <figcaption>図2:破線は、まだ作っていないもの(フェーズ4の Firestore、未実装の画像)です。<span class="t-a2">Vue</span> から Cloud Run への直接の線はなく、API のリクエストは <span class="t-a3">Firebase Hosting</span> を通ります(<a href="../adr/0008-proxy-api-through-firebase-hosting.md">ADR 0008</a>)。<span class="t-a2">Vue</span> から Cloud SQL への線もありません。データベースに触れるのは、いつも Rails です。</figcaption>
     </figure>
     <p>この分かれ方には理由があります。Firebase の機能は、サーバーを書かずにアプリを作れるように、ブラウザから安全に呼べる仕組み(Firebase Auth の ID トークン、Firestore のセキュリティルール)を持っています。一方、Cloud SQL のようなデータベースは、ブラウザから直接触らせず、サーバーが間に立って中身を確かめてから読み書きします。このアプリは、記事などのデータを Rails(Cloud SQL)に置き、リアルタイムに反映したいコメントとリアクションだけを Firestore に置く、と決めています(<a href="../architecture.md">architecture.md</a>)。</p>
     <div class="note">

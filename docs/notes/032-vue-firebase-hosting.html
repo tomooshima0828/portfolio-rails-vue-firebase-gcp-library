@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firebase Hosting と、3つのつなぎ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Issue #32 の学習ノート(layered-tech-explanation スキルのひな形から作った)。
+   登場人物の色:1人に1色(a1〜a6)を割り当て、図と本文で同じ色を使う。
+   a2 は「私たちが書くコード」と「今ここ」に使う。ここに割り当てを書いておく:
+   a1=オーナー、a2=Vue(私たちのコード・今ここ)、a3=Firebase Hosting、a4=Firebase Auth、a5=Cloud Run と Rails、a6=ブラウザ
+   データベース(Cloud SQL)は Issue #31 で済んだので、色を割り当てず、灰色の箱(bx-n)で描く */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .xs { font-size: 10.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .bx-a5w { fill: var(--surface); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-n { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+table.story th:first-child { white-space: nowrap; }
+table.rowhead td:first-child { white-space: nowrap; font-weight: 700; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+/* コードの字体は合字(=> が矢印になる、など)を切る。VS Code の見た目と食い違わないように */
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #32 · 学習メモ</p>
+    <h1>Firebase Hosting と、3つのつなぎ</h1>
+    <p class="lead">Issue #32 で、Vue の画面を本番に置き、本番でログイン → 記事の投稿 → 一覧の表示が通るようにします。Rails を本番に置いたとき(Issue #30)と何が同じで何が違うか、置いた後に何をつなぐのかを図にしたノートです。Issue #31 のノート「<a href="031-cloud-sql-connection.html">データベースと、接続口と、2つの門</a>」の続きです。どの方式を選ぶかの材料は、「<a href="vue-production-hosting.html">Vue の本番配信と Firebase Hosting</a>」にあります。</p>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>なぜ Firebase Hosting と、3つのつなぎが要るのか(1章)</li>
+        <li>フェーズ2の中で、今どこにいるか(2章)</li>
+        <li>Rails を本番に置いたときと、何が同じで何が違うか。<code>docker build</code> と <code>npm run build</code> の違い(3章)</li>
+        <li>Issue #32 が終わった時点の構成(4章)</li>
+        <li>準備から、ログインして投稿するまでの流れ(5章)</li>
+        <li>3つのつなぎの中身と、そうする理由(6章)</li>
+        <li>Firebase・Vite の名前と、AWS・Rails で近いもの(7章)</li>
+        <li>Issue #32 の作業と完了条件の対応(8章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:なぜ Firebase Hosting と、3つのつなぎが要るのか</h2>
+    <p>Issue #31 までで、本番の <span class="t-a5">Rails</span> はデータベースに繋がり、本番の URL の <code>/api/articles</code> に記事の一覧(今は空)を返せるようになりました。ただ、利用者が開く画面がありません。利用者は、記事を読むのも投稿するのも、<span class="t-a2">Vue</span> の画面を通して行います。</p>
+    <p>ローカルでは、Vite の開発サーバーが Vue の画面を配り、<code>/api</code> へのリクエストを Rails に回していました。本番には、その役をする係がいません。そこで、2つの問題を解きます。</p>
+    <ol class="flow">
+      <li><strong>Vue の画面を、どこから配るか。</strong>Vue はビルドすると、ただのファイル(HTML、JavaScript、CSS)になります。このファイルを、世界中のブラウザに速く配るサービス <span class="t-a3">Firebase Hosting</span> に置きます。</li>
+      <li><strong>置いた画面を、ログインと Rails にどうつなぐか。</strong>画面を置くだけでは、ログインも投稿もできません。次の3つをつなぎます。
+        <ul>
+          <li>つなぎ1:<span class="t-a3">Firebase Hosting</span> が、<code>/api</code> へのリクエストを <span class="t-a5">Rails</span> に取り次ぐ</li>
+          <li>つなぎ2:本番の <span class="t-a4">Firebase Auth</span> の設定値を、<span class="t-a2">Vue</span> のファイルに埋め込む</li>
+          <li>つなぎ3:<span class="t-a5">Rails</span> に、本番の <span class="t-a4">Firebase Auth</span> のログインだけを信じるよう教える</li>
+        </ul>
+      </li>
+    </ol>
+    <p>Issue #32 のゴールは、本番の URL(<code>https://knowledge-library-prod.web.app</code>)を開き、Google でログインし、記事を投稿すると、その記事が一覧に出ることです。Vue と Rails のコードは変えません。足すのは、Firebase Hosting の設定(<code>firebase.json</code>)と、Google の画面での設定だけです。</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">2</span>フェーズ2の地図と今ここ</h2>
+    <p>フェーズ2は7つの Issue に分かれています。矢印は進める順番で、矢印の元が終わってから先に進みます。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 210" role="img" aria-label="フェーズ2の Issue の順番。Issue #29 土台(済み)、Issue #30 Rails(済み)、Issue #31 DB(済み)、Issue #32 Vue を配信(今ここ)、Issue #33 自動デプロイの順に進む。Issue #30 の後に Issue #34 ログ、Issue #31 の後に Issue #35 スケール設定がある">
+          <defs>
+            <marker id="f1-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <rect x="20" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="80" y="57" text-anchor="middle" class="b">Issue #29</text>
+          <text x="80" y="77" text-anchor="middle" class="s">土台(済み)</text>
+          <rect x="170" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="230" y="57" text-anchor="middle" class="b">Issue #30</text>
+          <text x="230" y="77" text-anchor="middle" class="s">Rails(済み)</text>
+          <rect x="320" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="380" y="57" text-anchor="middle" class="b">Issue #31</text>
+          <text x="380" y="77" text-anchor="middle" class="s">DB(済み)</text>
+          <text x="530" y="24" text-anchor="middle" class="lab-here">今ここ</text>
+          <rect x="470" y="32" width="120" height="60" rx="8" class="bx-a2"/>
+          <text x="530" y="57" text-anchor="middle" class="b">Issue #32</text>
+          <text x="530" y="77" text-anchor="middle" class="s">Vue を配信</text>
+          <rect x="620" y="32" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="680" y="57" text-anchor="middle" class="b">Issue #33</text>
+          <text x="680" y="77" text-anchor="middle" class="s">自動デプロイ</text>
+          <rect x="170" y="132" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="230" y="157" text-anchor="middle" class="b">Issue #34</text>
+          <text x="230" y="177" text-anchor="middle" class="s">ログとエラー</text>
+          <rect x="320" y="132" width="120" height="60" rx="8" class="bx-a1"/>
+          <text x="380" y="157" text-anchor="middle" class="b">Issue #35</text>
+          <text x="380" y="177" text-anchor="middle" class="s">スケール設定</text>
+          <line x1="140" y1="62" x2="166" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="290" y1="62" x2="316" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="440" y1="62" x2="466" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="590" y1="62" x2="616" y2="62" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="230" y1="92" x2="230" y2="128" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="380" y1="92" x2="380" y2="128" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="470" y="160" class="s">Issue #32 で手で行うビルドとデプロイを、</text>
+          <text x="470" y="180" class="s">Issue #33 で GitHub から自動にする</text>
+        </svg>
+      </div>
+      <figcaption>図1:<span class="t-a2">Issue #32</span> で、利用者が触れる画面が本番に出ます。Issue #33 では、ここで手で行うビルドとデプロイを、Rails のデプロイと一緒に自動にします。</figcaption>
+    </figure>
+  </section>
+
+  <section id="compare">
+    <h2><span class="num">3</span>Rails を本番に置いたときと、何が同じで何が違うか</h2>
+    <p>「Rails を本番に置いたのと同じことを、Vue でも行う」という見方は、半分合っています。手元で作って本番に送るところは同じです。違うのは、送った後に <strong>どこで動くか</strong> です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 240" role="img" aria-label="Rails と Vue の比較。Rails は、手元でイメージを作り、Artifact Registry に送り、Cloud Run で動き続け、ブラウザにレスポンスを返す。Vue は、手元でファイルを作り、Firebase Hosting に送り、Firebase Hosting がファイルをそのままブラウザに渡し、Vue はブラウザの中で動く。Vue には Cloud Run が要らない">
+          <defs>
+            <marker id="f2-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+          <text x="20" y="24" class="b">api(Rails)· Issue #30 で済み</text>
+          <rect x="20" y="36" width="150" height="64" rx="8" class="bx-a1"/>
+          <text x="95" y="62" text-anchor="middle" class="b">イメージを作る</text>
+          <text x="95" y="84" text-anchor="middle" class="m">docker build</text>
+          <rect x="210" y="36" width="150" height="64" rx="8" class="bx-n"/>
+          <text x="285" y="62" text-anchor="middle" class="b">Artifact Registry</text>
+          <text x="285" y="84" text-anchor="middle" class="s">イメージの置き場</text>
+          <rect x="400" y="36" width="170" height="64" rx="8" class="bx-a5"/>
+          <text x="485" y="62" text-anchor="middle" class="b">Cloud Run</text>
+          <text x="485" y="84" text-anchor="middle" class="s">Rails が動き続ける</text>
+          <rect x="610" y="36" width="130" height="64" rx="8" class="bx-a6"/>
+          <text x="675" y="62" text-anchor="middle" class="b">ブラウザ</text>
+          <text x="675" y="84" text-anchor="middle" class="s">レスポンスを受け取る</text>
+          <line x1="170" y1="68" x2="206" y2="68" class="ln" marker-end="url(#f2-mk)"/>
+          <line x1="360" y1="68" x2="396" y2="68" class="ln" marker-end="url(#f2-mk)"/>
+          <line x1="570" y1="68" x2="606" y2="68" class="ln" marker-end="url(#f2-mk)"/>
+
+          <text x="20" y="144" class="lab-here">web(Vue)· Issue #32 で今ここ</text>
+          <rect x="20" y="156" width="150" height="64" rx="8" class="bx-a1"/>
+          <text x="95" y="182" text-anchor="middle" class="b">ファイルを作る</text>
+          <text x="95" y="204" text-anchor="middle" class="m">npm run build</text>
+          <rect x="210" y="156" width="150" height="64" rx="8" class="bx-a3"/>
+          <text x="285" y="182" text-anchor="middle" class="b">Firebase Hosting</text>
+          <text x="285" y="204" text-anchor="middle" class="s">ファイルを配る</text>
+          <text x="485" y="178" text-anchor="middle" class="s">Cloud Run は要らない</text>
+          <text x="485" y="208" text-anchor="middle" class="s">ファイルをそのまま渡す</text>
+          <rect x="610" y="156" width="130" height="64" rx="8" class="bx-a6"/>
+          <text x="675" y="182" text-anchor="middle" class="b">ブラウザ</text>
+          <text x="675" y="204" text-anchor="middle" class="s">Vue が動く</text>
+          <line x1="170" y1="188" x2="206" y2="188" class="ln" marker-end="url(#f2-mk)"/>
+          <line x1="360" y1="188" x2="606" y2="188" class="ln" marker-end="url(#f2-mk)"/>
+        </svg>
+      </div>
+      <figcaption>図2:Rails は、Google の中の <span class="t-a5">Cloud Run</span> で動き続け、ブラウザにはレスポンスだけを返します。Vue は、<span class="t-a3">Firebase Hosting</span> からファイルのままブラウザに渡り、<span class="t-a6">ブラウザ</span> の中で動きます。</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>api(Rails)</th><th>web(Vue)</th></tr></thead>
+        <tbody>
+          <tr><td>手元で作るもの</td><td>イメージ(Rails と、動かすのに要るものを固めた箱)</td><td>ビルドしたファイル(HTML、JavaScript、CSS)</td></tr>
+          <tr><td>送る先</td><td>Artifact Registry</td><td>Firebase Hosting</td></tr>
+          <tr><td>本番で動く場所</td><td>Google の中の Cloud Run</td><td>利用者のブラウザの中</td></tr>
+          <tr><td>設定値を受け取るとき</td><td>動き始めるとき(Cloud Run の環境変数、Secret Manager)</td><td><strong>ビルドするとき</strong>(ファイルの中に埋め込む)</td></tr>
+          <tr><td>使っていない間の料金</td><td>0台まで減るので、ほぼかからない</td><td>ファイルを置くだけなので、無料枠に収まる</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>4行目の違いが、このノートでいちばん大事な点です。Rails は、動き始めるたびに設定値を受け取るので、設定を変えればデプロイし直すだけで済みます。Vue は、設定値をビルドのときにファイルへ書き込んでしまうので、設定を変えたらビルドからやり直します(6章の「つなぎ2」)。</p>
+
+    <h3>docker build と npm run build の違い</h3>
+    <p>図2 の左端の箱は、どちらも「手元で作る」作業ですが、中身は違います。<code>docker build</code> は、<strong>Rails と、Rails を動かす道具一式を1つの箱に詰める</strong> 作業です。<code>npm run build</code> は、<strong>Vue のコードを、ブラウザがそのまま読める形に訳す</strong> 作業です。違いは、出来上がったものを誰が動かすかから生まれます。</p>
+    <div class="tablewrap">
+      <table class="rowhead">
+        <thead><tr><th></th><th>Rails</th><th>Vue</th></tr></thead>
+        <tbody>
+          <tr><td>本番で動かすのは</td><td><span class="t-a5">Cloud Run</span></td><td>利用者の <span class="t-a6">ブラウザ</span></td></tr>
+          <tr><td>動かすのに要る道具</td><td>Ruby、gem、OS の部品など</td><td>JavaScript を動かす仕組み</td></tr>
+          <tr><td>その道具は、動かす側に最初からあるか</td><td><strong>ない</strong>。Cloud Run は、渡された箱を動かすだけ</td><td><strong>ある</strong>。どのブラウザにも最初から入っている</td></tr>
+          <tr><td>だから、手元ですること</td><td>道具ごと箱に詰めて持っていく(<code>docker build</code>)</td><td>ブラウザは <code>.vue</code> や TypeScript を読めないので、読める形に訳して持っていく(<code>npm run build</code>)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table class="rowhead">
+        <thead><tr><th></th><th><code>docker build</code>(Rails)</th><th><code>npm run build</code>(Vue)</th></tr></thead>
+        <tbody>
+          <tr><td>材料</td><td><code>api/</code> のコードと <code>api/Dockerfile</code></td><td><code>web/src</code> の <code>.vue</code> と TypeScript</td></tr>
+          <tr><td>すること</td><td>OS の部品、Ruby、gem、Rails のコードを、<code>Dockerfile</code> の手順どおりに積み重ねる</td><td>① 型を検査する(<code>vue-tsc</code>)② <code>.vue</code> と TypeScript を JavaScript に訳す ③ 多くのファイルを数個にまとめ、小さく詰める ④ 設定値を埋め込む(②〜④ は <code>vite build</code>)</td></tr>
+          <tr><td>出来上がるもの</td><td><strong>イメージ</strong>(約 192MB)。中で Rails を動かせる箱</td><td><strong>ファイル</strong>(<code>web/dist</code> の HTML、JavaScript、CSS)。ブラウザが読むだけ</td></tr>
+          <tr><td>中に入るコード</td><td>書いたままの Ruby。本番で Ruby が読んで動かす</td><td>訳した後の JavaScript。元の <code>.vue</code> は入らない</td></tr>
+          <tr><td>次に送る先</td><td>Artifact Registry。Cloud Run が取り出して動かす</td><td>Firebase Hosting。ブラウザに配る</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Rails のコードは訳さずにそのまま箱に入り、本番で Ruby が読んで動かします。Vue のコードは本番の前に訳され、ブラウザには訳した結果だけが届きます。これが2つの一番の違いです。</p>
+    <div class="note">
+      <p><strong>混ざりやすい点:Issue #32 でも Docker を使う。</strong>仕様書 032 では、Vue のビルドを次のコマンドで行います。</p>
+      <pre><code>docker run --rm -v "$PWD/web":/app -w /app node:24.22.0-slim npm run build</code></pre>
+      <p>ここの Docker は、箱を作るためではなく、<strong>作業台</strong> として使っています。<code>docker build</code> は新しいイメージ(箱)を <strong>作る</strong> コマンドで、<code>docker run</code> は、すでにある Node のイメージを <strong>借りて</strong>、その中でコマンドを動かすコマンドです。借りるのは、手元の Mac の Node が <code>web/</code> の求める版より少し古く、<code>web/node_modules</code> も Linux 向けに入れたものだからです。<code>npm run build</code> の結果は、箱ではなく <code>web/dist</code> のファイルとして Mac に残り、作業台(コンテナ)は終わると消えます(<code>--rm</code>)。</p>
+      <pre><code>Rails: docker build → イメージ(箱)→ Artifact Registry → Cloud Run が動かす
+Vue:   docker run(作業台を借りる)の中で npm run build
+       → web/dist(ファイル)→ Firebase Hosting → ブラウザが動かす</code></pre>
+    </div>
+    <p>Rails の経験でいうと、<code>npm run build</code> は <code>rails assets:precompile</code> に近い作業です。CSS や JavaScript をブラウザ向けにまとめて小さくし、<code>public/assets</code> に出力する作業でした。このプロジェクトでは画面がすべて Vue なので、訳す対象が画面全体になります。</p>
+  </section>
+
+  <section id="cast">
+    <h2><span class="num">4</span>登場人物と、Issue #32 が終わった時点の構成</h2>
+    <p>登場人物は6つです。<span class="t-a6">ブラウザ</span> はインターネットのどこかに、<span class="t-a1">オーナー</span> は手元の Mac に、残りは Google の中(本番用の箱)にあります。色は、このページの図と本文で共通です。Issue #31 のノートでデータベースに使った色は、<span class="t-a3">Firebase Hosting</span> に回しました。データベースは灰色で描きます。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 800 400" role="img" aria-label="Issue #32 が終わった時点の構成。ブラウザの中で Vue が動く。ブラウザは Firebase Auth とログインのやりとりをし、Firebase Hosting から画面をもらい、API も Firebase Hosting に頼む。Firebase Hosting は API のリクエストを Cloud Run の Rails に取り次ぐ。Rails はデータベースを読み書きする。オーナーは Firebase Hosting にデプロイする。ブラウザから Rails への直接の線はない">
+          <defs>
+            <marker id="f3-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f3-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f3-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+            <marker id="f3-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+          </defs>
+
+          <rect x="10" y="20" width="150" height="200" rx="12" class="bx-frame"/>
+          <rect x="25" y="32" width="120" height="150" rx="8" class="bx-a6"/>
+          <text x="85" y="54" text-anchor="middle" class="b">ブラウザ</text>
+          <rect x="40" y="70" width="90" height="56" rx="8" class="bx-a2"/>
+          <text x="85" y="94" text-anchor="middle" class="b">Vue</text>
+          <text x="85" y="114" text-anchor="middle" class="s">画面</text>
+          <text x="85" y="156" text-anchor="middle" class="s">ここで動く</text>
+          <text x="24" y="210" class="s">インターネット</text>
+
+          <rect x="10" y="270" width="150" height="100" rx="12" class="bx-frame"/>
+          <rect x="25" y="282" width="120" height="56" rx="8" class="bx-a1"/>
+          <text x="85" y="306" text-anchor="middle" class="b">オーナー</text>
+          <text x="85" y="326" text-anchor="middle" class="s">ビルドとデプロイ</text>
+          <text x="24" y="360" class="s">オーナーの Mac</text>
+
+          <rect x="175" y="8" width="615" height="384" rx="12" class="bx-frame"/>
+          <text x="189" y="380" class="s">Google の中(本番用の箱)</text>
+          <text x="400" y="380" class="lab-here">今ここ:Firebase Hosting を足し、3つをつなぐ</text>
+
+          <rect x="215" y="40" width="150" height="64" rx="8" class="bx-a4"/>
+          <text x="290" y="66" text-anchor="middle" class="b">Firebase Auth</text>
+          <text x="290" y="88" text-anchor="middle" class="s">ログインを受け持つ</text>
+
+          <rect x="215" y="150" width="150" height="70" rx="8" class="bx-a3"/>
+          <text x="290" y="180" text-anchor="middle" class="b">Firebase Hosting</text>
+          <text x="290" y="202" text-anchor="middle" class="s">ファイルを配る・取り次ぐ</text>
+
+          <rect x="430" y="120" width="190" height="150" rx="10" class="bx-a5"/>
+          <text x="525" y="142" text-anchor="middle" class="b">Cloud Run</text>
+          <text x="525" y="160" text-anchor="middle" class="s">Rails を動かす</text>
+          <rect x="450" y="176" width="150" height="60" rx="8" class="bx-a5w"/>
+          <text x="525" y="200" text-anchor="middle" class="b">Rails</text>
+          <text x="525" y="222" text-anchor="middle" class="s">サービス api</text>
+          <text x="525" y="258" text-anchor="middle" class="xs">Issue #30・#31 で済み</text>
+
+          <rect x="660" y="176" width="120" height="60" rx="8" class="bx-n"/>
+          <text x="720" y="200" text-anchor="middle" class="b">データベース</text>
+          <text x="720" y="222" text-anchor="middle" class="s">Cloud SQL</text>
+
+          <line x1="149" y1="72" x2="211" y2="72" class="ln-a6" marker-start="url(#f3-a6)" marker-end="url(#f3-a6)"/>
+          <text x="180" y="64" text-anchor="middle" class="s">ログイン</text>
+          <line x1="149" y1="170" x2="211" y2="170" class="ln-a6" marker-start="url(#f3-a6)" marker-end="url(#f3-a6)"/>
+          <text x="180" y="162" text-anchor="middle" class="s">画面・API</text>
+          <path d="M145 310 H290 V224" class="ln-a1" marker-end="url(#f3-a1)"/>
+          <text x="220" y="302" text-anchor="middle" class="s">デプロイ</text>
+          <line x1="369" y1="200" x2="446" y2="200" class="ln-a3" marker-start="url(#f3-a3)" marker-end="url(#f3-a3)"/>
+          <text x="407" y="192" text-anchor="middle" class="s">取り次ぐ</text>
+          <line x1="604" y1="206" x2="656" y2="206" class="ln-a5" marker-start="url(#f3-a5)" marker-end="url(#f3-a5)"/>
+        </svg>
+      </div>
+      <figcaption>図3:<span class="t-a6">ブラウザ</span> から <span class="t-a5">Rails</span> への直接の線はありません。ブラウザが話す相手は、ログインを除けば <span class="t-a3">Firebase Hosting</span> だけで、API のリクエストも Firebase Hosting が取り次ぎます(6章の「つなぎ1」)。<br>(簡略化:オーナーがコンソールで行う設定(Firebase Auth の設定、Rails の環境変数)は、図4 の場面 1 と図5 で描きます。Rails が ID トークンを確かめるために Google から公開鍵を取ってくる線と、Secret Manager も省きました)</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card a6"><p><span class="who t-a6">ブラウザ</span><span class="kind">インターネット · 会員が使う</span>本番の URL(<code>knowledge-library-prod.web.app</code>)を開き、Firebase Hosting から画面のファイルをもらう。もらったファイルの中で Vue が動く。</p></div>
+      <div class="card a2"><p><span class="who t-a2">Vue</span><span class="kind">ブラウザの中 · 私たちが書いた</span>画面を出し、Firebase Auth にログインを頼み、<code>/api</code> に記事の一覧や投稿を頼む。Issue #32 でコードは変えない。本番の設定値を埋め込んでビルドし直す。</p></div>
+      <div class="card a3"><p><span class="who t-a3">Firebase Hosting</span><span class="kind">Google の中 · Issue #32 で作る</span>Vue のファイルを置いておき、ブラウザに配る。<code>/api</code> へのリクエストは、自分ではレスポンスを作らずに Rails へ取り次ぐ。</p></div>
+      <div class="card a4"><p><span class="who t-a4">Firebase Auth</span><span class="kind">Google の中 · Issue #32 で設定する</span>Google でのログインを受け持ち、ログインした会員に ID トークン(本人であることを示す、期限1時間の札)を発行する。本番用のプロジェクトの Firebase Auth は、開発用とは別のもの。</p></div>
+      <div class="card a5"><p><span class="who t-a5">Rails(Cloud Run の中)</span><span class="kind">Google の中 · Issue #30・#31 で済み</span>ID トークンを確かめて、記事を読み書きする。Issue #32 では、どの Firebase Auth の札を信じるかを、設定で教える。</p></div>
+      <div class="card a1"><p><span class="who t-a1">オーナー</span><span class="kind">手元の Mac · 人</span>コンソールで、Firebase Auth と Rails の設定をする。手元で Vue をビルドし、Firebase Hosting にデプロイする。</p></div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">5</span>準備から、ログインして投稿するまでの流れ</h2>
+    <p>5つの場面に分けました。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。<span class="t-a2">Vue</span> の線は、ブラウザの中で動く Vue を表します。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 26 780 872" role="img" aria-label="流れ。場面1 準備する:オーナーが Firebase Auth で Google を有効にしてウェブアプリを登録し、Firebase Auth が設定値を返す。オーナーが設定値を書いてビルドし、ファイルを Firebase Hosting に送り、Rails にプロジェクト ID を渡す。場面2 画面を開く:ブラウザが Firebase Hosting に画面を頼み、Firebase Hosting が画面のファイルを返し、Vue が動き出す。場面3 一覧を見る:Vue が Firebase Hosting に /api/articles を頼み、Firebase Hosting が Rails に取り次ぎ、Rails が DB から読み、記事の一覧を Firebase Hosting に返し、Firebase Hosting が Vue に返す。場面4 ログインする:Vue が Firebase Auth に Google でのログインを頼み、Firebase Auth が ID トークンを返す。場面5 投稿する:Vue が記事と ID トークンを Firebase Hosting に送り、Firebase Hosting が Rails に取り次ぎ、Rails がトークンを確かめて DB に保存し、保存したことを Firebase Hosting を通して Vue に返す">
+          <defs>
+            <marker id="f4-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f4-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f4-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f4-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f4-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+            <marker id="f4-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a6"/></marker>
+          </defs>
+
+          <rect x="0" y="96" width="780" height="180" class="band-here"/>
+          <rect x="0" y="280" width="780" height="120" class="band"/>
+          <rect x="0" y="404" width="780" height="180" class="band"/>
+          <rect x="0" y="588" width="780" height="90" class="band"/>
+          <rect x="0" y="682" width="780" height="210" class="band"/>
+
+          <text x="12" y="120" class="scene">場面 1</text>
+          <text x="12" y="138" class="a">準備する</text>
+          <text x="12" y="153" class="lab-here">今ここ(手で)</text>
+          <text x="12" y="304" class="scene">場面 2</text>
+          <text x="12" y="322" class="a">画面を開く</text>
+          <text x="12" y="337" class="s">URL を開くたび</text>
+          <text x="12" y="428" class="scene">場面 3</text>
+          <text x="12" y="446" class="a">一覧を見る</text>
+          <text x="12" y="461" class="s">画面を出すたび</text>
+          <text x="12" y="612" class="scene">場面 4</text>
+          <text x="12" y="630" class="a">ログインする</text>
+          <text x="12" y="645" class="s">ボタンを押す</text>
+          <text x="12" y="706" class="scene">場面 5</text>
+          <text x="12" y="724" class="a">投稿する</text>
+          <text x="12" y="739" class="s">投稿ボタン</text>
+
+          <line x1="180" y1="86" x2="180" y2="892" class="life"/>
+          <line x1="310" y1="86" x2="310" y2="892" class="life"/>
+          <line x1="440" y1="86" x2="440" y2="892" class="life"/>
+          <line x1="570" y1="86" x2="570" y2="892" class="life"/>
+          <line x1="700" y1="86" x2="700" y2="892" class="life"/>
+
+          <rect x="117" y="34" width="126" height="52" rx="7" class="bx-a1"/>
+          <text x="180" y="65" text-anchor="middle" class="b a">オーナー</text>
+          <rect x="247" y="34" width="126" height="52" rx="7" class="bx-a2"/>
+          <text x="310" y="55" text-anchor="middle" class="b a">Vue</text>
+          <text x="310" y="75" text-anchor="middle" class="xs">ブラウザの中</text>
+          <rect x="377" y="34" width="126" height="52" rx="7" class="bx-a3"/>
+          <text x="440" y="55" text-anchor="middle" class="b a">Firebase Hosting</text>
+          <text x="440" y="75" text-anchor="middle" class="xs">ファイルを配る</text>
+          <rect x="507" y="34" width="126" height="52" rx="7" class="bx-a4"/>
+          <text x="570" y="55" text-anchor="middle" class="b a">Firebase Auth</text>
+          <text x="570" y="75" text-anchor="middle" class="xs">ログインを受け持つ</text>
+          <rect x="637" y="34" width="126" height="52" rx="7" class="bx-a5"/>
+          <text x="700" y="55" text-anchor="middle" class="b a">Rails</text>
+          <text x="700" y="75" text-anchor="middle" class="xs">Cloud Run の中</text>
+
+          <!-- 場面 1 -->
+          <line x1="180" y1="126" x2="566" y2="126" class="ln-a1" marker-end="url(#f4-a1)"/>
+          <text x="373" y="118" text-anchor="middle" class="a">① Google を有効にし、アプリを登録</text>
+          <line x1="570" y1="156" x2="184" y2="156" class="ln-a4" marker-end="url(#f4-a4)"/>
+          <text x="373" y="148" text-anchor="middle" class="a">② 設定値</text>
+          <rect x="110" y="173" width="140" height="26" rx="6" class="bx-a1"/>
+          <text x="180" y="191" text-anchor="middle" class="a">③ 書いてビルド</text>
+          <line x1="180" y1="216" x2="436" y2="216" class="ln-a1" marker-end="url(#f4-a1)"/>
+          <text x="308" y="208" text-anchor="middle" class="a">④ ファイルを送る</text>
+          <line x1="180" y1="246" x2="696" y2="246" class="ln-a1" marker-end="url(#f4-a1)"/>
+          <text x="505" y="238" text-anchor="middle" class="a">⑤ プロジェクト ID</text>
+
+          <!-- 場面 2 -->
+          <line x1="310" y1="310" x2="436" y2="310" class="ln-a6" marker-end="url(#f4-a6)"/>
+          <text x="373" y="302" text-anchor="middle" class="a">⑥ 画面を頼む</text>
+          <line x1="440" y1="340" x2="314" y2="340" class="ln-a3" marker-end="url(#f4-a3)"/>
+          <text x="377" y="332" text-anchor="middle" class="a">⑦ ファイル</text>
+          <rect x="245" y="357" width="130" height="26" rx="6" class="bx-a2"/>
+          <text x="310" y="375" text-anchor="middle" class="a">⑧ Vue が動き出す</text>
+
+          <!-- 場面 3 -->
+          <line x1="310" y1="434" x2="436" y2="434" class="ln-a2" marker-end="url(#f4-a2)"/>
+          <text x="373" y="426" text-anchor="middle" class="a">⑨ 一覧を頼む</text>
+          <line x1="440" y1="464" x2="696" y2="464" class="ln-a3" marker-end="url(#f4-a3)"/>
+          <text x="570" y="456" text-anchor="middle" class="a">⑩ 取り次ぐ</text>
+          <rect x="635" y="481" width="130" height="26" rx="6" class="bx-a5"/>
+          <text x="700" y="499" text-anchor="middle" class="a">⑪ DB から読む</text>
+          <line x1="700" y1="524" x2="444" y2="524" class="ln-a5" marker-end="url(#f4-a5)"/>
+          <text x="570" y="516" text-anchor="middle" class="a">⑫ 記事の一覧</text>
+          <line x1="440" y1="554" x2="314" y2="554" class="ln-a3" marker-end="url(#f4-a3)"/>
+          <text x="377" y="546" text-anchor="middle" class="a">⑬ 記事の一覧</text>
+
+          <!-- 場面 4 -->
+          <line x1="310" y1="618" x2="566" y2="618" class="ln-a2" marker-end="url(#f4-a2)"/>
+          <text x="438" y="610" text-anchor="middle" class="a">⑭ Google でログイン</text>
+          <line x1="570" y1="648" x2="314" y2="648" class="ln-a4" marker-end="url(#f4-a4)"/>
+          <text x="442" y="640" text-anchor="middle" class="a">⑮ ID トークン</text>
+
+          <!-- 場面 5 -->
+          <line x1="310" y1="712" x2="436" y2="712" class="ln-a2" marker-end="url(#f4-a2)"/>
+          <text x="373" y="704" text-anchor="middle" class="a">⑯ 記事とトークン</text>
+          <line x1="440" y1="742" x2="696" y2="742" class="ln-a3" marker-end="url(#f4-a3)"/>
+          <text x="570" y="734" text-anchor="middle" class="a">⑰ 取り次ぐ</text>
+          <rect x="630" y="759" width="140" height="26" rx="6" class="bx-a5"/>
+          <text x="700" y="777" text-anchor="middle" class="a">⑱ トークンを確かめる</text>
+          <rect x="635" y="789" width="130" height="26" rx="6" class="bx-a5"/>
+          <text x="700" y="807" text-anchor="middle" class="a">⑲ DB に保存</text>
+          <line x1="700" y1="832" x2="444" y2="832" class="ln-a5" marker-end="url(#f4-a5)"/>
+          <text x="570" y="824" text-anchor="middle" class="a">⑳ 保存した</text>
+          <line x1="440" y1="862" x2="314" y2="862" class="ln-a3" marker-end="url(#f4-a3)"/>
+          <text x="377" y="854" text-anchor="middle" class="a">㉑ 保存した</text>
+        </svg>
+      </div>
+      <figcaption>図4:場面 3 と場面 5 の API のリクエストは、どちらも <span class="t-a3">Firebase Hosting</span> を通ります。<span class="t-a2">Vue</span> から <span class="t-a5">Rails</span> への直接の矢印はありません。場面 2 の ⑥ だけは、Vue がまだ動いていないので、<span class="t-a6">ブラウザ</span> 自身が頼みます(赤い線)。<br>(簡略化:データベースは Rails の中の箱 ⑪⑲ で表しました。Rails がデータベースに繋ぐ道は、Issue #31 のノートにあります)</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 1:準備する<span class="tag">Issue #32 で手で1回。設定値を変えたら③からやり直す</span></h3>
+    <ol class="flow">
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a4">Firebase Auth</span> のコンソールで、ログインの方法に Google を足し、ウェブアプリを登録する。</li>
+      <li><span class="t-a4">Firebase Auth</span> が、<span class="t-a1">オーナー</span> に、このウェブアプリの設定値(プロジェクト ID、API キーなど4つ)を見せる。</li>
+      <li><span class="t-a1">オーナー</span> が、設定値を手元のファイルに書き、Vue をビルドする。設定値はビルドしたファイルの中に埋め込まれる。</li>
+      <li><span class="t-a1">オーナー</span> が、ビルドしたファイルを <span class="t-a3">Firebase Hosting</span> に送る(デプロイ)。</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a5">Rails</span> の設定に、本番のプロジェクト ID を足してデプロイし直す。</li>
+    </ol>
+
+    <h3 class="scene-h">場面 2:画面を開く<span class="tag">利用者が URL を開くたび</span></h3>
+    <ol class="flow" start="6">
+      <li><span class="t-a6">ブラウザ</span> が、<span class="t-a3">Firebase Hosting</span> に、<code>https://knowledge-library-prod.web.app/</code> の画面を頼む。</li>
+      <li><span class="t-a3">Firebase Hosting</span> が、<span class="t-a6">ブラウザ</span> に、画面のファイル(<code>index.html</code> と JavaScript)を渡す。利用者が <code>/articles/new</code> のような画面の URL を直接開いたときも、同じ <code>index.html</code> を渡す。</li>
+      <li><span class="t-a6">ブラウザ</span> が JavaScript を読み込み、<span class="t-a2">Vue</span> が動き出す。Vue は URL を見て、出す画面を決める。</li>
+    </ol>
+
+    <h3 class="scene-h">場面 3:一覧を見る<span class="tag">一覧の画面を出すたび</span></h3>
+    <ol class="flow" start="9">
+      <li><span class="t-a2">Vue</span> が、<span class="t-a3">Firebase Hosting</span> に、<code>/api/articles</code>(記事の一覧)を頼む。Vue から見ると、画面をもらったのと同じ相手に頼んでいる。</li>
+      <li><span class="t-a3">Firebase Hosting</span> は自分ではレスポンスを作らず、<span class="t-a5">Rails</span> に取り次ぐ。</li>
+      <li><span class="t-a5">Rails</span> が、データベースから記事を読む。</li>
+      <li><span class="t-a5">Rails</span> が、<span class="t-a3">Firebase Hosting</span> に記事の一覧を返す。</li>
+      <li><span class="t-a3">Firebase Hosting</span> が、そのレスポンスを <span class="t-a2">Vue</span> にそのまま渡す。Vue が一覧を画面に出す。</li>
+    </ol>
+
+    <h3 class="scene-h">場面 4:ログインする<span class="tag">ログインのボタンを押したとき</span></h3>
+    <ol class="flow" start="14">
+      <li><span class="t-a2">Vue</span> が、本番の <span class="t-a4">Firebase Auth</span> に、Google でのログインを頼む。小さな窓(ポップアップ)が開き、利用者が Google アカウントを選ぶ。</li>
+      <li><span class="t-a4">Firebase Auth</span> が、<span class="t-a2">Vue</span> に、ID トークンを渡す。ID トークンには「本番の Firebase Auth が発行した」という印(プロジェクト ID)が入っている。</li>
+    </ol>
+
+    <h3 class="scene-h">場面 5:投稿する<span class="tag">投稿のボタンを押したとき</span></h3>
+    <ol class="flow" start="16">
+      <li><span class="t-a2">Vue</span> が、<span class="t-a3">Firebase Hosting</span> に、記事と ID トークンを送る(<code>POST /api/articles</code>)。</li>
+      <li><span class="t-a3">Firebase Hosting</span> が、<span class="t-a5">Rails</span> に取り次ぐ。ID トークンも、そのまま一緒に届く。</li>
+      <li><span class="t-a5">Rails</span> が、ID トークンを確かめる。署名が本物か、期限内か、そして <strong>本番の Firebase Auth が発行したものか</strong>(⑤ で教わったプロジェクト ID と同じか)を見る。</li>
+      <li><span class="t-a5">Rails</span> が、その会員の記事としてデータベースに保存する。</li>
+      <li><span class="t-a5">Rails</span> が、<span class="t-a3">Firebase Hosting</span> に「保存した」と返す。</li>
+      <li><span class="t-a3">Firebase Hosting</span> が、<span class="t-a2">Vue</span> に渡す。Vue は一覧の画面に戻り、場面 3 がもう一度起きて、投稿した記事が一覧に出る。</li>
+    </ol>
+
+    <div class="note here">
+      <p><strong>今ここ:</strong>Issue #32 で手で行うのは、場面 1 です。場面 2〜5 は、場面 1 が終われば、利用者の操作で自然に起きます。完了条件は、場面 2〜5 が本当に起きるかを確かめるものです(8章)。</p>
+    </div>
+  </section>
+
+  <section id="links">
+    <h2><span class="num">6</span>3つのつなぎ</h2>
+    <p>図4 の矢印のうち、Issue #32 で初めて通るようになるのは、Firebase Hosting を通る矢印(⑥⑦、⑨⑩⑫⑬、⑯⑰⑳㉑)と、本番の Firebase Auth との矢印(⑭⑮)です。これらを通すのが、次の3つのつなぎです。</p>
+
+    <h3>つなぎ1:Firebase Hosting が、/api を Rails に取り次ぐ</h3>
+    <p><span class="t-a3">Firebase Hosting</span> には、「どのパスに来たリクエストを、どう扱うか」を設定に書きます。書くのは2行だけです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>来たリクエストのパス</th><th>Firebase Hosting がすること</th><th>図4</th></tr></thead>
+        <tbody>
+          <tr><td><code>/api/</code> で始まる</td><td>自分ではレスポンスを作らず、東京の <span class="t-a5">Rails</span>(Cloud Run のサービス <code>api</code>)に取り次ぎ、そのレスポンスを返す</td><td>⑨〜⑬、⑯〜㉑</td></tr>
+          <tr><td>それ以外で、ファイルがある(<code>/assets/…js</code> など)</td><td>そのファイルを返す</td><td>⑦</td></tr>
+          <tr><td>それ以外で、ファイルがない(<code>/articles/new</code> など)</td><td><code>index.html</code> を返す。Vue が起動して URL を見て、画面を出す</td><td>⑦</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>3行目が要るのは、<code>/articles/new</code> のような画面は、ブラウザの中で Vue が切り替えて作るもので、ファイルとしては存在しないからです。この設定がないと、画面の URL をブックマークから直接開いたときに「ページが見つからない」(404)になります。</p>
+
+    <p><strong>なぜ、ブラウザに Rails の URL を直接呼ばせず、Firebase Hosting に取り次がせるのか</strong></p>
+    <p>結論:Vue から見た API の相手を、画面をくれた相手と同じ1つにそろえると、Vue のコードを変えずに済み、別の相手を呼ぶための許可の設定も要らないからです。</p>
+    <ol class="flow">
+      <li><strong>直接呼ぶ案では、2つの手間が増える。</strong>ブラウザが <code>web.app</code> から画面をもらい、<code>run.app</code>(Rails の URL)を直接呼ぶと、ブラウザから見て相手が2つになります。ブラウザは、画面をくれた相手と違う相手への呼び出しを、相手が許可したときだけ通します(CORS という仕組み)。そのため Rails に許可の設定が要り、Vue にも Rails の URL を教える必要があります。</li>
+      <li><strong>取り次がせると、ローカルと同じ形になる。</strong>ローカルでは、Vite の開発サーバーが <code>/api</code> を Rails に取り次いでいます。本番では、Firebase Hosting が同じことをします。Vue は今も <code>/api/articles</code> のように同じ相手の <code>/api</code> を呼んでいるので、コードを変えずに済みます。</li>
+      <li><strong>取り次がせる損は、このアプリでは小さい。</strong>損は2つあります。1つは、取り次ぎが60秒で打ち切られること。このアプリの API は1秒もかかりません。もう1つは、Firebase Hosting の CDN(世界各地に持つキャッシュ)がレスポンスをキャッシュして、ほかの人に同じレスポンスを返してしまうおそれです。Firebase Hosting は、Cloud Run から返ったレスポンスを、<code>Cache-Control: public</code> などが付いたときだけキャッシュします。Rails のレスポンスには <code>Cache-Control: private</code>(リクエストした人のブラウザだけがキャッシュしてよい)が付いていることを、2026-11-13 に本番で確かめました。</li>
+    </ol>
+    <p>まとめ:取り次がせると、許可の設定と URL の受け渡しがいらず、Vue のコードもローカルと同じまま動きます。損は60秒の上限と保存のおそれで、どちらもこのアプリでは困りません。判断は ADR 0008 に、設定は <code>firebase.json</code> に書きます。</p>
+
+    <h3>つなぎ2:本番の Firebase Auth の設定値を、Vue のファイルに埋め込む</h3>
+    <p><span class="t-a2">Vue</span> が Firebase Auth にログインを頼むには、「どの Firebase Auth か」を知っている必要があります。それを表すのが、Firebase Auth がウェブアプリごとに発行する4つの設定値(プロジェクト ID、API キー、ログインの窓のドメイン、アプリ ID)です。今の Vue のファイルには、開発用の Firebase Auth の設定値しか入っていません。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 820 220" role="img" aria-label="設定値の動き。1 Firebase Auth が設定値を発行し、オーナーが Mac の設定値のファイルに書く。2 ビルドで、ビルドしたファイルに埋め込まれる。3 Firebase Hosting にそのまま置かれる。4 ブラウザに配られ、Vue のファイルの中に入る。5 Vue がログインのときに、その設定値で Firebase Auth とやりとりする">
+          <defs>
+            <marker id="f5-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f5-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f5-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f5-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+          </defs>
+          <rect x="10" y="60" width="130" height="70" rx="8" class="bx-a4"/>
+          <text x="75" y="90" text-anchor="middle" class="b">Firebase Auth</text>
+          <text x="75" y="112" text-anchor="middle" class="s">設定値を発行</text>
+          <rect x="180" y="60" width="140" height="70" rx="8" class="bx-a1"/>
+          <text x="250" y="90" text-anchor="middle" class="b">設定値のファイル</text>
+          <text x="250" y="112" text-anchor="middle" class="s">オーナーの Mac</text>
+          <rect x="360" y="60" width="140" height="70" rx="8" class="bx-a1"/>
+          <text x="430" y="90" text-anchor="middle" class="b">ビルドしたファイル</text>
+          <text x="430" y="112" text-anchor="middle" class="s">設定値が埋め込まれる</text>
+          <rect x="534" y="60" width="128" height="70" rx="8" class="bx-a3"/>
+          <text x="598" y="90" text-anchor="middle" class="b a">Firebase Hosting</text>
+          <text x="598" y="112" text-anchor="middle" class="s">そのまま置く</text>
+          <rect x="690" y="60" width="120" height="70" rx="8" class="bx-a6"/>
+          <text x="750" y="90" text-anchor="middle" class="b">ブラウザ</text>
+          <text x="750" y="112" text-anchor="middle" class="s">Vue のファイル</text>
+
+          <line x1="140" y1="95" x2="176" y2="95" class="ln-a4" marker-end="url(#f5-a4)"/>
+          <text x="158" y="86" text-anchor="middle" class="a">①</text>
+          <line x1="320" y1="95" x2="356" y2="95" class="ln-a1" marker-end="url(#f5-a1)"/>
+          <text x="338" y="86" text-anchor="middle" class="a">②</text>
+          <line x1="500" y1="95" x2="530" y2="95" class="ln-a1" marker-end="url(#f5-a1)"/>
+          <text x="515" y="86" text-anchor="middle" class="a">③</text>
+          <line x1="662" y1="95" x2="686" y2="95" class="ln-a3" marker-end="url(#f5-a3)"/>
+          <text x="674" y="86" text-anchor="middle" class="a">④</text>
+          <path d="M750 130 V190 H75 V134" class="ln-a2 dash" marker-end="url(#f5-a2)"/>
+          <text x="412" y="182" text-anchor="middle" class="a">⑤ Vue がログインのたびに、この設定値で Firebase Auth を呼ぶ</text>
+          <text x="250" y="40" text-anchor="middle" class="xs">ここまでが、ビルドの前</text>
+          <text x="598" y="40" text-anchor="middle" class="xs">ここからは、ファイルの一部</text>
+        </svg>
+      </div>
+      <figcaption>図5:設定値は、② のビルドで <span class="t-a1">ビルドしたファイル</span> の一部になり、その後はファイルと一緒に動きます。<span class="t-a3">Firebase Hosting</span> は中身を見ずに、そのまま配ります。⑤ は、ものの移動ではなく「使う」なので破線にしました。</figcaption>
+    </figure>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>誰が、何をするか</th><th>設定値がある場所</th></tr></thead>
+        <tbody>
+          <tr><td class="step">①</td><td><span class="t-a4">Firebase Auth</span> が、ウェブアプリを登録したオーナーに設定値を見せる。<span class="t-a1">オーナー</span> が、手元の設定値のファイルに書く</td><td><span class="loc a4">Firebase Auth のコンソール</span><span class="loc a1">Mac のファイル</span></td></tr>
+          <tr><td class="step">②</td><td><span class="t-a1">オーナー</span> が Vue をビルドする。ビルドの道具が、設定値のファイルを読み、JavaScript のファイルの中に値をそのまま書き込む</td><td><span class="loc a1">ビルドしたファイル</span></td></tr>
+          <tr><td class="step">③</td><td><span class="t-a1">オーナー</span> が、ビルドしたファイルを <span class="t-a3">Firebase Hosting</span> に送る</td><td><span class="loc a3">Firebase Hosting</span></td></tr>
+          <tr><td class="step">④</td><td>利用者が画面を開くたびに、<span class="t-a3">Firebase Hosting</span> がファイルを <span class="t-a6">ブラウザ</span> に配る(図4 の ⑦)</td><td><span class="loc a6">ブラウザ</span></td></tr>
+          <tr><td class="step">⑤</td><td><span class="t-a2">Vue</span> が、ログインのたびに、この設定値で本番の Firebase Auth を呼ぶ(図4 の ⑭)</td><td><span class="loc a6">ブラウザ</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>なぜ、Rails のように動き始めるときに受け取らないのか</strong></p>
+    <p>結論:Vue が動くのは利用者のブラウザの中で、そこには設定値を後から渡す係がいないからです。</p>
+    <ol class="flow">
+      <li><strong>ブラウザには、設定を渡す仕組みがない。</strong>Rails は、Google の中の Cloud Run が、動き始めるたびに環境変数を渡してくれます。ブラウザは利用者の持ち物で、Google はそこに環境変数を渡せません。Vue が手にできるのは、配られたファイルの中身だけです。</li>
+      <li><strong>ファイルに埋め込めば、追加の通信がいらない。</strong>設定値を別のファイルにして、画面を開くたびに取りに行く方法もありますが、その分だけ通信が増え、取りに行く仕組みを Vue に書く必要があります。ビルドのときに埋め込むのは、Vite の標準のやり方です。</li>
+      <li><strong>埋め込んでも、秘密は漏れない。</strong>この4つの値は、ブラウザに配る JavaScript に入るので、誰でも読めます。もともと秘密ではありません。Firebase Auth は、値を知っているだけでは使わせず、許可したドメイン(<code>web.app</code> など)からのログインだけを受け付けます。</li>
+    </ol>
+    <p>まとめ:埋め込む損は、設定値を変えたらビルドからやり直すことだけです。設定値はめったに変わらないので、困りません。</p>
+    <div class="note warn">
+      <p><strong>落とし穴:</strong>いつもの Vue のコンテナ(<code>docker compose run web</code>)でビルドすると、開発用の設定値が埋め込まれます。このコンテナには、ローカル開発のために、開発用の設定値が環境変数で渡されているからです。ビルドの道具(Vite)は、ファイルに書いた値より、環境変数の値を優先します。そのため本番のビルドは、開発用の設定値を渡さない別のコマンドで行います(仕様書 032)。間違えても画面は開きますが、ログインが開発用の Firebase Auth に行き、Rails が ID トークンを断ります(つなぎ3)。</p>
+    </div>
+
+    <h3>つなぎ3:Rails に、本番の Firebase Auth の札だけを信じるよう教える</h3>
+    <p>ID トークンには、「どの Firebase Auth が発行したか」を表す印として、プロジェクト ID が入っています。<span class="t-a5">Rails</span> は、図4 の ⑱ で、この印が「自分が信じる Firebase Auth」と同じかを確かめます。違えば、署名が本物でも断ります(401)。開発用の Firebase Auth の札を、本番の Rails で使わせないためです。</p>
+    <p>Rails が信じる Firebase Auth は、環境変数 <code>FIREBASE_PROJECT_ID</code> で教えます。ローカルでは開発用のプロジェクト ID が入っていますが、本番の Rails にはまだ入っていません。図4 の ⑤ で、<code>knowledge-library-prod</code> を入れます。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>本番の Rails の設定</th><th>ログインが要らない一覧(場面 3)</th><th>ログインした投稿(場面 5)</th></tr></thead>
+        <tbody>
+          <tr><td>今(<code>FIREBASE_PROJECT_ID</code> がない)</td><td>200(ID トークンを見ないので動く)</td><td>500。トークンを確かめようとして、信じる相手が決まっていないため止まる</td></tr>
+          <tr class="now"><td>⑤ の後(<code>knowledge-library-prod</code>)</td><td>200</td><td>本番の Firebase Auth の札なら 201。開発用の札なら 401</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>この値は、ブラウザに配るファイル(つなぎ2)にも入る公開の値で、秘密ではありません。そのため、Secret Manager には入れず、Cloud Run の普通の環境変数で渡します。</p>
+    <p>ログインせずに投稿を送った場合(完了条件の AC-5)は、Rails は ID トークンを確かめる前に「札がない」として 401 を返します。この振る舞いは、⑤ の前でも後でも同じです。</p>
+
+    <h3>受け持ちの分け方</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>すること</th><th>誰がするか</th></tr></thead>
+        <tbody>
+          <tr><td>ファイルを配る、画面の URL に <code>index.html</code> を返す、<code>/api</code> を取り次ぐ</td><td><span class="t-a3">Firebase Hosting</span>。私たちが書くのは、その設定(<code>firebase.json</code>)だけ</td></tr>
+          <tr><td>Google でのログイン、ID トークンの発行</td><td><span class="t-a4">Firebase Auth</span>。私たちはコンソールで有効にするだけ</td></tr>
+          <tr><td>設定値をファイルに埋め込む</td><td>ビルドの道具(Vite)。私たちは設定値のファイルを用意するだけ</td></tr>
+          <tr><td>ID トークンを確かめる、記事を読み書きする</td><td><span class="t-a5">Rails</span>。Issue #8・#10 で書いたコードのまま</td></tr>
+          <tr><td>画面を出す、ログインと API を頼む</td><td><span class="t-a2">Vue</span>。Issue #11・#12 で書いたコードのまま</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Issue #32 で私たちが新しく書くファイルは、<code>firebase.json</code> の1つだけです。残りは、設定値を用意して、すでにある部品をつなぐ作業です。</p>
+  </section>
+
+  <section id="words">
+    <h2><span class="num">7</span>言葉:設定やファイルの名前と、AWS・Rails で近いもの</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>やっていること</th><th>製品・ファイルの名前</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td>ファイルを配る</td><td>Firebase Hosting</td><td>ファイルを、世界各地の複製(CDN)から HTTPS で配るサービス。<code>/api</code> などを別のサービスへ取り次げる</td><td>図3・図4 の青</td></tr>
+          <tr><td>配り方の設定</td><td><code>firebase.json</code> の <code>hosting</code></td><td>配るフォルダ(<code>public</code>)と、パスごとの扱い(<code>rewrites</code>)</td><td>6章のつなぎ1</td></tr>
+          <tr><td>取り次ぐ</td><td><code>rewrites</code> の <code>run</code></td><td>パスに合ったリクエストを、Cloud Run のサービスへ回す</td><td>図4 の ⑩⑰</td></tr>
+          <tr><td>画面の URL に index.html を返す</td><td><code>rewrites</code> の <code>destination: "/index.html"</code></td><td>SPA のフォールバックと呼ばれる設定</td><td>図4 の ⑦</td></tr>
+          <tr><td>本番の URL</td><td><code>knowledge-library-prod.web.app</code></td><td>Firebase Hosting が用意する URL。<code>firebaseapp.com</code> でも同じものが開く</td><td>図4 の ⑥</td></tr>
+          <tr><td>ログインを受け持つ</td><td>Firebase Authentication(Firebase Auth)</td><td>Google ログインなどを受け持ち、ID トークンを発行する</td><td>図3・図4 の茶</td></tr>
+          <tr><td>設定値</td><td><code>firebaseConfig</code>(<code>apiKey</code>、<code>authDomain</code>、<code>projectId</code>、<code>appId</code>)</td><td>ウェブアプリを登録すると発行される4つの値</td><td>図5</td></tr>
+          <tr><td>設定値のファイル</td><td><code>web/.env.production.local</code></td><td>本番のビルドのときだけ Vite が読む。コミットしない。オーナーが書く</td><td>図5 の ①</td></tr>
+          <tr><td>ビルドしたファイル</td><td><code>web/dist</code></td><td><code>npm run build</code>(中で <code>vite build</code>)の出力先</td><td>図5 の ②</td></tr>
+          <tr><td>ファイルを送る</td><td><code>firebase deploy --only hosting</code></td><td>Firebase CLI のコマンド。<code>web/dist</code> を Firebase Hosting に送る</td><td>図4 の ④</td></tr>
+          <tr><td>本番のプロジェクト ID</td><td><code>FIREBASE_PROJECT_ID</code></td><td>Rails が「信じる Firebase Auth」を知るための環境変数</td><td>図4 の ⑤ と ⑱</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>AWS と Rails で近いもの</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>このノート</th><th>AWS で近いもの</th><th>Rails・ローカル開発で近いもの</th></tr></thead>
+        <tbody>
+          <tr><td>Firebase Hosting</td><td>S3 にファイルを置き、CloudFront で配る</td><td>Rails の <code>public/</code> に置いたファイルを nginx が返す</td></tr>
+          <tr><td>取り次ぐ(<code>rewrites</code> の <code>run</code>)</td><td>CloudFront のビヘイビアで <code>/api/*</code> を ALB に回す</td><td>nginx の <code>proxy_pass</code>。ローカルでは Vite の <code>server.proxy</code></td></tr>
+          <tr><td>設定値をビルドで埋め込む</td><td>(同じ。ビルドの道具の話で、AWS でも変わらない)</td><td><code>rails assets:precompile</code> のときに値が書き込まれる、に近い</td></tr>
+          <tr><td>Firebase Auth</td><td>Amazon Cognito</td><td>Devise と OmniAuth の Google ログイン(ただし会員の情報は Rails の外に持つ)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="steps">
+    <h2><span class="num">8</span>Issue #32 の作業と完了条件</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>作業</th><th>誰が</th><th>図4</th><th>完了条件</th></tr></thead>
+        <tbody>
+          <tr><td>仕様書と ADR 0008 を書く</td><td>Claude</td><td>―</td><td>―</td></tr>
+          <tr class="now"><td><code>firebase.json</code> を書く(つなぎ1)</td><td>Claude</td><td>⑦⑩⑰</td><td>AC-2、AC-3</td></tr>
+          <tr><td>Firebase Auth で Google を有効にし、ウェブアプリを登録する</td><td><span class="t-a1">オーナー</span></td><td>①②</td><td>AC-4</td></tr>
+          <tr><td>設定値を <code>web/.env.production.local</code> に書く(つなぎ2)</td><td><span class="t-a1">オーナー</span></td><td>③</td><td>AC-4</td></tr>
+          <tr><td>Rails に <code>FIREBASE_PROJECT_ID</code> を足す(つなぎ3)</td><td><span class="t-a1">オーナー</span></td><td>⑤</td><td>AC-4</td></tr>
+          <tr><td>Vue をビルドし、Firebase Hosting にデプロイする</td><td><span class="t-a1">オーナー</span></td><td>③④</td><td>AC-1、AC-2</td></tr>
+          <tr><td>画面を開き、ログインして投稿する</td><td><span class="t-a1">オーナー</span>(ブラウザ)</td><td>⑥〜㉑</td><td>AC-1、AC-4</td></tr>
+          <tr><td>curl と gcloud で確かめる</td><td>Claude</td><td>⑨〜⑬</td><td>AC-2、AC-3、AC-5</td></tr>
+          <tr><td>手順書 <code>docs/production-setup.md</code> に残す</td><td>Claude</td><td>―</td><td>―</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>色を付けた行が、Issue #32 で新しく書くファイルです。Google の画面での操作は、Issue #30・#31 と同じく、オーナーが行います。</p>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">9</span>確認用の問い</h2>
+    <ol class="check">
+      <li>Rails と Vue は、本番でそれぞれどこで動きますか。Vue に「Cloud Run」が要らないのはなぜですか。<span class="hint">3章の図2 と表です。</span></li>
+      <li><code>docker build</code> で出来るものと、<code>npm run build</code> で出来るものは、それぞれ何ですか。Vue のビルドで <code>docker run</code> を使うのは、箱を作るためですか。<span class="hint">3章の「docker build と npm run build の違い」です。</span></li>
+      <li>ブラウザで記事の一覧を開いたとき、<code>/api/articles</code> のリクエストは、誰から誰へ渡りますか。ブラウザが Rails と直接話す場面はありますか。<span class="hint">5章の場面 3 と、図3 の説明です。</span></li>
+      <li><code>/articles/new</code> を直接開いたとき、Firebase Hosting は何を返しますか。返さないと何が起きますか。<span class="hint">6章のつなぎ1 の表です。</span></li>
+      <li>本番の Firebase Auth の設定値を変えたら、何をやり直す必要がありますか。Rails の設定を変えたときとの違いは何ですか。<span class="hint">3章の表の4行目と、6章のつなぎ2 です。</span></li>
+      <li>開発用の Firebase Auth でログインした ID トークンを、本番の Rails に送ると、どうなりますか。それはなぜですか。<span class="hint">6章のつなぎ3 です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

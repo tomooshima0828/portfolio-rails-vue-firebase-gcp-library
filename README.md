@@ -184,7 +184,7 @@ docker compose run --rm api bin/rails db:prepare  # DB を作り直す
 | PostgreSQL | 本番は Cloud SQL、ローカルは Docker | A |
 | jwt gem(Firebase ID トークンの検証を自前実装) | Firebase Auth のログインを Rails 側で受ける | A |
 | Active Storage + Cloud Storage | 記事のサムネイル画像 | A |
-| rack-cors | Vue(別オリジン)からの呼び出し | A |
+| rack-cors | 使わない。本番は Firebase Hosting が、ローカルは Vite の開発サーバーが `/api` を転送するので、画面と API が同じオリジンになる([ADR 0008](docs/adr/0008-proxy-api-through-firebase-hosting.md)) | — |
 | RSpec / FactoryBot | request spec 中心のテスト | A |
 | RuboCop / Brakeman / bundler-audit | 静的解析、脆弱性チェック | A |
 | Bullet | N+1 の検出 | B |
@@ -264,7 +264,8 @@ docker compose run --rm api bin/rails db:prepare  # DB を作り直す
 .
 ├── api/        # Rails API
 ├── web/        # Vue 3 SPA
-├── firebase/   # firestore.rules、ルールのテスト、firebase.json
+├── firebase/   # firestore.rules、ルールのテスト
+├── firebase.json  # Firebase CLI の設定(今は Firebase Hosting だけ)
 ├── infra/      # Cloud Run・Cloud SQL などの設定(余力があれば Terraform)
 ├── docs/       # 構成図、ADR、AI 利用ガイドライン、runbook、スプリントの記録
 └── .github/    # GitHub Actions、PR テンプレート

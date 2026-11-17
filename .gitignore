@@ -11,5 +11,8 @@
 # Claude Code の個人設定(全員で共有する設定は .claude/settings.json)
 .claude/settings.local.json
 
+# Firebase CLI がデプロイのときに作るキャッシュ(前回送ったファイルの一覧)
+.firebase/
+
 # OS
 .DS_Store

@@ -25,6 +25,10 @@
 | データベース、DB の利用者 | `api_production`、`api`(パスワードで認証する) |
 | 鍵の金庫(Secret Manager) | シークレット `db-password`。中身は利用者 `api` のパスワード |
 | 表を作るジョブ(Cloud Run) | ジョブ `migrate`。`bin/rails db:migrate` を実行する |
+| 画面の URL(Firebase Hosting) | `https://knowledge-library-prod.web.app`。`/api/**` は Cloud Run のサービス `api` へ転送する(`firebase.json`) |
+| Firebase Auth | ログインの方法は Google。ウェブアプリ `knowledge-library-web` |
+| Rails が信じる Firebase のプロジェクト | Cloud Run の環境変数 `FIREBASE_PROJECT_ID=knowledge-library-prod` |
+| 今のイメージ | `4f5855b`(サービス `api` とジョブ `migrate` の両方)。2026-11-16 から |
 
 ## 1. プロジェクトと課金(#29)
 
@@ -698,3 +702,153 @@ gcloud sql instances create db --project=knowledge-library-prod \
 - **サービスとジョブは、同じイメージで動かす**:イメージを作り直したら、ジョブとサービスの両方を新しいイメージに替える。`database.yml` が違うイメージでは、同じ環境変数を渡しても DB に繋げないことがある
 - **古いイメージを消す**:置き場の無料枠は 0.5GB。サービスとジョブが `fcf8acc` を使うようになったので、`cc1e273` は使われていない。「Artifact Registry」の `knowledge-library` → `api` で、タグ `cc1e273` のイメージを選んで削除する。#31 では 2026-11-13 に消し、`fcf8acc` だけが残った
 - **パスワードを変えたら、ジョブとサービスの版の番号を変える**:2.10 の鍵と同じく、新しい版を足しても、版の番号を変えてデプロイし直すまで、Rails は古いパスワードを使う
+
+## 4. Firebase Hosting(#32)
+
+作業した日:2026-11-16
+
+Vue を Firebase Hosting から配り、本番でログイン → 記事の投稿 → 一覧の表示が通るところまでを手で通す。仕様は [docs/specs/032-firebase-hosting.md](specs/032-firebase-hosting.md)、`/api` を Firebase Hosting から転送する理由は [ADR 0008](adr/0008-proxy-api-through-firebase-hosting.md)、仕組みの図は [docs/notes/032-vue-firebase-hosting.html](notes/032-vue-firebase-hosting.html)。Firebase のコンソールと Google Cloud のコンソールの関係は [docs/notes/firebase-and-google-cloud.html](notes/firebase-and-google-cloud.html)。
+
+Firebase Hosting と Firebase Auth の API は、#29 で Firebase のプロジェクトを作ったときに有効になっていた。有効にする作業は要らない。
+
+### 4.1 Firebase Auth で Google ログインを有効にし、ウェブアプリを登録する
+
+Firebase のコンソール(https://console.firebase.google.com/)で、`knowledge-library-prod` を開いて行う。開発用のプロジェクトと取り違えないよう、画面の上のプロジェクト名を確かめる。
+
+1. 「構築」の「Authentication」を開き、「始める」を押す。「ログイン方法」タブで「Google」を選び、有効にして、プロジェクトのサポートメールを選び、保存する
+2. 歯車の「プロジェクトの設定」の「マイアプリ」で、ウェブのアイコン(`</>`)を押す。ニックネームに `knowledge-library-web` と入れる。「このアプリの Firebase Hosting も設定します」のチェックは入れない(Firebase Hosting の設定は `firebase.json` で行う)。「アプリを登録」を押す
+3. 表示された `firebaseConfig` の値は、4.2 で使う。いつでも「プロジェクトの設定」の「マイアプリ」で見直せる
+4. 「Authentication」の「設定」タブの「承認済みドメイン」に、`localhost`、`knowledge-library-prod.firebaseapp.com`、`knowledge-library-prod.web.app` の3つがあることを確かめる。足すものはない
+
+確かめるときは、Firebase Management API と Identity Toolkit API を、オーナーのアカウントで読む。設定値(API キーなど)は表示しない。
+
+```bash
+P=knowledge-library-prod; T=$(gcloud auth print-access-token)
+H=(-H "Authorization: Bearer $T" -H "x-goog-user-project: $P")
+# ウェブアプリの名前と状態(knowledge-library-web ACTIVE)
+curl -s "${H[@]}" "https://firebase.googleapis.com/v1beta1/projects/$P/webApps" \
+  | python3 -c "import json,sys;[print(a['displayName'],a['state']) for a in json.load(sys.stdin)['apps']]"
+# ログインの方法(google.com enabled= True)
+curl -s "${H[@]}" "https://identitytoolkit.googleapis.com/admin/v2/projects/$P/defaultSupportedIdpConfigs" \
+  | python3 -c "import json,sys;[print(c['name'].split('/')[-1],'enabled=',c.get('enabled')) for c in json.load(sys.stdin)['defaultSupportedIdpConfigs']]"
+# 承認済みドメイン
+curl -s "${H[@]}" "https://identitytoolkit.googleapis.com/admin/v2/projects/$P/config" \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['authorizedDomains'])"
+```
+
+### 4.2 設定値を `web/.env.production.local` に書く
+
+オーナーが、`web/` の中に `.env.production.local` を作り、4.1 の `firebaseConfig` の値を書く。値は引用符で囲まない。このファイルは `web/.gitignore` の `*.local` でコミットされず、Claude は読まない。
+
+```
+VITE_FIREBASE_PROJECT_ID=      # projectId(knowledge-library-prod)
+VITE_FIREBASE_API_KEY=         # apiKey
+VITE_FIREBASE_AUTH_DOMAIN=     # authDomain(knowledge-library-prod.firebaseapp.com)
+VITE_FIREBASE_APP_ID=          # appId
+```
+
+コメントの部分は書かない。Vite は、本番のビルド(`vite build`)のときだけ、このファイルを読む。開発用の値は、リポジトリの直下の `.env` にあり、`compose.yaml` を通って `web` のコンテナに渡る。この2つは別のファイルで、互いに影響しない。
+
+### 4.3 イメージを作り直し、ジョブとサービスを新しいイメージに替える
+
+#40 で puma を 8.0.3 に上げた分を、本番に入れる。Rails のデプロイは 4.4 の `FIREBASE_PROJECT_ID` と一緒に行う。
+
+1. 3.7 と同じ手順で、イメージを作って push する。#32 では、タグは `4f5855b`、digest は `sha256:668f1626…` だった
+2. 「Cloud Run」の「ジョブ」で `migrate` を開き、「編集」で、コンテナ イメージの URL を `4f5855b` に替えて保存し、「実行」する。新しいマイグレーションはないので、表は変わらない。デプロイの順番(ジョブ → サービス)を守り、ジョブとサービスのイメージをそろえるために行う(ADR 0006)。#32 では、実行 `migrate-zncr6` が成功した
+3. サービス `api` は、4.4 でイメージを替える
+4. 4.4 の後、使われなくなった古いイメージ `fcf8acc` を、Artifact Registry から消す(3.13)。#32 では、`4f5855b` だけが残った
+
+### 4.4 Rails に `FIREBASE_PROJECT_ID` を足す
+
+Rails は、ID トークンの `aud` と `iss` が、この値のプロジェクトのものかを確かめる(`api/app/lib/firebase_id_token_verifier.rb`)。値がないと、ID トークンを確かめる処理が例外で止まり、ログインが要る API は 500 を返す。プロジェクト ID は公開の値なので、Secret Manager ではなく、普通の環境変数で渡す。
+
+1. 「Cloud Run」でサービス `api` を開き、「コンテナ」タブを開く
+2. コンテナ イメージの URL を `4f5855b` に替え、「変数とシークレット」の「変数を追加」で、`FIREBASE_PROJECT_ID` = `knowledge-library-prod` を足す
+3. 「差分を表示して再デプロイ」を押し、変わるのがイメージと `FIREBASE_PROJECT_ID` の2点だけであることを確かめて、デプロイする
+
+#32 では、版 `api-00004-w7p` が起動した。偽の ID トークン(`Authorization: Bearer dummy`)で `POST /api/articles` を送ると、401 が返るようになった(足す前は、確かめる処理が止まるので 500 になる)。
+
+```bash
+gcloud run jobs update migrate \
+  --image=asia-northeast1-docker.pkg.dev/knowledge-library-prod/knowledge-library/api:4f5855b \
+  --region=asia-northeast1 --project=knowledge-library-prod
+gcloud run jobs execute migrate --wait --region=asia-northeast1 --project=knowledge-library-prod
+gcloud run deploy api \
+  --image=asia-northeast1-docker.pkg.dev/knowledge-library-prod/knowledge-library/api:4f5855b \
+  --update-env-vars=FIREBASE_PROJECT_ID=knowledge-library-prod \
+  --region=asia-northeast1 --project=knowledge-library-prod
+```
+
+### 4.5 Vue を本番の設定値でビルドする
+
+リポジトリの直下で実行する。
+
+```bash
+docker run --rm -v "$PWD/web":/app -w /app node:24.22.0-slim npm run build
+```
+
+- `docker compose run web` は使わない。`compose.yaml` が、開発用の Firebase の値を環境変数で渡し、Vite はファイルより環境変数を優先するので、開発用の値が埋め込まれる
+- Node のイメージは、`web/Dockerfile.dev` と CI と同じ版にする。`web/node_modules` は Linux のコンテナの中で入れたものなので、Mac の上ではなく、コンテナの中でビルドする
+- 出力は `web/dist`。`web/.gitignore` でコミットされない
+
+ビルドした JavaScript に、本番のプロジェクト ID だけが入ったことを確かめる。プロジェクト ID は公開の値。
+
+```bash
+grep -o 'knowledge-library-[a-z]*' web/dist/assets/*.js | sort | uniq -c   # knowledge-library-prod だけが出る
+```
+
+### 4.6 Firebase Hosting にデプロイする
+
+Firebase CLI は、Mac に入れずに、版を決めて `npx` で動かす。`.firebaserc` は作らず、デプロイ先を毎回 `--project` で書く。
+
+```bash
+# 1. ログインする(初回だけ)。ブラウザが開くので、オーナーの Google アカウントを選ぶ
+npx --yes firebase-tools@15.34.2 login
+# 2. デプロイする。最後に「Deploy complete!」と Hosting URL が出る
+npx --yes firebase-tools@15.34.2 deploy --only hosting --project knowledge-library-prod
+```
+
+`login` の途中で、次の2つを聞かれた。どちらも `n` にした。
+
+| 質問 | 答え | 理由 |
+|---|---|---|
+| Enable Gemini in Firebase features? | `n` | 使わない(1.1 と同じ) |
+| Allow Firebase to collect CLI and Emulator Suite usage and error reporting information? | `n` | 送らなくても、動きは変わらない |
+
+ログインの情報は、Mac のホームフォルダ(`~/.config/configstore/`)に保存され、リポジトリには入らない。
+
+### 4.7 確かめる
+
+```bash
+U=https://knowledge-library-prod.web.app
+
+# 画面(AC-1、AC-2)。どちらも 200 で、同じ index.html が返る
+curl -s -o /dev/null -w "%{http_code}\n" $U/
+curl -s -o /dev/null -w "%{http_code}\n" $U/articles/new
+
+# API の転送とキャッシュ(AC-3)。200 と {"articles":[...]}。Cache-Control は private、X-Cache は MISS
+curl -s -D - $U/api/articles | grep -iE "^HTTP|cache-control|^x-cache|^\{"
+
+# ログインせずに投稿すると 401(AC-5)
+curl -s -X POST -H "Content-Type: application/json" -d '{}' -w " %{http_code}\n" $U/api/articles
+```
+
+AC-4(ログインして投稿し、一覧に出る)は、オーナーがブラウザで確かめる。
+
+2026-11-16 の結果:
+
+| 確かめたこと | 結果 |
+|---|---|
+| `/`、`/articles/new` | どちらも 200、`text/html`。ビルドした `index-CdY7-fFQ.js` を読み込む `index.html` |
+| `/api/articles` | 200、`{"articles":[]}`(投稿の前)。`Cache-Control: max-age=0, private, must-revalidate`、2回続けても `X-Cache: MISS` |
+| ログインせずに `POST /api/articles` | 401、`{"error":"unauthorized"}` |
+| ブラウザでログインして投稿 | 投稿でき、一覧に出た(オーナーが確かめた)。投稿の後、`/api/articles` の件数は 2(中身は読んでいない) |
+
+### 4.8 注意点
+
+- **Vue の設定値を変えたら、ビルドからやり直す**:Vue は、Firebase の設定値をビルドのときにファイルへ埋め込む。Rails のように、デプロイし直すだけでは変わらない
+- **画面の `index.html` は、ブラウザに1時間キャッシュされる**:Firebase Hosting の初めの値で、`/` のレスポンスに `Cache-Control: max-age=3600` が付いていた。Vue をデプロイし直した直後は、ブラウザによっては、最大1時間、前の画面が出ることがある。困ったら、`firebase.json` に、`index.html` だけキャッシュしない `headers` の設定を足す
+- **`/api` のレスポンスの `Vary`**:Firebase Hosting は、転送したレスポンスの `Vary` に、`cookie` と `need-authorization` を足していた。Firebase の文書では「`Authorization` を足す」と説明されている。`private` でキャッシュされないので、どちらでも結論は変わらない
+- **`firebase.json` を変えたら、Firebase Hosting をデプロイし直す**:`rewrites` などの設定は、デプロイのときに Firebase Hosting に写される
+- **Rails をデプロイし直しても、Firebase Hosting はデプロイし直さなくてよい**:`rewrites` は Cloud Run のサービスを名前で指し、`pinTag` を使っていないので、Cloud Run でいま動いている版に転送される
+- **投稿した記事は、DB の作り直しで消える**:3.12 で DB を作り直したら、画面から入れ直す

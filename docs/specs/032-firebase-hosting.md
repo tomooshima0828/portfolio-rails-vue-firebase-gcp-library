@@ -56,7 +56,9 @@ Google Cloud と Firebase の画面の操作は、オーナーがコンソール
 5. (ファイルではない操作)Authentication と Google ログイン → ウェブアプリの登録 → `web/.env.production.local`(オーナー)→ Cloud Run に `FIREBASE_PROJECT_ID` → Vue のビルドとデプロイ(オーナー)→ 確認
 6. `docs/production-setup.md`:「4. Firebase Hosting」の章。5 で実際に行った手順を書く
 7. `docs/architecture.md`:配信の行を、今の姿に直す
-8. `README.md`:技術一覧の rack-cors の行を、今の使い方(本番でも使わない)に直す(ADR 0008)
+8. `README.md`:技術一覧の rack-cors の行を、今の使い方(本番でも使わない)に直す(ADR 0008)。ディレクトリ構成の図の `firebase.json` を、リポジトリ直下に移す
+9. `.gitignore`:Firebase CLI がデプロイのときに作るキャッシュ `.firebase/` を除外する
+10. `docs/notes/firebase-and-google-cloud.html`:PR #42 で文字だけにした ADR 0008 への言及を、リンクに戻す
 
 ### 本番の値
 

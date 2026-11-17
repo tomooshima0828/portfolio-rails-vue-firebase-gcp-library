@@ -23,6 +23,7 @@
 | Issue #30 | 置き場と、動かす場所と、鍵の金庫 | Rails を Cloud Run で動かすまでの流れと、master.key の渡り方 | [030-cloud-run-deploy.html](030-cloud-run-deploy.html) |
 | Issue #31 | データベースと、接続口と、2つの門 | Rails から Cloud SQL までの繋がり方と、DB のパスワードの渡り方 | [031-cloud-sql-connection.html](031-cloud-sql-connection.html) |
 | Issue #32 | Firebase Hosting と、3つのつなぎ | Vue を Firebase Hosting で本番に置き、ログイン → 投稿 → 一覧を通す流れ。`docker build` と `npm run build` の違い | [032-vue-firebase-hosting.html](032-vue-firebase-hosting.html) |
+| Issue #33 | 自動デプロイと、サービスアカウントの権限借用 | main へのマージから本番が更新されるまでの流れ。GitHub の OIDC トークンが deployer のアクセストークンに交換される仕組みと、仕様書で決める5つの事項 | [033-auto-deploy.html](033-auto-deploy.html) |
 
 ## Issue に紐づかないもの
 

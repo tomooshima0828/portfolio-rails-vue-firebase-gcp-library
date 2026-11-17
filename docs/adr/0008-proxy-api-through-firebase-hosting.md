@@ -30,7 +30,7 @@
 - **api と web を分けた構成のまま見せられる**。3 は、部品が一番少ないが、画面を直すだけでも Rails のイメージを作り直す必要があり、CDN もない。README の「api/ と web/ を分ける」構成とずれる。
 - **1 の損は、このアプリでは困らない**。損は次の2つ。
   - Firebase Hosting からの取り次ぎは、60秒で打ち切られる。このアプリの API は、1秒もかからない。
-  - Firebase Hosting の CDN が、API のレスポンスをキャッシュして、ほかの人に返すおそれがある。Firebase の文書によると、Cloud Run に取り次いだリクエストのレスポンスは、初めの値では CDN にキャッシュされない。キャッシュされるのは、レスポンスの `Cache-Control` に `public` を付けたときで、`private` なら、キャッシュしてよいのはリクエストした人のブラウザだけになる。また、Firebase Hosting は、取り次いだレスポンスの `Vary` に `Authorization` を足すので、ID トークンが違えば、同じキャッシュは返らない。Rails のレスポンスには `Cache-Control: max-age=0, private, must-revalidate` が付いている(2026-11-13 に、本番の `/api/articles` で確かめた)。取り次いだ後も同じであることを、仕様書 032 の AC-3 で確かめる。
+  - Firebase Hosting の CDN が、API のレスポンスをキャッシュして、ほかの人に返すおそれがある。Firebase の文書によると、Cloud Run に取り次いだリクエストのレスポンスは、初めの値では CDN にキャッシュされない。キャッシュされるのは、レスポンスの `Cache-Control` に `public` を付けたときで、`private` なら、キャッシュしてよいのはリクエストした人のブラウザだけになる。また、Firebase の文書によると、Firebase Hosting は、取り次いだレスポンスの `Vary` に `Authorization` を足すので、ID トークンが違えば、同じキャッシュは返らない。ただし、実際のレスポンスの `Vary` には `cookie` と `need-authorization` が入り、`Authorization` という名前は出てこない(2026-11-17 に、本番の `/api/articles` で確かめた)。Firebase Hosting の中で、「`Authorization` ヘッダーがあるかどうか」を `need-authorization` という名前で扱っていると考えられるが、文書には書かれていない。どちらにしても、このアプリは `Cache-Control: public` を付けないので、CDN にキャッシュされることはなく、この違いは影響しない。Rails のレスポンスには `Cache-Control: max-age=0, private, must-revalidate` が付いている(2026-11-13 に、本番の `/api/articles` で確かめた)。取り次いだ後も同じであることを、仕様書 032 の AC-3 で確かめる。
 
 4 は、取り次ぎの60秒の上限がなく、Firebase Hosting を通らない分だけ通り道が短い。2 は、Google Cloud だけで完結する。3 は、デプロイするものが1つで済む。1 を選ぶことで、これらの利点は捨てる。
 

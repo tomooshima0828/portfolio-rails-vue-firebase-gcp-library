@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Google Cloud の全体図と用語</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* 学習ノート(layered-tech-explanation スキルのひな形から作成)。
+   登場人物の色:a2=今ここ(2-6 の借用)、a3=Rails、a4=deploy.yml のジョブ、a5=サービスアカウント(api-runtime と deployer。同じ仲間なので同じ色)、a6=依頼する先のリソース */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; overflow-wrap: anywhere; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul, .answer ol { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+.answer + .answer { margin-top: 12px; }
+
+/* 見出しは、日本語の単語の途中で折り返さない。折り返してよい位置は <wbr> で示す */
+h1, h2, h3 { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .bx-pol { fill: var(--surface); stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 3; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .mk-a5 { fill: var(--a5); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」、.warn は注意 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+td.nw, table.claims td:first-child { white-space: nowrap; }
+
+/* 居場所のバッジ */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+pre .c { color: var(--accent); }
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .mk-a2 { fill: var(--a2); }
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #33 · 学習メモ</p>
+    <h1>Google Cloud の<wbr>全体図と用語</h1>
+    <p class="lead">Issue #33 の準備の作業で操作したものが、Google Cloud の中のどこにあり、どういう関係かを、全体図と用語の表で示します。最後に、プログラムが Google Cloud にリクエストを送るときの関係を示します。</p>
+    
+    <div class="answer">
+      <p><strong>要点</strong></p>
+      <ol>
+        <li>Google Cloud では、プロジェクトの中に製品(Cloud Run など)があり、製品の中に、オーナーが作ったリソース(サービス <code>api</code> など)があります。</li>
+        <li>リソースは、それぞれ IAM ポリシー(許可の一覧)を持ちます。1行は「誰に(プリンシパル)、何を許可するか(ロール)」です。</li>
+        <li>Rails や GitHub Actions のジョブは、サービスアカウントを使ってリクエストを送ります。リクエストを受けた側は、自分の IAM ポリシーで許可するかを決めます。</li>
+      </ol>
+    </div>
+  </header>
+
+  <section id="map">
+    <h2><span class="num">1</span>全体図</h2>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 840 530" role="img" aria-label="全体図。左に GitHub があり、GitHub のリポジトリと deploy.yml のジョブがある。右に Google Cloud のプロジェクト knowledge-library-prod があり、その中に製品 Artifact Registry、Cloud Run、Secret Manager、Cloud SQL、IAM、Firebase Hosting がある。各製品の中に、オーナーが作ったリソースがある。リポジトリ knowledge-library には IAM ポリシーがくっついている。プロジェクトにも IAM ポリシーがある。">
+          <!-- GitHub -->
+          <rect x="12" y="40" width="190" height="200" rx="12" class="bx-frame"/>
+          <text x="26" y="60" class="s">GitHub</text>
+          <rect x="26" y="72" width="162" height="60" rx="8" class="bx-a1"/>
+          <text x="107" y="96" text-anchor="middle" class="a b">GitHub のリポジトリ</text>
+          <text x="107" y="116" text-anchor="middle" class="s">ソースコードを保存する</text>
+          <rect x="26" y="150" width="162" height="60" rx="8" class="bx-a4"/>
+          <text x="107" y="174" text-anchor="middle" class="a b">deploy.yml のジョブ</text>
+          <text x="107" y="194" text-anchor="middle" class="s">ランナーで動く</text>
+
+          <!-- プロジェクト -->
+          <rect x="220" y="40" width="608" height="476" rx="12" class="bx-frame"/>
+          <text x="234" y="60" class="s">プロジェクト knowledge-library-prod(Google Cloud。Firebase も同じプロジェクト)</text>
+
+          <!-- 製品:Artifact Registry -->
+          <rect x="236" y="74" width="286" height="132" rx="10" class="bx-frame"/>
+          <text x="250" y="92" class="s">製品:Artifact Registry</text>
+          <rect x="250" y="100" width="258" height="96" rx="8" class="bx-a6"/>
+          <text x="379" y="120" text-anchor="middle" class="a b">リポジトリ knowledge-library</text>
+          <rect x="264" y="130" width="230" height="26" rx="6" class="bx-a1"/>
+          <text x="379" y="148" text-anchor="middle" class="s">イメージ api(タグ 4f5855b)</text>
+          <rect x="264" y="162" width="230" height="26" rx="6" class="bx-pol"/>
+          <text x="379" y="180" text-anchor="middle" class="s">IAM ポリシー:deployer に書き込み</text>
+
+          <!-- 製品:Cloud Run -->
+          <rect x="536" y="74" width="278" height="132" rx="10" class="bx-frame"/>
+          <text x="550" y="92" class="s">製品:Cloud Run</text>
+          <rect x="550" y="100" width="250" height="44" rx="8" class="bx-a6"/>
+          <text x="675" y="118" text-anchor="middle" class="a b">サービス api</text>
+          <text x="675" y="136" text-anchor="middle" class="s">Rails が動く</text>
+          <rect x="550" y="152" width="250" height="44" rx="8" class="bx-a6"/>
+          <text x="675" y="170" text-anchor="middle" class="a b">ジョブ migrate</text>
+          <text x="675" y="188" text-anchor="middle" class="s">マイグレーションを実行する</text>
+
+          <!-- 製品:Secret Manager -->
+          <rect x="236" y="220" width="286" height="112" rx="10" class="bx-frame"/>
+          <text x="250" y="238" class="s">製品:Secret Manager</text>
+          <rect x="250" y="246" width="258" height="34" rx="8" class="bx-a6"/>
+          <text x="379" y="268" text-anchor="middle" class="a">シークレット db-password</text>
+          <rect x="250" y="288" width="258" height="34" rx="8" class="bx-a6"/>
+          <text x="379" y="310" text-anchor="middle" class="a">シークレット rails-master-key</text>
+
+          <!-- 製品:Cloud SQL -->
+          <rect x="536" y="220" width="278" height="112" rx="10" class="bx-frame"/>
+          <text x="550" y="238" class="s">製品:Cloud SQL</text>
+          <rect x="550" y="246" width="250" height="34" rx="8" class="bx-a6"/>
+          <text x="675" y="268" text-anchor="middle" class="a">インスタンス db</text>
+
+          <!-- 製品:IAM -->
+          <rect x="236" y="346" width="286" height="156" rx="10" class="bx-frame"/>
+          <text x="250" y="364" class="s">製品:IAM</text>
+          <rect x="250" y="372" width="258" height="34" rx="8" class="bx-a5"/>
+          <text x="379" y="394" text-anchor="middle" class="a">サービスアカウント api-runtime</text>
+          <rect x="250" y="414" width="258" height="34" rx="8" class="bx-a5"/>
+          <text x="379" y="436" text-anchor="middle" class="a">サービスアカウント deployer</text>
+          <rect x="250" y="456" width="258" height="34" rx="8" class="bx-a6"/>
+          <text x="379" y="478" text-anchor="middle" class="a">プール github(プロバイダ github-actions)</text>
+
+          <!-- 製品:Firebase Hosting -->
+          <rect x="536" y="346" width="278" height="70" rx="10" class="bx-frame"/>
+          <text x="550" y="364" class="s">製品:Firebase Hosting</text>
+          <rect x="550" y="372" width="250" height="34" rx="8" class="bx-a6"/>
+          <text x="675" y="394" text-anchor="middle" class="a">サイト(Vue を配信する)</text>
+
+          <!-- プロジェクトの IAM ポリシー -->
+          <rect x="536" y="430" width="278" height="60" rx="8" class="bx-pol"/>
+          <text x="675" y="454" text-anchor="middle" class="a">プロジェクトの IAM ポリシー</text>
+          <text x="675" y="474" text-anchor="middle" class="s">オーナー、deployer(Firebase Hosting)など</text>
+        </svg>
+      </div>
+      <figcaption>図1:外側の大きな枠がプロジェクト、その中の枠が製品、色の付いた箱がオーナーの作ったリソースです。点線の箱は IAM ポリシー(許可の一覧)で、ここでは例としてリポジトリ <code>knowledge-library</code> とプロジェクトのものだけを描きました。実際には、サービス <code>api</code>、シークレット、サービスアカウントなど、ほかのリソースもそれぞれ IAM ポリシーを持っています。<code>deployer</code> というサービスアカウントそのものは「製品:IAM」の緑の箱で、点線の箱に書かれた <code>deployer</code> は、そのサービスアカウントを許可の相手として指している名前です。GitHub は、プロジェクトの外にあります。</figcaption>
+    </figure>
+
+    <h3>製品と、その中にあるもの</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>製品</th><th>中にあるリソース</th><th>役割</th></tr></thead>
+        <tbody>
+          <tr><td class="nw">Artifact Registry</td><td>リポジトリ <code>knowledge-library</code></td><td>Rails の Docker イメージ <code>api</code> を保存する。保存するだけで、動かすのは Cloud Run</td></tr>
+          <tr><td class="nw">Cloud Run</td><td>サービス <code>api</code></td><td>イメージ <code>api</code> を取り出して、Rails を動かし続ける。イメージを入れ替えて動かすことを、デプロイと呼ぶ</td></tr>
+          <tr><td class="nw">Cloud Run</td><td>ジョブ <code>migrate</code></td><td>同じイメージ <code>api</code> で、<code>rails db:migrate</code> を1回実行して終わる。テーブルの構造(列の追加など)を変える</td></tr>
+          <tr><td class="nw">Secret Manager</td><td>シークレット <code>db-password</code>、<code>rails-master-key</code></td><td>秘密の値を保存する。データベースのパスワードと、Rails の <code>config/master.key</code> の中身</td></tr>
+          <tr><td class="nw">Cloud SQL</td><td>インスタンス <code>db</code></td><td>データベースのサーバー。この中に Rails のテーブルがある</td></tr>
+          <tr><td class="nw">IAM</td><td>サービスアカウント <code>api-runtime</code>、<code>deployer</code></td><td>プログラムが使うサービスアカウント(2章)</td></tr>
+          <tr><td class="nw">IAM</td><td>プール <code>github</code>(プロバイダ <code>github-actions</code>)</td><td>GitHub の OIDC トークンを、どの条件なら受け付けるかの設定</td></tr>
+          <tr><td class="nw">Firebase Hosting</td><td>サイト</td><td>Vue をビルドしてできたファイル(HTML、JavaScript、CSS)を、会員のブラウザに配信する</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>プロジェクトの IAM ポリシー</h3>
+    <p>プロジェクト <code>knowledge-library-prod</code> も1つのリソースなので、自分の IAM ポリシーを持っています。ほかのリソースとの違いは、効く範囲です。リポジトリ <code>knowledge-library</code> の IAM ポリシーの行は、そのリポジトリにだけ効きます。プロジェクトの IAM ポリシーの行は、プロジェクトの中のすべてのリソースに効きます(継承)。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>プロジェクトの IAM ポリシーの行(一部)</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td>オーナーの Google アカウントに「オーナー」</td><td>オーナーは、プロジェクトの中のすべてを操作できる。どの画面でも操作できるのは、この行があるから</td></tr>
+          <tr><td><code>deployer</code> に「Firebase Hosting 管理者」</td><td>2-1 で付けた行。Firebase Hosting は、リソースごとに許可を付けられないため</td></tr>
+          <tr><td><code>api-runtime</code> に「Cloud SQL クライアント」</td><td>Issue #31 で付けた行。Rails がデータベースに接続できる</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>コンソールの「IAM と管理」の「IAM」の画面は、このプロジェクトの IAM ポリシーを表示する画面です。サービスアカウントそのものの一覧は、別の「サービス アカウント」の画面にあります。</p>
+    <p>プロジェクトに付けた行は全体に効くので、許可はできるだけ個々のリソースに付け、プロジェクトに付けるのは必要なものだけにしています。</p>
+  </section>
+
+  <section id="terms">
+    <h2><span class="num">2</span>用語</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>用語</th><th>意味</th><th>このプロジェクトの例(図1のどこか)</th></tr></thead>
+        <tbody>
+          <tr><td class="nw">プロジェクト</td><td>Google Cloud の中で、すべてを入れておく一番外側の入れ物。料金と権限の単位にもなる</td><td><code>knowledge-library-prod</code>(外側の大きな枠)</td></tr>
+          <tr><td class="nw">製品</td><td>Google Cloud が提供する機能の単位。サービスとも呼ぶ</td><td>Cloud Run、Artifact Registry など(中の枠)</td></tr>
+          <tr><td class="nw">リソース</td><td>製品の中に、オーナーが作ったもの。名前が付き、操作の対象になる</td><td>サービス <code>api</code>、リポジトリ <code>knowledge-library</code> など(色の付いた箱)</td></tr>
+          <tr><td class="nw">リポジトリ</td><td>何かを保存する入れ物。Artifact Registry のリポジトリは Docker イメージを、GitHub のリポジトリはソースコードを保存する</td><td><code>knowledge-library</code>(Artifact Registry の中)と、GitHub のリポジトリ</td></tr>
+          <tr><td class="nw">イメージ</td><td>Rails を動かすための Docker イメージ。Artifact Registry のリポジトリに保存され、Cloud Run がそれを取り出して動かす(デプロイ)</td><td><code>api</code>(リポジトリ <code>knowledge-library</code> の中)</td></tr>
+          <tr><td class="nw">タグ</td><td>イメージの版に付ける名前。このプロジェクトでは、コミットの短い ID を使う</td><td><code>4f5855b</code></td></tr>
+          <tr><td class="nw">シークレット</td><td>Secret Manager に保存する秘密の値(パスワード、<code>master.key</code> の中身など)。公開鍵と対になる「秘密鍵」とは別のもの</td><td><code>db-password</code>、<code>rails-master-key</code></td></tr>
+          <tr><td class="nw">IAM</td><td>アカウントと権限を管理する製品</td><td>「製品:IAM」の枠</td></tr>
+          <tr><td class="nw">IAM ポリシー</td><td>リソースごとの許可の一覧。1行は「誰に(プリンシパル)、何を許可するか(ロール)」。プロジェクトの IAM ポリシーの行は、プロジェクトの中のすべてに効く(継承)</td><td>点線の箱</td></tr>
+          <tr><td class="nw">プリンシパル</td><td>IAM ポリシーの「誰に」に入る相手。人の Google アカウント、サービスアカウント、GitHub のジョブなど</td><td><code>deployer</code>(リポジトリの IAM ポリシーの「誰に」)</td></tr>
+          <tr><td class="nw">ロール</td><td>IAM ポリシーの「何を許可するか」に入る、操作のまとまり。Google が用意している</td><td>Artifact Registry 書き込みなど</td></tr>
+          <tr><td class="nw">サービスアカウント</td><td>人ではなく、プログラムが使うアカウント。オーナーが IAM の中に作ったものなのでリソースとして描くが、使われ方はアカウントで、IAM ポリシーの「誰に」(プリンシパル)に入る</td><td><code>api-runtime</code>、<code>deployer</code>(緑の箱)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="request">
+    <h2><span class="num">3</span>リクエストを送るときの関係</h2>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 840 500" role="img" aria-label="置き場所の枠つきの関係図。Cloud Run の枠の中に Rails があり、Rails は IAM の枠にある api-runtime のサービスアカウントを使って、Google Cloud のサービスの枠にある Secret Manager と Cloud SQL に直接リクエストを送る。GitHub の枠の中に deploy.yml のジョブがあり、ジョブは IAM の枠にある deployer の権限を借用し(2-6 で許可する、今ここ)、Artifact Registry、Cloud Run、Firebase Hosting に直接リクエストを送る。">
+          <defs>
+            <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+          </defs>
+
+          <text x="112" y="24" text-anchor="middle" class="b">プログラムと、サービスアカウント</text>
+          <text x="705" y="24" text-anchor="middle" class="b">依頼する先</text>
+
+          <!-- 上の段:Rails -->
+          <rect x="12" y="40" width="200" height="96" rx="10" class="bx-frame"/>
+          <text x="24" y="58" class="s">Cloud Run(Google Cloud)</text>
+          <rect x="24" y="64" width="176" height="60" rx="8" class="bx-a3"/>
+          <text x="112" y="90" text-anchor="middle" class="b">Rails</text>
+          <text x="112" y="110" text-anchor="middle" class="s">プログラム</text>
+
+          <line x1="112" y1="124" x2="112" y2="182" class="ln dash"/>
+          <text x="120" y="150" class="s">使う(Cloud Run が使わせる)</text>
+
+          <rect x="12" y="158" width="200" height="86" rx="10" class="bx-frame"/>
+          <text x="24" y="176" class="s">IAM(Google Cloud)</text>
+          <rect x="24" y="182" width="176" height="52" rx="8" class="bx-a5"/>
+          <text x="112" y="204" text-anchor="middle" class="b">api-runtime</text>
+          <text x="112" y="224" text-anchor="middle" class="s">サービスアカウント</text>
+
+          <line x1="200" y1="84" x2="586" y2="88" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="393" y="78" text-anchor="middle" class="a">リクエスト(api-runtime を使う)</text>
+          <line x1="200" y1="104" x2="586" y2="166" class="ln-a3" marker-end="url(#f2-a3)"/>
+
+          <!-- 下の段:GitHub Actions のジョブ -->
+          <rect x="12" y="256" width="200" height="104" rx="10" class="bx-frame"/>
+          <text x="24" y="274" class="s">GitHub</text>
+          <rect x="24" y="280" width="176" height="70" rx="8" class="bx-a4"/>
+          <text x="112" y="310" text-anchor="middle" class="b">deploy.yml のジョブ</text>
+          <text x="112" y="330" text-anchor="middle" class="s">プログラム</text>
+
+          <line x1="112" y1="350" x2="112" y2="424" class="ln-a2 dash"/>
+          <text x="120" y="378" class="lab-here">借用して使う</text>
+          <text x="120" y="394" class="lab-here">2-6 で許可。今ここ</text>
+
+          <rect x="12" y="400" width="200" height="86" rx="10" class="bx-frame"/>
+          <text x="24" y="418" class="s">IAM(Google Cloud)</text>
+          <rect x="24" y="424" width="176" height="52" rx="8" class="bx-a5"/>
+          <text x="112" y="446" text-anchor="middle" class="b">deployer</text>
+          <text x="112" y="466" text-anchor="middle" class="s">サービスアカウント</text>
+
+          <line x1="200" y1="296" x2="586" y2="290" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="393" y="284" text-anchor="middle" class="a">リクエスト(deployer を使う)</text>
+          <line x1="200" y1="316" x2="586" y2="364" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <line x1="200" y1="336" x2="586" y2="438" class="ln-a4" marker-end="url(#f2-a4)"/>
+
+          <!-- 依頼する先 -->
+          <rect x="576" y="40" width="256" height="446" rx="10" class="bx-frame"/>
+          <text x="588" y="58" class="s">Google Cloud のサービス</text>
+          <rect x="590" y="62" width="230" height="56" rx="8" class="bx-a6"/>
+          <text x="705" y="86" text-anchor="middle" class="b">Secret Manager</text>
+          <text x="705" y="106" text-anchor="middle" class="s">2つのシークレットを読ませる</text>
+          <rect x="590" y="138" width="230" height="56" rx="8" class="bx-a6"/>
+          <text x="705" y="162" text-anchor="middle" class="b">Cloud SQL</text>
+          <text x="705" y="182" text-anchor="middle" class="s">データベースに接続させる</text>
+          <rect x="590" y="262" width="230" height="56" rx="8" class="bx-a6"/>
+          <text x="705" y="286" text-anchor="middle" class="b">Artifact Registry</text>
+          <text x="705" y="306" text-anchor="middle" class="s">knowledge-library に書き込ませる</text>
+          <rect x="590" y="336" width="230" height="56" rx="8" class="bx-a6"/>
+          <text x="705" y="360" text-anchor="middle" class="b">Cloud Run</text>
+          <text x="705" y="380" text-anchor="middle" class="s">migrate と api を更新させる</text>
+          <rect x="590" y="410" width="230" height="56" rx="8" class="bx-a6"/>
+          <text x="705" y="434" text-anchor="middle" class="b">Firebase Hosting</text>
+          <text x="705" y="454" text-anchor="middle" class="s">Vue のファイルをデプロイさせる</text>
+
+          <!-- 凡例 -->
+          <line x1="250" y1="448" x2="286" y2="448" class="ln-a3"/>
+          <text x="294" y="452" class="s">リクエスト(依頼)</text>
+          <line x1="250" y1="466" x2="286" y2="466" class="ln dash"/>
+          <text x="294" y="470" class="s">プログラムが使うサービスアカウント</text>
+          <line x1="250" y1="484" x2="286" y2="484" class="ln-a2 dash"/>
+          <text x="294" y="488" class="s">まだ許可していない(今ここ)</text>
+        </svg>
+      </div>
+      <figcaption>図2:破線の枠は、それぞれがある場所です。Rails は Cloud Run の中で、ジョブは GitHub の中で動きます。<code>api-runtime</code> と <code>deployer</code> は、Cloud Run や GitHub の中ではなく、Google Cloud の IAM にあるサービスアカウントです。矢印は、プログラムが送るリクエストです。サービスアカウントは、リクエストを中継しません。プログラムは、サービスアカウントを使ったリクエストを、依頼する先に直接送ります。依頼する先は、どのサービスアカウントからのリクエストかを見て、そのサービスアカウントに付いたロールで許可します(右の箱の下の行は、許可する操作です。ロールの正式な名前は4章)。Cloud Run の更新には、<code>deployer</code> が <code>api-runtime</code> を使ってよいという許可(2-5)も必要です。</figcaption>
+    </figure>
+
+    <h3>アカウントの使い方(人とプログラム)</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>操作する主体</th><th>主体の種類</th><th>使うアカウント</th><th>アカウントの種類</th><th>どうやってそのアカウントを使うか</th></tr></thead>
+        <tbody>
+          <tr><td>オーナー</td><td class="nw">人</td><td>オーナーの Google アカウント</td><td class="nw">Google アカウント</td><td>コンソールにログインする</td></tr>
+          <tr><td><span class="t-a3">Rails</span></td><td class="nw">プログラム</td><td><span class="t-a5">api-runtime</span></td><td class="nw">サービスアカウント</td><td>パスワードではログインしない。Cloud Run が、サービス <code>api</code> とジョブ <code>migrate</code> の設定の「サービス アカウント」の欄(Issue #30 で <code>api-runtime</code> を指定)に従って、Rails に <code>api-runtime</code> を使わせる。Rails のコードには、鍵も設定もない</td></tr>
+          <tr class="now"><td><span class="t-a4">deploy.yml のジョブ</span></td><td class="nw">プログラム</td><td><span class="t-a5">deployer</span></td><td class="nw">サービスアカウント</td><td>Workload Identity 連携で、OIDC トークンを <code>deployer</code> のアクセストークンに交換する(<a href="033-oidc-token.html">033-oidc-token.html</a>)。そのための許可が 2-6</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>サービスアカウントが2つで足りる理由</h3>
+    <p>サービスアカウントが必要になるのは、私たちのプログラムが、Google Cloud にリクエストを送るときだけです。このアプリで動くものを全部並べると、次のとおりです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>動くもの</th><th>種類</th><th>動く場所</th><th>Google Cloud にリクエストを送るか</th><th>サービスアカウント</th></tr></thead>
+        <tbody>
+          <tr><td><span class="t-a3">Rails</span></td><td class="nw">私たちのプログラム</td><td class="nw">Cloud Run</td><td>送る(Secret Manager、Cloud SQL)</td><td><code>api-runtime</code></td></tr>
+          <tr><td><span class="t-a4">deploy.yml のジョブ</span></td><td class="nw">私たちのプログラム</td><td class="nw">GitHub</td><td>送る(Artifact Registry、Cloud Run、Firebase Hosting)</td><td><code>deployer</code></td></tr>
+          <tr><td>Vue</td><td class="nw">私たちのプログラム</td><td class="nw">会員のブラウザ</td><td>送らない。Firebase Authentication へのログインは会員の Google アカウントで行い、そのほかは Rails を呼ぶだけ</td><td>不要</td></tr>
+          <tr><td>Firebase Hosting、<wbr>Cloud Run など</td><td class="nw">Google の製品</td><td class="nw">Google Cloud</td><td>私たちのプログラムではないので、対象外</td><td>不要。製品の内部では、Google のサービス エージェントが動く</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Firebase Hosting は Google が動かしている製品なので、サービスアカウントを作る必要はありません。ただし、Firebase Hosting にファイルを送る(デプロイする)のは私たちのデプロイのジョブなので、<code>deployer</code> に Firebase Hosting 管理者のロールが必要です。</p>
+    <p>1つのサービスアカウントで両方を行うこともできますが、その場合、Rails がデプロイの操作もでき、デプロイのジョブが秘密の値も読めてしまいます。サービスアカウントを分けておけば、それぞれが必要なことしかできません。</p>
+    <p>このプロジェクトには、ほかに Google が自動で作ったサービスアカウント(<code>656607631341-compute@developer…</code>、<code>firebase-adminsdk-fbsvc@…</code>)もあります。このアプリでは使っていませんが、Google の機能が使う可能性があるため、削除しません。</p>
+  </section>
+
+  <section id="grants">
+    <h2><span class="num">4</span>準備の作業 2 で付けた許可</h2>
+    <p>Google Cloud の許可は、すべて「どのリソースで、どのプリンシパル(アカウントなど)に、どのロールを付けるか」の組です。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>順</th><th>リソース</th><th>プリンシパル</th><th>ロール</th><th>状態</th></tr></thead>
+        <tbody>
+          <tr><td class="step">2-1</td><td>プロジェクト全体</td><td><code>deployer</code></td><td>Firebase Hosting 管理者</td><td>完了</td></tr>
+          <tr><td class="step">2-2</td><td>Artifact Registry のリポジトリ <code>knowledge-library</code></td><td><code>deployer</code></td><td>Artifact Registry 書き込み</td><td>完了</td></tr>
+          <tr><td class="step">2-3</td><td>Cloud Run のジョブ <code>migrate</code></td><td><code>deployer</code></td><td>Cloud Run デベロッパー</td><td>完了</td></tr>
+          <tr><td class="step">2-4</td><td>Cloud Run のサービス <code>api</code></td><td><code>deployer</code></td><td>Cloud Run デベロッパー</td><td>完了</td></tr>
+          <tr><td class="step">2-5</td><td>サービスアカウント <code>api-runtime</code></td><td><code>deployer</code></td><td>サービス アカウント ユーザー</td><td>完了</td></tr>
+          <tr class="now"><td class="step">2-6</td><td>サービスアカウント <code>deployer</code></td><td>このリポジトリの、<code>production</code> を宣言したジョブ</td><td>Workload Identity ユーザー</td><td>今ここ</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>参考:<code>api-runtime</code> の許可は Issue #30、#31 で付けたものです。Secret Manager の <code>db-password</code> と <code>rails-master-key</code> に「Secret Manager のシークレット アクセサー」、プロジェクト全体に「Cloud SQL クライアント」が付いています(2026-11-19 に確認)。</p>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OIDC と GitHub Actions の OIDC トークン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* 学習ノート(layered-tech-explanation スキルのひな形から作成)。
+   登場人物の色:a1=オーナー、a2=プロバイダ github-actions(今ここ。オーナーが作る設定)、
+   a3=GitHub の OIDC プロバイダ、a4=deploy.yml のジョブ、a5=Security Token Service */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; overflow-wrap: anywhere; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul, .answer ol { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+.answer + .answer { margin-top: 12px; }
+
+/* 見出しは、日本語の単語の途中で折り返さない。折り返してよい位置は <wbr> で示す */
+h1, h2, h3 { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」、.warn は注意 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+td.nw, table.claims td:first-child { white-space: nowrap; }
+
+/* 居場所のバッジ */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+pre .c { color: var(--accent); }
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #33 · 学習メモ</p>
+    <h1>OIDC と、<wbr>GitHub Actions の<wbr> OIDC トークン</h1>
+    <p class="lead">GitHub Actions のジョブが、鍵ファイルを持たずに Google Cloud を操作できるのは、OIDC という標準の仕組みを使っているからです。このページでは、OIDC の基本を確認したうえで、今コンソールで作成している「プロバイダ <code>github-actions</code>」の各欄が、OIDC のどの部分にあたるかを説明します。</p>
+    <div class="note">
+      <p><strong>OIDC(OpenID Connect)</strong>:「相手が誰か」を、発行元が署名したトークンで、別のサービスに伝えるための標準の仕組みです。「Google でログイン」もこの仕組みで作られています。</p>
+      <p><strong>OIDC トークン</strong>:GitHub Actions が、ジョブのために発行する、署名つきのトークンです。「どのリポジトリの、どの Environment のジョブか」が書かれています。形式は JWT(署名の仕組みは、Issue #8 のノート <a href="008-id-token-signature.html">ID トークンの署名</a>)で、OIDC の標準では「ID トークン」と呼ぶものにあたります。</p>
+      <p><strong>署名</strong>:発行元が、自分だけが持つ秘密鍵で、トークンの中身から作る値です。受け取る側は、発行元が公開している公開鍵で、トークンが発行元の作ったものか、書き換えられていないかを検証できます。</p>
+    </div>
+    <div class="answer">
+      <p><strong>要点</strong></p>
+      <ol>
+        <li>GitHub の OIDC プロバイダが、ジョブのたびに、「どのリポジトリの、どの Environment のジョブか」を書いた OIDC トークンを発行し、GitHub の秘密鍵で署名する。</li>
+        <li>Security Token Service が、GitHub の公開鍵で署名を検証し、属性の条件でリポジトリ ID と Environment を確認する。合えば、deploy.yml のジョブに連携トークンを返す。署名は暗号化ではなく、OIDC トークンの中身は誰でも読める。</li>
+        <li>deploy.yml のジョブは、連携トークンをさらに deployer のアクセストークンに交換し、そのアクセストークンで Cloud Run などを操作する。</li>
+      </ol>
+    </div>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>GitHub Actions が、鍵ファイルではなく OIDC トークンで身元を伝える理由(1章)</li>
+        <li>登場人物と、「プロバイダ」と呼ばれるものが2つあること(2章)</li>
+        <li>OIDC トークンが発行され、検証され、交換されるまでの流れ(3章)</li>
+        <li>署名の検証で分かることと、分からないこと。条件が必要な理由(4章)</li>
+        <li>OIDC トークンの項目と、プロバイダ <code>github-actions</code> の欄の対応(5章)</li>
+        <li>「Google でログイン」との共通点と違い(6章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- 1章 -->
+  <section id="why">
+    <h2><span class="num">1</span>出発点:鍵ファイルを渡さずに、身元を伝える</h2>
+    <p>Issue #33 では、main へのマージのたびに、GitHub Actions のジョブが本番の Google Cloud を操作します。Google Cloud は、リクエストを送ってきたのが誰かを確認できなければ、操作を許可しません。</p>
+    <p>もっとも単純な方法は、サービスアカウントの鍵ファイルを GitHub に保存し、ジョブがその鍵ファイルを提示することです。しかし鍵ファイルは、削除するまで有効なままで、漏洩すると誰でも使えます(ADR 0009 の【鍵ファイル方式】)。</p>
+    <p>そこで、すでにジョブのことを知っている GitHub に、身元を証明してもらいます。GitHub は、ジョブが実行されるたびに「このジョブは、リポジトリ ID <code>1409915528</code> の、Environment <code>production</code> のジョブである」と書いた OIDC トークンを発行し、GitHub の秘密鍵で署名します。Google Cloud の Security Token Service は、GitHub の公開鍵で署名を検証し、中身を読んで、受け付けるかどうかを決めます。GitHub と Google Cloud の間で、秘密の値を共有する必要はありません。</p>
+  </section>
+
+  <!-- 2章 -->
+  <section id="cast">
+    <h2><span class="num">2</span>登場人物</h2>
+    <p>登場人物は5人です。GitHub の中に2人、Google Cloud の中に2人、そしてコンソールを操作するオーナーです。色は、このページの図と本文で共通です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 760 380" role="img" aria-label="配置図。左の GitHub の枠に、GitHub の OIDC プロバイダと deploy.yml のジョブがある。右の Google Cloud の枠に、プール github の中のプロバイダ github-actions と、Security Token Service がある。ジョブは GitHub の OIDC プロバイダに OIDC トークンを要求して受け取り、Security Token Service に送って連携トークンを受け取る。Security Token Service は GitHub の OIDC プロバイダから公開鍵を取得し、プロバイダ github-actions の設定を参照する。オーナーはプロバイダ github-actions を作成する。">
+          <defs>
+            <marker id="f1-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f1-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f1-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f1-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+
+          <!-- オーナー -->
+          <rect x="590" y="8" width="140" height="46" rx="8" class="bx-a1"/>
+          <text x="660" y="28" text-anchor="middle" class="b">オーナー</text>
+          <text x="660" y="46" text-anchor="middle" class="s">コンソールで操作する</text>
+
+          <!-- GitHub -->
+          <rect x="20" y="70" width="280" height="290" rx="12" class="bx-frame"/>
+          <text x="36" y="94" class="s">GitHub</text>
+          <rect x="40" y="112" width="240" height="64" rx="8" class="bx-a3"/>
+          <text x="160" y="138" text-anchor="middle" class="b">GitHub の OIDC プロバイダ</text>
+          <text x="160" y="160" text-anchor="middle" class="s">OIDC トークンを発行する</text>
+          <rect x="40" y="262" width="240" height="64" rx="8" class="bx-a4"/>
+          <text x="160" y="288" text-anchor="middle" class="b">deploy.yml のジョブ</text>
+          <text x="160" y="310" text-anchor="middle" class="s">ランナーの上で動く</text>
+
+          <!-- Google Cloud -->
+          <rect x="400" y="70" width="340" height="290" rx="12" class="bx-frame"/>
+          <text x="416" y="94" class="s">Google Cloud(knowledge-library-prod)</text>
+          <rect x="420" y="110" width="305" height="104" rx="10" class="bx-frame"/>
+          <text x="434" y="130" class="s">プール github</text>
+          <rect x="440" y="140" width="270" height="60" rx="8" class="bx-a2"/>
+          <text x="575" y="164" text-anchor="middle" class="b">プロバイダ github-actions</text>
+          <text x="575" y="186" text-anchor="middle" class="s">Workload Identity 連携の設定</text>
+          <rect x="420" y="262" width="305" height="64" rx="8" class="bx-a5"/>
+          <text x="572" y="288" text-anchor="middle" class="b">Security Token Service</text>
+          <text x="572" y="310" text-anchor="middle" class="s">OIDC トークンを検証し、交換する</text>
+
+          <!-- オーナーが作成する -->
+          <line x1="700" y1="54" x2="700" y2="136" class="ln-a1" marker-end="url(#f1-a1)"/>
+          <text x="692" y="65" text-anchor="end" class="s">作成する</text>
+
+          <!-- GitHub の中 -->
+          <line x1="110" y1="258" x2="110" y2="180" class="ln-a4" marker-end="url(#f1-a4)"/>
+          <text x="102" y="222" text-anchor="end" class="a">要求</text>
+          <line x1="196" y1="180" x2="196" y2="258" class="ln-a3" marker-end="url(#f1-a3)"/>
+          <text x="204" y="222" class="a">OIDC トークン</text>
+
+          <!-- 公開鍵の取得(ときどき) -->
+          <line x1="284" y1="150" x2="436" y2="258" class="ln-a3 dash" marker-end="url(#f1-a3)"/>
+          <text x="330" y="162" class="s">公開鍵</text>
+
+          <!-- 設定を参照(動きではない) -->
+          <line x1="572" y1="204" x2="572" y2="258" class="ln dash"/>
+          <text x="580" y="238" class="s">設定を参照</text>
+
+          <!-- ジョブと Security Token Service -->
+          <line x1="284" y1="284" x2="416" y2="284" class="ln-a4" marker-end="url(#f1-a4)"/>
+          <text x="350" y="276" text-anchor="middle" class="a">OIDC トークン</text>
+          <line x1="420" y1="312" x2="284" y2="312" class="ln-a5" marker-end="url(#f1-a5)"/>
+          <text x="350" y="304" text-anchor="middle" class="a">連携トークン</text>
+        </svg>
+      </div>
+      <figcaption>図1:矢印は、ものが渡る向きです。破線の矢印(公開鍵)は、毎回ではなく必要なときに起きる取得です。矢じりのない点線は、動きではなく「設定を参照する」つながりです。オーナーと deploy.yml のジョブの間、GitHub とプロバイダ <code>github-actions</code> の間には、線がありません。GitHub は、Google Cloud の設定を知りません。</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card a3"><p><span class="who t-a3">GitHub の OIDC プロバイダ</span><span class="kind">GitHub · GitHub が運用する(OIDC の役割:OpenID Provider、発行元)</span>ジョブの要求に応じて OIDC トークンを発行し、GitHub の秘密鍵で署名します。署名の検証に使う公開鍵を、決まった URL で公開しています。URL は <code>https://token.actions.githubusercontent.com</code> です。</p></div>
+      <div class="card a4"><p><span class="who t-a4">deploy.yml のジョブ</span><span class="kind">GitHub のランナーの上 · 私たちが書く(Issue #33 の後の作業)</span>OIDC トークンを要求し、Security Token Service に送ります。実際に要求と送信を行うのは、ジョブの中で使う Action(<code>google-github-actions/auth</code>)です。</p></div>
+      <div class="card a5"><p><span class="who t-a5">Security Token Service</span><span class="kind">Google Cloud · Google が運用する(OIDC の役割:Relying Party、受け取る側)</span>OIDC トークンの署名と中身を検証し、プロバイダ <code>github-actions</code> の設定に合えば、Google Cloud の連携トークンに交換します。</p></div>
+      <div class="card a2"><p><span class="who t-a2">プロバイダ github-actions</span><span class="kind">Google Cloud のプール github の中 · オーナーが作る(今ここ)</span>Security Token Service に「どの発行元の OIDC トークンを、どの条件なら受け付けるか」を教える設定です。それ自体は動きません。</p></div>
+      <div class="card a1"><p><span class="who t-a1">オーナー</span><span class="kind">Google Cloud のコンソール</span>プール <code>github</code> と、プロバイダ <code>github-actions</code> を作成します。作成は1回だけです。</p></div>
+    </div>
+
+    <h3>「プロバイダ」と呼ばれるものが2つある</h3>
+    <p>このページには、「プロバイダ」と呼ばれるものが2つ出てきます。名前は似ていますが、別のものです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>名前</th><th>何か</th><th>どこにあるか、誰が作るか</th></tr></thead>
+        <tbody>
+          <tr><td class="nw"><span class="t-a3">GitHub の OIDC プロバイダ</span></td><td>OIDC トークンを発行する側。OIDC の標準では OpenID Provider(発行元)と呼ぶ役割</td><td>GitHub。GitHub が運用している</td></tr>
+          <tr class="now"><td class="nw"><span class="t-a2">プロバイダ github-actions</span></td><td>「GitHub の OIDC プロバイダを、Google Cloud に登録した設定」。Google の文書では Workload Identity プール プロバイダと呼ぶ</td><td>Google Cloud のプール <code>github</code> の中。オーナーが今作成している</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>コンソールの画面にある「ID プロバイダを接続する」「OpenID Connect(OIDC)プロバイダをプールに追加します」は、2行目の設定を作る操作です。2行目の設定には、1行目(GitHub の OIDC プロバイダ)の URL を書き込みます。</p>
+  </section>
+
+  <!-- 3章 -->
+  <section id="flow">
+    <h2><span class="num">3</span>全体の流れ</h2>
+    <p>全体を3つの場面に分けました。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。今オーナーが行っている作業は、場面 0 です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 760 476" role="img" aria-label="場面ごとのシーケンス図。場面 0 準備:オーナーがプロバイダ github-actions を作成する。場面 1 発行:deploy.yml のジョブが GitHub の OIDC プロバイダに要求し、OIDC トークンを受け取る。場面 2 検証と交換:ジョブが Security Token Service に OIDC トークンを送る。Security Token Service は GitHub の OIDC プロバイダに公開鍵を要求して受け取り、プロバイダ github-actions の設定を参照して検証し、ジョブに連携トークンを返す。">
+          <defs>
+            <marker id="f2-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f2-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+
+          <!-- 場面の帯 -->
+          <rect x="0" y="96" width="760" height="60" class="band-here"/>
+          <rect x="0" y="160" width="760" height="90" class="band"/>
+          <rect x="0" y="254" width="760" height="210" class="band"/>
+
+          <text x="12" y="120" class="scene">場面 0</text>
+          <text x="12" y="138" class="a">準備</text>
+          <text x="12" y="151" class="lab-here">今ここ</text>
+          <text x="12" y="184" class="scene">場面 1</text>
+          <text x="12" y="202" class="a">発行</text>
+          <text x="12" y="278" class="scene">場面 2</text>
+          <text x="12" y="296" class="a">検証と交換</text>
+
+          <!-- 場所のまとまり -->
+          <path d="M254 30 V22 H486 V30" class="ln"/>
+          <text x="370" y="16" text-anchor="middle" class="s">GitHub</text>
+          <path d="M494 30 V22 H726 V30" class="ln"/>
+          <text x="610" y="16" text-anchor="middle" class="s">Google Cloud</text>
+
+          <!-- 縦の点線 -->
+          <line x1="190" y1="84" x2="190" y2="464" class="life"/>
+          <line x1="310" y1="84" x2="310" y2="464" class="life"/>
+          <line x1="430" y1="84" x2="430" y2="464" class="life"/>
+          <line x1="550" y1="84" x2="550" y2="464" class="life"/>
+          <line x1="670" y1="84" x2="670" y2="464" class="life"/>
+
+          <!-- 見出し -->
+          <rect x="134" y="36" width="112" height="48" rx="7" class="bx-a1"/>
+          <text x="190" y="65" text-anchor="middle" class="b a">オーナー</text>
+          <rect x="254" y="36" width="112" height="48" rx="7" class="bx-a3"/>
+          <text x="310" y="56" text-anchor="middle" class="b a">GitHub の</text>
+          <text x="310" y="74" text-anchor="middle" class="b a">OIDC プロバイダ</text>
+          <rect x="374" y="36" width="112" height="48" rx="7" class="bx-a4"/>
+          <text x="430" y="56" text-anchor="middle" class="b a">deploy.yml</text>
+          <text x="430" y="74" text-anchor="middle" class="b a">のジョブ</text>
+          <rect x="494" y="36" width="112" height="48" rx="7" class="bx-a5"/>
+          <text x="550" y="56" text-anchor="middle" class="b a">Security Token</text>
+          <text x="550" y="74" text-anchor="middle" class="b a">Service</text>
+          <rect x="614" y="36" width="112" height="48" rx="7" class="bx-a2"/>
+          <text x="670" y="56" text-anchor="middle" class="b a">プロバイダ</text>
+          <text x="670" y="74" text-anchor="middle" class="b a">github-actions</text>
+
+          <!-- 場面 0 -->
+          <line x1="190" y1="128" x2="666" y2="128" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="430" y="120" text-anchor="middle" class="a">① 作成する</text>
+
+          <!-- 場面 1 -->
+          <line x1="430" y1="190" x2="314" y2="190" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="370" y="182" text-anchor="middle" class="a">① 要求する</text>
+          <line x1="310" y1="220" x2="426" y2="220" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="370" y="212" text-anchor="middle" class="a">② OIDC トークン</text>
+
+          <!-- 場面 2 -->
+          <line x1="430" y1="284" x2="546" y2="284" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="490" y="276" text-anchor="middle" class="a">① OIDC トークン</text>
+          <line x1="550" y1="314" x2="314" y2="314" class="ln-a5 dash" marker-end="url(#f2-a5)"/>
+          <text x="372" y="306" text-anchor="middle" class="a">② 公開鍵を要求</text>
+          <line x1="310" y1="344" x2="546" y2="344" class="ln-a3 dash" marker-end="url(#f2-a3)"/>
+          <text x="372" y="336" text-anchor="middle" class="a">③ 公開鍵</text>
+          <line x1="554" y1="374" x2="666" y2="374" class="ln dash"/>
+          <text x="610" y="366" text-anchor="middle" class="a">④ 設定を参照</text>
+          <rect x="496" y="389" width="108" height="26" rx="6" class="bx-a5"/>
+          <text x="550" y="407" text-anchor="middle" class="a">⑤ 検証する</text>
+          <line x1="550" y1="442" x2="434" y2="442" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <text x="490" y="434" text-anchor="middle" class="a">⑥ 連携トークン</text>
+        </svg>
+      </div>
+      <figcaption>図2:場面 0 は1回だけ、場面 1 と場面 2 はデプロイのたびに起きます。② と ③(公開鍵)は破線で、毎回起きるとは限りません。④ の点線は、動きではなく設定の参照です。GitHub の OIDC プロバイダとプロバイダ <code>github-actions</code> の間には、矢印がありません。</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 0:準備<span class="tag">1回だけ · 今ここ</span></h3>
+    <ol class="flow">
+      <li><span class="t-a1">オーナー</span> が、コンソールで、プール <code>github</code> と <span class="t-a2">プロバイダ github-actions</span> を作成する。プロバイダには、GitHub の OIDC プロバイダの URL、受け付ける対象、属性の対応づけ、属性の条件を書き込む(5章)</li>
+    </ol>
+    <div class="note here"><p>今オーナーが作成しているのは、この場面の <span class="t-a2">プロバイダ github-actions</span> です。作成した設定は、場面 2 の ④ で、Security Token Service が参照します。</p></div>
+
+    <h3 class="scene-h">場面 1:OIDC トークンの発行<span class="tag">デプロイのたび</span></h3>
+    <ol class="flow">
+      <li><span class="t-a4">deploy.yml のジョブ</span> が、<span class="t-a3">GitHub の OIDC プロバイダ</span> に、OIDC トークンを要求する。このとき、OIDC トークンの「対象」(宛先)を指定する。ジョブにこの要求を許可するのは、<code>deploy.yml</code> に書く <code>permissions</code> の設定である</li>
+      <li><span class="t-a3">GitHub の OIDC プロバイダ</span> が、リポジトリ ID や Environment などを書いた OIDC トークンを作り、GitHub の秘密鍵で署名して、<span class="t-a4">deploy.yml のジョブ</span> に渡す</li>
+    </ol>
+
+    <h3 class="scene-h">場面 2:検証と交換<span class="tag">デプロイのたび</span></h3>
+    <ol class="flow">
+      <li><span class="t-a4">deploy.yml のジョブ</span> が、<span class="t-a5">Security Token Service</span> に、OIDC トークンと、使うプロバイダの名前(<code>github-actions</code>)を送る</li>
+      <li><span class="t-a5">Security Token Service</span> が、<span class="t-a3">GitHub の OIDC プロバイダ</span> に、公開鍵を要求する</li>
+      <li><span class="t-a3">GitHub の OIDC プロバイダ</span> が、<span class="t-a5">Security Token Service</span> に、公開鍵を渡す</li>
+      <li><span class="t-a5">Security Token Service</span> が、<span class="t-a2">プロバイダ github-actions</span> の設定(発行元の URL、対象、属性の対応づけ、属性の条件)を参照する</li>
+      <li><span class="t-a5">Security Token Service</span> が、署名、発行元、対象、期限を検証し、属性の対応づけで OIDC トークンの中身を写し、属性の条件を評価する</li>
+      <li>すべてに合えば、<span class="t-a5">Security Token Service</span> が、<span class="t-a4">deploy.yml のジョブ</span> に、連携トークンを渡す。合わなければ、交換を拒否する</li>
+    </ol>
+    <div class="note">
+      <p>簡略化と、確認していないこと:② と ③ は、OIDC の標準の手順(受け取る側が、発行元の URL の <code>/.well-known/openid-configuration</code> から公開鍵の場所を知り、取得する)で描きました。GitHub はこの場所で公開鍵を公開しています(2026-11-18 に確認)。Security Token Service が公開鍵をいつ取得し、どれだけ使い回すかは、Google の文書では確認していません。</p>
+      <p>この後、ジョブは連携トークンを IAM Credentials API に送り、<code>deployer</code> のアクセストークンに交換します。この部分は、ノート <a href="033-auto-deploy.html">自動デプロイと、サービスアカウントの権限借用</a> の4章で説明しています。</p>
+    </div>
+  </section>
+
+  <!-- 4章 -->
+  <section id="token">
+    <h2><span class="num">4</span>OIDC トークンを追う</h2>
+    <p>3章の中心にあるのは OIDC トークンです。この章では、OIDC トークンに何が書かれているか、誰の手を通り、どこで役目を終えるかを追います。</p>
+
+    <h3>OIDC トークンに書かれていること</h3>
+    <p>OIDC トークンには、主に次のことが書かれています。項目の正式な名前(<code>iss</code> など)は、5章で対応づけます。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>書かれていること</th><th>今回の例</th><th>Security Token Service が確認すること</th></tr></thead>
+        <tbody>
+          <tr><td>発行元</td><td>GitHub の OIDC プロバイダ</td><td>登録した発行元の URL と一致するか</td></tr>
+          <tr><td>対象(宛先)</td><td>プロバイダ <code>github-actions</code></td><td>自分(このプロバイダ)宛てか</td></tr>
+          <tr><td>期限</td><td>発行から短い時間</td><td>期限が切れていないか</td></tr>
+          <tr><td>誰か(主体)</td><td>このリポジトリの、このジョブ</td><td>操作の記録に残す名前になる</td></tr>
+          <tr><td>リポジトリ ID</td><td><code>1409915528</code></td><td>属性の条件で確認する</td></tr>
+          <tr><td>Environment</td><td><code>production</code></td><td>属性の条件で確認する</td></tr>
+          <tr><td>署名</td><td>GitHub の秘密鍵で作った値</td><td>GitHub の公開鍵で検証する</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>OIDC トークンの一生</h3>
+    <p>右の列は、その時点で OIDC トークンがどこにあるかです。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>誰が、何をするか</th><th>ある場所</th></tr></thead>
+        <tbody>
+          <tr><td class="step">①</td><td><span class="t-a3">GitHub の OIDC プロバイダ</span> が、ジョブの要求に応じて OIDC トークンを作り、署名して、<span class="t-a4">deploy.yml のジョブ</span> に渡す(図2 の場面 1)</td><td><span class="loc a4">ジョブ(ランナーの上)</span></td></tr>
+          <tr><td class="step">②</td><td><span class="t-a4">deploy.yml のジョブ</span> が、<span class="t-a5">Security Token Service</span> に送る(場面 2 の ①)</td><td><span class="loc a4">ジョブ</span><span class="loc a5">Security Token Service</span></td></tr>
+          <tr><td class="step">③</td><td><span class="t-a5">Security Token Service</span> が検証し、連携トークンを返す。この後、OIDC トークンは使われない(場面 2 の ⑤ と ⑥)</td><td><span class="loc a4">ジョブ</span></td></tr>
+          <tr><td class="step">④</td><td>ジョブが終わると、GitHub が用意したランナーは片付けられる。また、期限を過ぎた OIDC トークンは、検証に通らない</td><td><span class="loc none">どこにもない</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><p>確認していないこと:GitHub の文書は、OIDC トークンの期限の長さを明記していません。文書に載っている例では、期限は発行の5分後です。また、ジョブの中で OIDC トークンが何回要求されるか(gcloud や Firebase CLI が動くたびに要求し直すか)は、確認していません。</p></div>
+
+    <h3>署名つきのトークンで身元を伝える理由</h3>
+    <p>結論から言うと、<strong>受け取る側が、発行元と秘密を共有せずに、中身が発行元の書いたとおりであることを検証できる</strong>からです。理由は3つあります。</p>
+    <ol class="flow">
+      <li><strong>共有する秘密(鍵ファイル)で伝える方式は、秘密が長く残る。</strong>鍵ファイルは GitHub に保存され、削除するまで有効です。漏洩すると、拾った人がどこからでも使えます。</li>
+      <li><strong>OIDC トークンは、ほかの人には作れない。</strong>署名に使う秘密鍵は GitHub の外に出ません。そのため、ほかの人が、リポジトリ ID や Environment を書き換えた OIDC トークンを作っても、署名の検証に通りません。Security Token Service は、公開されている公開鍵だけで検証できます。</li>
+      <li><strong>損は小さい。</strong>OIDC トークンはジョブのたびに発行され、期限は短いので、漏洩しても使える時間はわずかです。保存や更新の作業もありません。代わりに、Google Cloud が GitHub の発行元を信頼する設定(プロバイダ <code>github-actions</code>)が1回だけ必要になります。</li>
+    </ol>
+    <p>つまり、1回の設定の手間と引き換えに、長く残る秘密をなくせます。これは ADR 0009 の判断1(【借用方式】を選び、【鍵ファイル方式】を選ばない)の前提です。</p>
+
+    <h3>署名の検証で分かることと、分からないこと</h3>
+    <p>まず、署名は暗号化ではありません。OIDC トークンの中身は暗号化されておらず、base64 という形式に変換されているだけなので、誰でも読めます。公開鍵で行うのは「復号」ではなく、「この署名は、この中身から GitHub の秘密鍵で作られた」ことの検証です。OIDC トークンの安全性は、中身を隠すことではなく、ほかの人には作れないことから来ています。</p>
+    <p>署名の検証で分かるのは、「この OIDC トークンは GitHub が発行したもので、中身は書き換えられていない」ことまでです。「このリポジトリのジョブが発行させたものか」は、署名だけでは分かりません。</p>
+    <p>理由は、GitHub の OIDC プロバイダが1つだけで、世界中のすべてのリポジトリのジョブに、同じ秘密鍵で署名した OIDC トークンを発行しているからです。ほかの人が自分のリポジトリでジョブを動かしても、GitHub が正しく署名した OIDC トークンが手に入ります。</p>
+    <p>そこで、署名の検証に加えて、OIDC トークンに書かれたリポジトリ ID と Environment を、属性の条件で確認します。Google の文書が、GitHub のプロバイダには条件を「付けなければならない(must)」と書いているのは、このためです。ADR 0009 の判断2(【両方で絞る】)の、入口の側にあたります。</p>
+
+    <h3>対象(宛先)を確認する理由</h3>
+    <p>GitHub の OIDC トークンは、Google Cloud だけでなく、AWS や Azure などとの連携にも使われます。対象を確認しないと、ほかのサービス宛てに発行された OIDC トークンを、Google Cloud に送って使い回すことができてしまいます。対象が「プロバイダ <code>github-actions</code>」である OIDC トークンだけを受け付ければ、その OIDC トークンは Google Cloud のこのプロバイダのためだけに発行されたものだと言えます。</p>
+
+    <h3>受け持ち</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>すること</th><th>誰がするか</th></tr></thead>
+        <tbody>
+          <tr><td>OIDC トークンを作り、署名する。公開鍵を公開する</td><td><span class="t-a3">GitHub の OIDC プロバイダ</span></td></tr>
+          <tr><td>OIDC トークンを要求し、Security Token Service に送る</td><td><code>google-github-actions/auth</code>(<span class="t-a4">deploy.yml のジョブ</span> の中で使う Action)</td></tr>
+          <tr><td>検証し、属性の対応づけと条件を適用し、連携トークンを発行する</td><td><span class="t-a5">Security Token Service</span></td></tr>
+          <tr class="now"><td>どの発行元の、どの対象の、どの条件の OIDC トークンを受け付けるかを決める</td><td><span class="t-a1">オーナー</span>(<span class="t-a2">プロバイダ github-actions</span> の設定。今ここ)</td></tr>
+          <tr><td>ジョブに、OIDC トークンの要求を許可する</td><td><code>deploy.yml</code> の <code>permissions</code>(Issue #33 の後の作業)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>私たちが決めるのは、プロバイダ <code>github-actions</code> の設定と、<code>deploy.yml</code> の2か所だけです。署名や検証の処理は、GitHub と Google が受け持ちます。</p>
+  </section>
+
+  <!-- 5章 -->
+  <section id="fields">
+    <h2><span class="num">5</span>名前:OIDC トークンの項目と、<wbr>プロバイダ github-actions の欄</h2>
+    <p>4章の「書かれていること」には、それぞれ正式な名前(クレーム名)があります。プロバイダ <code>github-actions</code> の欄は、このクレーム名で OIDC トークンの中身を指します。属性の対応づけや条件に出てくる <code>assertion.</code> は、「受け取った OIDC トークンの」という意味です(例:<code>assertion.repository_id</code> は、OIDC トークンの <code>repository_id</code>)。</p>
+
+    <h3>OIDC トークンの項目</h3>
+    <div class="tablewrap">
+      <table class="claims">
+        <thead><tr><th>クレーム名</th><th>何か</th><th>今回の値</th><th>使う欄</th></tr></thead>
+        <tbody>
+          <tr><td><code>iss</code></td><td>発行元</td><td><code>https://token.actions.githubusercontent.com</code></td><td>発行元(URL)</td></tr>
+          <tr><td><code>aud</code></td><td>対象(宛先)</td><td>プロバイダ <code>github-actions</code> の完全な名前(下の注記)</td><td>対象(Audiences)</td></tr>
+          <tr><td><code>exp</code></td><td>期限</td><td>発行から短い時間(4章の注記)</td><td>欄なし。Security Token Service が必ず確認する</td></tr>
+          <tr><td><code>sub</code></td><td>誰か(主体)</td><td><code>repo:tomooshima0828@51151357/portfolio-rails-vue-firebase-gcp-library@1409915528:…</code>(下の注記)</td><td>属性の対応づけの <code>google.subject</code></td></tr>
+          <tr><td><code>repository_id</code></td><td>リポジトリ ID</td><td><code>"1409915528"</code>(文字列)</td><td>属性の対応づけ、属性の条件</td></tr>
+          <tr><td><code>environment</code></td><td>ジョブが宣言した Environment の名前</td><td><code>"production"</code></td><td>属性の対応づけ、属性の条件</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <p><strong><code>aud</code> について</strong>:プロバイダの「対象」を「デフォルトの対象」にすると、Security Token Service は、<code>aud</code> がプロバイダの完全な名前(<code>//iam.googleapis.com/projects/656607631341/locations/global/workloadIdentityPools/github/providers/github-actions</code>、先頭に <code>https:</code> が付いてもよい)と一致することを求めます(gcloud の文書)。<code>google-github-actions/auth</code> は、初めの値で、この名前を <code>aud</code> に入れるよう GitHub に要求します(Action の README)。実際に入る文字列は、確認していません。</p>
+      <p><strong><code>sub</code> について</strong>:GitHub の文書によると、2026-07-15 より後に作られたリポジトリでは、<code>sub</code> に所有者とリポジトリの ID が入る新しい書式になります。このリポジトリは 2026-10-08 に作られたので、新しい書式です。Environment を宣言したジョブで、後ろの部分(<code>…</code>)がどうなるかは、文書に書かれていないため確認していません。今回の条件は <code>sub</code> を使わず、<code>repository_id</code> と <code>environment</code> で判定するので、書式の違いは設定に影響しません。</p>
+      <p><strong><code>iss</code> と、入力した URL の末尾の <code>/</code></strong>:OIDC トークンの <code>iss</code> の末尾には <code>/</code> がありません。発行元の欄には、Google の文書の例に合わせて、末尾に <code>/</code> を付けた URL を入力しました(<code>google-github-actions/auth</code> の README の例には <code>/</code> がありません)。どちらでも一致と見なされるかは、Google の文書では確認していません。最初の自動デプロイで、交換が成功するかで確認します。</p>
+    </div>
+
+    <h3>プロバイダ github-actions の欄</h3>
+    <p>今オーナーが入力している欄と、その欄が場面 2 のどの確認に使われるかです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>欄</th><th>入力する値</th><th>場面 2 で何に使われるか</th></tr></thead>
+        <tbody>
+          <tr class="now"><td>発行元(URL)</td><td><code>https://token.actions.githubusercontent.com/</code></td><td>⑤ で <code>iss</code> と照合する。② の公開鍵の取得先にもなる</td></tr>
+          <tr class="now"><td>対象(Audiences)</td><td>デフォルトの対象</td><td>⑤ で <code>aud</code> と照合する</td></tr>
+          <tr class="now"><td>属性の対応づけ <code>google.subject</code></td><td><code>assertion.sub</code></td><td>⑤ で、操作の記録に残す名前を決める(127文字まで。今回は約100文字)</td></tr>
+          <tr class="now"><td>属性の対応づけ <code>attribute.repository_id</code></td><td><code>assertion.repository_id</code></td><td>⑤ で、リポジトリ ID を Google Cloud 側の属性に写す</td></tr>
+          <tr class="now"><td>属性の対応づけ <code>attribute.environment</code></td><td><code>assertion.environment</code></td><td>⑤ で、Environment を Google Cloud 側の属性に写す</td></tr>
+          <tr class="now"><td>属性の対応づけ <code>attribute.repo_env</code></td><td><code>assertion.repository_id + "_" + assertion.environment</code></td><td>⑤ で、2つをつなげた値(<code>1409915528_production</code>)を作る。次の作業で、<code>deployer</code> の権限借用を許可する相手の指定に使う</td></tr>
+          <tr class="now"><td>属性の条件</td><td><code>assertion.repository_id == "1409915528" &amp;&amp; assertion.environment == "production"</code></td><td>⑤ で評価し、合わなければ ⑥ の交換を拒否する</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><p>条件の <code>"1409915528"</code> を引用符で囲むのは、OIDC トークンの中で <code>repository_id</code> が数ではなく文字列として書かれているからです(GitHub の文書の例でも <code>"repository_id": "74"</code> のように文字列です)。</p></div>
+  </section>
+
+  <!-- 6章 -->
+  <section id="position">
+    <h2><span class="num">6</span>位置づけ:「Google でログイン」との比較</h2>
+    <p>OIDC は、もともと人のログイン(「Google でログイン」など)のために作られた仕組みです。GitHub Actions は、そのうち「署名つきのトークンの形式」と「公開鍵を公開する方法」を、人ではなくジョブ(プログラム)の身元を伝えるために使っています。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>OIDC の役割</th><th>Google でログイン</th><th>GitHub Actions → Google Cloud(今回)</th></tr></thead>
+        <tbody>
+          <tr><td>発行元(OpenID Provider)</td><td>Google</td><td><span class="t-a3">GitHub の OIDC プロバイダ</span></td></tr>
+          <tr><td>発行されるトークン</td><td>ID トークン</td><td>OIDC トークン(形式は ID トークンと同じ JWT)</td></tr>
+          <tr><td>誰か(<code>sub</code>)</td><td>Google のユーザー ID</td><td>リポジトリとジョブの情報</td></tr>
+          <tr><td>受け取る側(Relying Party)</td><td>Web サービス</td><td><span class="t-a5">Security Token Service</span></td></tr>
+          <tr><td>対象(<code>aud</code>)</td><td>Web サービスのクライアント ID</td><td>プロバイダ <code>github-actions</code> の名前</td></tr>
+          <tr><td>ログイン画面とリダイレクト</td><td>ある(人がログインする)</td><td>ない(ジョブが直接要求する)</td></tr>
+          <tr><td>検証の後に起きること</td><td>Web サービスが、会員をログイン状態にする</td><td>Security Token Service が、連携トークンを発行する</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>ログイン画面がないのは、ジョブは人ではないので、パスワードを入力したり、同意の画面で許可したりできないからです。ジョブが GitHub のランナーの上で動いていること自体を、GitHub が知っています。そのため GitHub は、ジョブの要求だけで、OIDC トークンを発行できます。</p>
+    <p>Issue #8 では、Rails が、Google の公開鍵で Firebase の ID トークンの署名を検証しました(<a href="008-id-token-signature.html">ID トークンの署名</a>)。今回は、Security Token Service が、GitHub の公開鍵で OIDC トークンの署名を検証します。受け取る側が Rails から Security Token Service に、発行元が Google から GitHub に替わりますが、「発行元が署名したトークンを、受け取る側が公開鍵で検証し、中身で受け付けるかを決める」という形は同じです。</p>
+  </section>
+
+  <!-- 7章 -->
+  <section id="check">
+    <h2><span class="num">7</span>確認用の問い</h2>
+    <ol class="check">
+      <li>「GitHub の OIDC プロバイダ」と「プロバイダ <code>github-actions</code>」は、それぞれ何で、誰が作りますか。<span class="hint">2章の「「プロバイダ」と呼ばれるものが2つある」です。</span></li>
+      <li>署名の検証に通った OIDC トークンでも、属性の条件が必要なのはなぜですか。<span class="hint">4章の「署名の検証で分かることと、分からないこと」です。</span></li>
+      <li>対象(<code>aud</code>)を確認しないと、何が起きる可能性がありますか。<span class="hint">4章の「対象(宛先)を確認する理由」です。</span></li>
+      <li>今入力している属性の条件は、場面 2 のどこで評価され、合わないと何が起きますか。<span class="hint">3章の場面 2 の ⑤ と ⑥、5章の欄の表です。</span></li>
+      <li>GitHub Actions の OIDC には、ログイン画面がありません。それでも GitHub が OIDC トークンを発行できるのはなぜですか。<span class="hint">6章です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

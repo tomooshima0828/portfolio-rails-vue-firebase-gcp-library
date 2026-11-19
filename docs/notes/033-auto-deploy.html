@@ -484,13 +484,13 @@ ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
       <table>
         <thead><tr><th>たとえ話</th><th>このアプリでは</th></tr></thead>
         <tbody>
-          <tr><td>会社に登録された社員の名義</td><td><span class="t-a5">deployer</span>(Google Cloud の中にあり、外に出ない)</td></tr>
+          <tr><td>会社に登録された社員</td><td><span class="t-a5">deployer</span>(Google Cloud の中にあり、外に出ない)</td></tr>
           <tr><td>その社員が入ってよい部屋</td><td><span class="t-a5">deployer</span> に付けたロール</td></tr>
           <tr><td>外の会社が書いた紹介状</td><td><span class="t-a3">GitHub</span> の OIDC トークン</td></tr>
           <tr><td>紹介状を確認し、入館証を出す受付</td><td><span class="t-a4">Workload Identity 連携</span></td></tr>
-          <tr><td>その社員の名義で、1時間だけ使える入館証</td><td><span class="t-a5">deployer</span> のアクセストークン</td></tr>
+          <tr><td>その社員として、1時間だけ使える入館証</td><td><span class="t-a5">deployer</span> のアクセストークン</td></tr>
           <tr><td>入館証を持って部屋に入る人</td><td><span class="t-a2">deploy.yml のジョブ</span></td></tr>
-          <tr><td>部屋の入口で、入館証の名義に許可があるかを確認する</td><td><span class="t-a6">Artifact Registry</span> などが、<span class="t-a5">deployer</span> のロールを確認する</td></tr>
+          <tr><td>部屋の入口で、入館証の社員に許可があるかを確認する</td><td><span class="t-a6">Artifact Registry</span> などが、<span class="t-a5">deployer</span> のロールを確認する</td></tr>
         </tbody>
       </table>
     </div>
@@ -515,7 +515,7 @@ ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
 
     <figure>
       <div class="figbox">
-        <svg class="mid" viewBox="0 0 780 565" role="img" aria-label="トークンの動き。左が GitHub、右が Google Cloud。1、GitHub が OIDC トークンを deploy.yml のジョブに渡す。2、ジョブが Security Token Service に OIDC トークンを提示する。Security Token Service は GitHub の公開鍵で署名を検証する。3、Security Token Service が連携トークンをジョブに渡す。4、ジョブが IAM Credentials API に連携トークンを提示する。5、IAM Credentials API が deployer 名義のアクセストークンをジョブに渡す。6、ジョブがアクセストークンを付けて Artifact Registry、Cloud Run、Firebase Hosting にリクエストを送り、それぞれが deployer のロールを確認する。7、ジョブが終了するとランナーごと破棄される。deployer は Google Cloud の中にあり、動かない">
+        <svg class="mid" viewBox="0 0 780 565" role="img" aria-label="トークンの動き。左が GitHub、右が Google Cloud。1、GitHub が OIDC トークンを deploy.yml のジョブに渡す。2、ジョブが Security Token Service に OIDC トークンを提示する。Security Token Service は GitHub の公開鍵で署名を検証する。3、Security Token Service が連携トークンをジョブに渡す。4、ジョブが IAM Credentials API に連携トークンを提示する。5、IAM Credentials API が deployer のアクセストークンをジョブに渡す。6、ジョブがアクセストークンを付けて Artifact Registry、Cloud Run、Firebase Hosting にリクエストを送り、それぞれが deployer のロールを確認する。7、ジョブが終了するとランナーごと破棄される。deployer は Google Cloud の中にあり、動かない">
           <defs>
             <marker id="f3-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
             <marker id="f3-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
@@ -546,14 +546,14 @@ ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
           <rect x="400" y="240" width="330" height="72" rx="8" class="bx-a4"/>
           <text x="565" y="264" text-anchor="middle" class="b">IAM Credentials API</text>
           <text x="565" y="284" text-anchor="middle" class="s">連携トークンを検証し、</text>
-          <text x="565" y="300" text-anchor="middle" class="s">deployer 名義のアクセストークンを出す</text>
+          <text x="565" y="300" text-anchor="middle" class="s">deployer のアクセストークンを出す</text>
 
           <!-- deployer は動かない。点線(矢印なし)は、動きではなく、つながり -->
           <rect x="470" y="350" width="190" height="46" rx="8" class="bx-a5"/>
           <text x="565" y="369" text-anchor="middle" class="b">deployer</text>
           <text x="565" y="388" text-anchor="middle" class="s">Google Cloud から出ない</text>
           <line x1="565" y1="312" x2="565" y2="350" class="ln dash"/>
-          <text x="575" y="337" class="s">名義</text>
+          <text x="575" y="337" class="s">権限を借用</text>
           <line x1="565" y1="396" x2="565" y2="420" class="ln dash"/>
           <text x="575" y="412" class="s">ロールを確認</text>
 
@@ -586,7 +586,7 @@ ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
           <text x="300" y="428" text-anchor="middle" class="s">を付けてリクエスト</text>
         </svg>
       </div>
-      <figcaption>図3:図1 と同じく、左の枠が GitHub、右の枠が Google Cloud です。実線の矢印は、3つのトークン(OIDC トークン、連携トークン、アクセストークン)が動く向きです。OIDC トークンは、② で Security Token Service に提示した後は使いません。<span class="t-a5">deployer</span> は Google Cloud の中にあり、動きません。動くのは、⑤ で IAM Credentials API が出す「<span class="t-a5">deployer</span> 名義のアクセストークン」です。矢印のない点線は、動きではなくつながりです。IAM Credentials API は <span class="t-a5">deployer</span> の名義でアクセストークンを出し、<span class="t-a6">Artifact Registry</span> などは ⑥ のリクエストを受けると、<span class="t-a5">deployer</span> に付いたロールを確認します。<span class="t-a3">GitHub</span> と Artifact Registry などの間には矢印がありません。</figcaption>
+      <figcaption>図3:図1 と同じく、左の枠が GitHub、右の枠が Google Cloud です。実線の矢印は、3つのトークン(OIDC トークン、連携トークン、アクセストークン)が動く向きです。OIDC トークンは、② で Security Token Service に提示した後は使いません。<span class="t-a5">deployer</span> は Google Cloud の中にあり、動きません。動くのは、⑤ で IAM Credentials API が出す「<span class="t-a5">deployer</span> のアクセストークン」です。矢印のない点線は、動きではなくつながりです。IAM Credentials API は <span class="t-a5">deployer</span> のアクセストークンを出し、<span class="t-a6">Artifact Registry</span> などは ⑥ のリクエストを受けると、<span class="t-a5">deployer</span> に付いたロールを確認します。<span class="t-a3">GitHub</span> と Artifact Registry などの間には矢印がありません。</figcaption>
     </figure>
 
     <h3>トークンは受け渡されるのではなく、2回交換される</h3>
@@ -612,7 +612,7 @@ ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
           <tr><td class="step">②</td><td><span class="t-a2">deploy.yml のジョブ</span> が、Security Token Service に OIDC トークンを提示する。Security Token Service は、<span class="t-a3">GitHub</span> の公開鍵で署名を検証し、中身が登録した条件(次の節)に合うかを確認する。合わなければ、ここで拒否する</td><td><span class="loc a2">ランナー</span><span class="loc a4">Security Token Service</span></td></tr>
           <tr><td class="step">③</td><td>Security Token Service が、<span class="t-a2">deploy.yml のジョブ</span> に連携トークン(Google の文書では federated token)を渡す。連携トークンは「Workload Identity 連携を通った」ことを示すだけで、まだ <span class="t-a5">deployer</span> としては何もできない</td><td><span class="loc a2">ランナー</span></td></tr>
           <tr><td class="step">④</td><td><span class="t-a2">deploy.yml のジョブ</span> が、IAM Credentials API に連携トークンを提示し、<span class="t-a5">deployer</span> のアクセストークンを要求する</td><td><span class="loc a2">ランナー</span><span class="loc a4">IAM Credentials API</span></td></tr>
-          <tr><td class="step">⑤</td><td>IAM Credentials API が、「この相手には <span class="t-a5">deployer</span> の権限の借用を許可する」と登録されているかを確認し(場面 0 の 2)、<span class="t-a5">deployer</span> 名義のアクセストークンを渡す。期限は、初めの値で1時間。<span class="t-a5">deployer</span> そのものは、Google Cloud の中に残る</td><td><span class="loc a2">ランナー</span></td></tr>
+          <tr><td class="step">⑤</td><td>IAM Credentials API が、「この相手には <span class="t-a5">deployer</span> の権限の借用を許可する」と登録されているかを確認し(場面 0 の 2)、<span class="t-a5">deployer</span> のアクセストークンを渡す。期限は、初めの値で1時間。<span class="t-a5">deployer</span> そのものは、Google Cloud の中に残る</td><td><span class="loc a2">ランナー</span></td></tr>
           <tr><td class="step">⑥</td><td><span class="t-a2">deploy.yml のジョブ</span> が、アクセストークンを付けて、<span class="t-a6">Artifact Registry</span>、<span class="t-a6">Cloud Run</span>、<span class="t-a6">Firebase Hosting</span> にリクエストを送る(場面 3)。それぞれが、<span class="t-a5">deployer</span> にそのロールがあるかを確認する</td><td><span class="loc a2">ランナー</span></td></tr>
           <tr><td class="step">⑦</td><td>ジョブが終了し、<span class="t-a3">GitHub</span> がランナーを破棄する。アクセストークンも、期限が来れば使えなくなる</td><td><span class="loc none">どこにもない</span></td></tr>
         </tbody>

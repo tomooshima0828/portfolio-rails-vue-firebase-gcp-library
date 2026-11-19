@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
 <style>
 /* 学習ノート(layered-tech-explanation スキルのひな形から作成)。
-   登場人物の色:a2=今ここ(2-6 の借用)、a3=Rails、a4=deploy.yml のジョブ、a5=サービスアカウント(api-runtime と deployer。同じ仲間なので同じ色)、a6=依頼する先のリソース */
+   登場人物の色:a2=2-6 の借用(Workload Identity 連携)、a3=Rails、a4=deploy.yml のジョブ、a5=サービスアカウント(api-runtime と deployer。同じ仲間なので同じ色)、a6=依頼する先のリソース */
 :root {
   --bg: #f3f5f8;
   --surface: #ffffff;
@@ -339,6 +339,8 @@ svg .mk-a2 { fill: var(--a2); }
           <tr><td class="nw">IAM ポリシー</td><td>リソースごとの許可の一覧。1行は「誰に(プリンシパル)、何を許可するか(ロール)」。プロジェクトの IAM ポリシーの行は、プロジェクトの中のすべてに効く(継承)</td><td>点線の箱</td></tr>
           <tr><td class="nw">プリンシパル</td><td>IAM ポリシーの「誰に」に入る相手。人の Google アカウント、サービスアカウント、GitHub のジョブなど</td><td><code>deployer</code>(リポジトリの IAM ポリシーの「誰に」)</td></tr>
           <tr><td class="nw">ロール</td><td>IAM ポリシーの「何を許可するか」に入る、操作のまとまり。Google が用意している</td><td>Artifact Registry 書き込みなど</td></tr>
+          <tr><td class="nw">Workload Identity 連携</td><td>Google Cloud の外のプログラム(GitHub のジョブなど)を、鍵ファイルなしで Google Cloud に受け入れる仕組み。外部が発行したトークン(OIDC トークン)を、Google Cloud のトークンに交換する</td><td>プール <code>github</code> とプロバイダ <code>github-actions</code>(「製品:IAM」の枠)</td></tr>
+          <tr><td class="nw">Workload Identity ユーザー</td><td>ロールの1つ。サービスアカウントの IAM ポリシーに書くと、「誰に」の欄の外部のプログラムが、そのサービスアカウントのアクセストークンを受け取り、そのサービスアカウントとして操作できる(権限の借用)</td><td><code>deployer</code> の IAM ポリシーの1行(4章の 2-6)</td></tr>
           <tr><td class="nw">サービスアカウント</td><td>人ではなく、プログラムが使うアカウント。オーナーが IAM の中に作ったものなのでリソースとして描くが、使われ方はアカウントで、IAM ポリシーの「誰に」(プリンシパル)に入る</td><td><code>api-runtime</code>、<code>deployer</code>(緑の箱)</td></tr>
         </tbody>
       </table>
@@ -349,7 +351,7 @@ svg .mk-a2 { fill: var(--a2); }
     <h2><span class="num">3</span>リクエストを送るときの関係</h2>
     <figure>
       <div class="figbox">
-        <svg class="wide" viewBox="0 0 840 500" role="img" aria-label="置き場所の枠つきの関係図。Cloud Run の枠の中に Rails があり、Rails は IAM の枠にある api-runtime のサービスアカウントを使って、Google Cloud のサービスの枠にある Secret Manager と Cloud SQL に直接リクエストを送る。GitHub の枠の中に deploy.yml のジョブがあり、ジョブは IAM の枠にある deployer の権限を借用し(2-6 で許可する、今ここ)、Artifact Registry、Cloud Run、Firebase Hosting に直接リクエストを送る。">
+        <svg class="wide" viewBox="0 0 840 500" role="img" aria-label="置き場所の枠つきの関係図。Cloud Run の枠の中に Rails があり、Rails は IAM の枠にある api-runtime のサービスアカウントを使って、Google Cloud のサービスの枠にある Secret Manager と Cloud SQL に直接リクエストを送る。GitHub の枠の中に deploy.yml のジョブがあり、ジョブは IAM の枠にある deployer の権限を借用し(2-6 で許可した)、Artifact Registry、Cloud Run、Firebase Hosting に直接リクエストを送る。">
           <defs>
             <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
             <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
@@ -387,7 +389,7 @@ svg .mk-a2 { fill: var(--a2); }
 
           <line x1="112" y1="350" x2="112" y2="424" class="ln-a2 dash"/>
           <text x="120" y="378" class="lab-here">借用して使う</text>
-          <text x="120" y="394" class="lab-here">2-6 で許可。今ここ</text>
+          <text x="120" y="394" class="lab-here">(2-6 で許可)</text>
 
           <rect x="12" y="400" width="200" height="86" rx="10" class="bx-frame"/>
           <text x="24" y="418" class="s">IAM(Google Cloud)</text>
@@ -425,7 +427,7 @@ svg .mk-a2 { fill: var(--a2); }
           <line x1="250" y1="466" x2="286" y2="466" class="ln dash"/>
           <text x="294" y="470" class="s">プログラムが使うサービスアカウント</text>
           <line x1="250" y1="484" x2="286" y2="484" class="ln-a2 dash"/>
-          <text x="294" y="488" class="s">まだ許可していない(今ここ)</text>
+          <text x="294" y="488" class="s">Workload Identity 連携で借用して使う</text>
         </svg>
       </div>
       <figcaption>図2:破線の枠は、それぞれがある場所です。Rails は Cloud Run の中で、ジョブは GitHub の中で動きます。<code>api-runtime</code> と <code>deployer</code> は、Cloud Run や GitHub の中ではなく、Google Cloud の IAM にあるサービスアカウントです。矢印は、プログラムが送るリクエストです。サービスアカウントは、リクエストを中継しません。プログラムは、サービスアカウントを使ったリクエストを、依頼する先に直接送ります。依頼する先は、どのサービスアカウントからのリクエストかを見て、そのサービスアカウントに付いたロールで許可します(右の箱の下の行は、許可する操作です。ロールの正式な名前は4章)。Cloud Run の更新には、<code>deployer</code> が <code>api-runtime</code> を使ってよいという許可(2-5)も必要です。</figcaption>
@@ -438,7 +440,7 @@ svg .mk-a2 { fill: var(--a2); }
         <tbody>
           <tr><td>オーナー</td><td class="nw">人</td><td>オーナーの Google アカウント</td><td class="nw">Google アカウント</td><td>コンソールにログインする</td></tr>
           <tr><td><span class="t-a3">Rails</span></td><td class="nw">プログラム</td><td><span class="t-a5">api-runtime</span></td><td class="nw">サービスアカウント</td><td>パスワードではログインしない。Cloud Run が、サービス <code>api</code> とジョブ <code>migrate</code> の設定の「サービス アカウント」の欄(Issue #30 で <code>api-runtime</code> を指定)に従って、Rails に <code>api-runtime</code> を使わせる。Rails のコードには、鍵も設定もない</td></tr>
-          <tr class="now"><td><span class="t-a4">deploy.yml のジョブ</span></td><td class="nw">プログラム</td><td><span class="t-a5">deployer</span></td><td class="nw">サービスアカウント</td><td>Workload Identity 連携で、OIDC トークンを <code>deployer</code> のアクセストークンに交換する(<a href="033-oidc-token.html">033-oidc-token.html</a>)。そのための許可が 2-6</td></tr>
+          <tr><td><span class="t-a4">deploy.yml のジョブ</span></td><td class="nw">プログラム</td><td><span class="t-a5">deployer</span></td><td class="nw">サービスアカウント</td><td>Workload Identity 連携で、OIDC トークンを <code>deployer</code> のアクセストークンに交換する(<a href="033-oidc-token.html">033-oidc-token.html</a>)。そのための許可が 2-6</td></tr>
         </tbody>
       </table>
     </div>
@@ -468,15 +470,116 @@ svg .mk-a2 { fill: var(--a2); }
       <table>
         <thead><tr><th>順</th><th>リソース</th><th>プリンシパル</th><th>ロール</th><th>状態</th></tr></thead>
         <tbody>
-          <tr><td class="step">2-1</td><td>プロジェクト全体</td><td><code>deployer</code></td><td>Firebase Hosting 管理者</td><td>完了</td></tr>
-          <tr><td class="step">2-2</td><td>Artifact Registry のリポジトリ <code>knowledge-library</code></td><td><code>deployer</code></td><td>Artifact Registry 書き込み</td><td>完了</td></tr>
-          <tr><td class="step">2-3</td><td>Cloud Run のジョブ <code>migrate</code></td><td><code>deployer</code></td><td>Cloud Run デベロッパー</td><td>完了</td></tr>
-          <tr><td class="step">2-4</td><td>Cloud Run のサービス <code>api</code></td><td><code>deployer</code></td><td>Cloud Run デベロッパー</td><td>完了</td></tr>
-          <tr><td class="step">2-5</td><td>サービスアカウント <code>api-runtime</code></td><td><code>deployer</code></td><td>サービス アカウント ユーザー</td><td>完了</td></tr>
-          <tr class="now"><td class="step">2-6</td><td>サービスアカウント <code>deployer</code></td><td>このリポジトリの、<code>production</code> を宣言したジョブ</td><td>Workload Identity ユーザー</td><td>今ここ</td></tr>
+          <tr><td class="step">2-1</td><td>プロジェクト全体</td><td><code>deployer</code></td><td>Firebase Hosting 管理者</td><td class="nw">完了</td></tr>
+          <tr><td class="step">2-2</td><td>Artifact Registry のリポジトリ <code>knowledge-library</code></td><td><code>deployer</code></td><td>Artifact Registry 書き込み</td><td class="nw">完了</td></tr>
+          <tr><td class="step">2-3</td><td>Cloud Run のジョブ <code>migrate</code></td><td><code>deployer</code></td><td>Cloud Run デベロッパー</td><td class="nw">完了</td></tr>
+          <tr><td class="step">2-4</td><td>Cloud Run のサービス <code>api</code></td><td><code>deployer</code></td><td>Cloud Run デベロッパー</td><td class="nw">完了</td></tr>
+          <tr><td class="step">2-5</td><td>サービスアカウント <code>api-runtime</code></td><td><code>deployer</code></td><td>サービス アカウント ユーザー</td><td class="nw">完了</td></tr>
+          <tr><td class="step">2-6</td><td>サービスアカウント <code>deployer</code></td><td>このリポジトリの、<code>production</code> を宣言したジョブ</td><td>Workload Identity ユーザー</td><td class="nw">完了</td></tr>
         </tbody>
       </table>
     </div>
+    <h3>許可している行と、トークンの流れ</h3>
+    <p>自動デプロイのトークンの流れ(<a href="033-auto-deploy.html#object">033-auto-deploy.html の4章の図3</a>)に、それぞれの操作を許可している行を書き足した図です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 910 480" role="img" aria-label="左の GitHub の枠に deploy.yml のジョブ、右の Google Cloud の枠に Security Token Service、IAM Credentials API、deployer、Artifact Registry、Cloud Run、Firebase Hosting。② ③ ジョブが Security Token Service で OIDC トークンを連携トークンに交換する。これはプロバイダ github-actions の属性条件で許可される。④ ⑤ ジョブが IAM Credentials API で連携トークンを deployer のアクセストークンに交換する。これは deployer の IAM ポリシー(2-6)で許可される。⑥ ジョブがアクセストークンを付けて各サービスにリクエストを送る。これは各リソースの IAM ポリシー(2-1〜2-4)で許可される。">
+          <defs>
+            <marker id="f3-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f3-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+          </defs>
+
+          <!-- GitHub -->
+          <rect x="12" y="20" width="180" height="450" rx="12" class="bx-frame"/>
+          <text x="26" y="40" class="s">GitHub</text>
+          <rect x="28" y="52" width="148" height="404" rx="8" class="bx-a4"/>
+          <text x="102" y="240" text-anchor="middle" class="b">deploy.yml</text>
+          <text x="102" y="258" text-anchor="middle" class="b">のジョブ</text>
+          <text x="102" y="280" text-anchor="middle" class="s">プログラム</text>
+
+          <!-- Google Cloud -->
+          <rect x="240" y="20" width="656" height="450" rx="12" class="bx-frame"/>
+          <text x="254" y="40" class="s">Google Cloud</text>
+          <text x="723" y="40" text-anchor="middle" class="s b">許可している行</text>
+
+          <rect x="300" y="52" width="230" height="50" rx="8" class="bx-a3"/>
+          <text x="415" y="72" text-anchor="middle" class="b">Security Token Service</text>
+          <text x="415" y="92" text-anchor="middle" class="s">OIDC トークンを交換する</text>
+          <rect x="560" y="52" width="326" height="50" rx="8" class="bx-pol"/>
+          <text x="723" y="72" text-anchor="middle" class="s">プロバイダ github-actions の属性条件</text>
+          <text x="723" y="92" text-anchor="middle" class="s">(準備の作業 1)</text>
+          <line x1="530" y1="77" x2="560" y2="77" class="ln dash"/>
+
+          <rect x="300" y="132" width="230" height="50" rx="8" class="bx-a3"/>
+          <text x="415" y="152" text-anchor="middle" class="b">IAM Credentials API</text>
+          <text x="415" y="172" text-anchor="middle" class="s">deployer のアクセストークンを出す</text>
+
+          <line x1="415" y1="182" x2="415" y2="216" class="ln dash"/>
+          <text x="423" y="203" class="s">権限を借用</text>
+          <rect x="330" y="216" width="170" height="46" rx="8" class="bx-a5"/>
+          <text x="415" y="236" text-anchor="middle" class="b">deployer</text>
+          <text x="415" y="254" text-anchor="middle" class="s">サービスアカウント</text>
+          <rect x="560" y="208" width="326" height="62" rx="8" class="bx-pol"/>
+          <text x="723" y="228" text-anchor="middle" class="s b">deployer の IAM ポリシー(2-6)</text>
+          <text x="723" y="246" text-anchor="middle" class="s">deploy.yml のジョブに</text>
+          <text x="723" y="262" text-anchor="middle" class="s">Workload Identity ユーザー</text>
+          <line x1="500" y1="239" x2="560" y2="239" class="ln dash"/>
+
+          <rect x="300" y="316" width="230" height="36" rx="8" class="bx-a6"/>
+          <text x="415" y="339" text-anchor="middle" class="a b">Artifact Registry</text>
+          <rect x="560" y="316" width="326" height="36" rx="8" class="bx-pol"/>
+          <text x="723" y="339" text-anchor="middle" class="s">リポジトリの IAM ポリシー:deployer に書き込み(2-2)</text>
+          <line x1="530" y1="334" x2="560" y2="334" class="ln dash"/>
+
+          <rect x="300" y="362" width="230" height="36" rx="8" class="bx-a6"/>
+          <text x="415" y="385" text-anchor="middle" class="a b">Cloud Run</text>
+          <rect x="560" y="362" width="326" height="36" rx="8" class="bx-pol"/>
+          <text x="723" y="385" text-anchor="middle" class="s">migrate と api:deployer にデベロッパー(2-3、2-4)</text>
+          <line x1="530" y1="380" x2="560" y2="380" class="ln dash"/>
+
+          <rect x="300" y="408" width="230" height="36" rx="8" class="bx-a6"/>
+          <text x="415" y="431" text-anchor="middle" class="a b">Firebase Hosting</text>
+          <rect x="560" y="408" width="326" height="36" rx="8" class="bx-pol"/>
+          <text x="723" y="431" text-anchor="middle" class="s">プロジェクト:deployer に Hosting 管理者(2-1)</text>
+          <line x1="530" y1="426" x2="560" y2="426" class="ln dash"/>
+
+          <!-- トークンとリクエスト -->
+          <line x1="176" y1="66" x2="296" y2="66" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="236" y="58" text-anchor="middle" class="a">② OIDC トークン</text>
+          <line x1="300" y1="92" x2="180" y2="92" class="ln-a3" marker-end="url(#f3-a3)"/>
+          <text x="240" y="85" text-anchor="middle" class="a">③ 連携トークン</text>
+          <line x1="176" y1="146" x2="296" y2="146" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="236" y="138" text-anchor="middle" class="a">④ 連携トークン</text>
+          <line x1="300" y1="172" x2="180" y2="172" class="ln-a3" marker-end="url(#f3-a3)"/>
+          <text x="240" y="165" text-anchor="middle" class="a">⑤ アクセストークン</text>
+          <line x1="176" y1="334" x2="296" y2="334" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="236" y="326" text-anchor="middle" class="a">⑥ リクエスト</text>
+          <line x1="176" y1="380" x2="296" y2="380" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <line x1="176" y1="426" x2="296" y2="426" class="ln-a4" marker-end="url(#f3-a4)"/>
+        </svg>
+      </div>
+      <figcaption>図3:番号は、033-auto-deploy.html の図3 と同じです(① の OIDC トークンの発行は省きました)。実線の矢印は、トークンとリクエストが動く向きです。右の点線の箱は、その操作を許可している行です。④ ⑤ は、IAM Credentials API が <code>deployer</code> の IAM ポリシー(2-6)を確認して、<code>deployer</code> のアクセストークンを出します。⑥ は、ジョブがアクセストークンを付けて送るリクエストで、受け取った側が自分の IAM ポリシーを確認します。<code>deployer</code> は矢印の途中にはなく、動きません。Cloud Run の更新には、2-5 の行(<code>api-runtime</code> の IAM ポリシー)も必要です。</figcaption>
+    </figure>
+
+    <h3>2-6 の1行の読み方</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>決めること</th><th>2-6 の1行</th></tr></thead>
+        <tbody>
+          <tr><td>どれに対して(リソース)</td><td><code>deployer</code>(この IAM ポリシーを持つ側)</td></tr>
+          <tr><td>誰が(プリンシパル)</td><td><code>deploy.yml</code> のデプロイのジョブ(ロールを受け取る側)</td></tr>
+          <tr><td>何ができるか(ロール)</td><td>Workload Identity ユーザー(権限の借用)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>続けて読むと、「<code>deploy.yml</code> のデプロイのジョブは、<code>deployer</code> の権限を借用できる」です。借用したジョブは、<code>deployer</code> が 2-1〜2-5 で持った権限で操作できます。2-5(「<code>deployer</code> は <code>api-runtime</code> を使ってよい」)と同じ形の1行です。</p>
+    <ul>
+      <li><strong>「どれに対して」は、1行の中には書かれない。</strong>どのリソースの IAM ポリシーに書いたかで決まります。Google ドライブで、ファイル A の共有の画面で追加した人が、ファイル A だけを編集できるのと同じです。</li>
+      <li><strong>「誰が」は、<code>production</code> を宣言したジョブ。</strong>ジョブに <code>environment: production</code> の1行を書くと、GitHub はそのジョブの OIDC トークンに <code>"environment": "production"</code> と書き込みます。この1行があるのは <code>deploy.yml</code> のデプロイのジョブだけで、<code>ci.yml</code> の4つのジョブにはありません。ジョブは Google Cloud の外にいてメールアドレスがないため、「プール <code>github</code> を通ってきた、リポジトリ ID <code>1409915528</code>、Environment <code>production</code> のジョブ」という条件で書きます(下の値。覚える必要はありません)。</li>
+      <li><strong>Workload Identity ユーザーという名前。</strong>Workload は人ではなく機械が動かすプログラム、Workload Identity は外のプログラムに身元を与える仕組み(Workload Identity 連携)、ユーザーはサービスアカウントを使う側、という意味です。GitHub 専用ではなく、AWS や Kubernetes などのプログラムにも使います。</li>
+    </ul>
+    <pre><code>principalSet://iam.googleapis.com/projects/656607631341/locations/global/workloadIdentityPools/github/attribute.repo_env/1409915528_production</code></pre>
+
     <p>参考:<code>api-runtime</code> の許可は Issue #30、#31 で付けたものです。Secret Manager の <code>db-password</code> と <code>rails-master-key</code> に「Secret Manager のシークレット アクセサー」、プロジェクト全体に「Cloud SQL クライアント」が付いています(2026-11-19 に確認)。</p>
   </section>
 </main>

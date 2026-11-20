@@ -102,7 +102,7 @@ AC-2 と AC-3 は、意図的に CI やマイグレーションを失敗させ�
 | 起動のきっかけ | ワークフロー `CI` が main ブランチで終了したとき(GitHub Actions の `workflow_run`) |
 | GitHub の Environment | `production`。使用できるブランチは main だけ。URL は `https://knowledge-library-prod.web.app` |
 | Environment に保存する Vue の設定値 | `VITE_FIREBASE_PROJECT_ID`、`VITE_FIREBASE_API_KEY`、`VITE_FIREBASE_AUTH_DOMAIN`、`VITE_FIREBASE_APP_ID`(値は `web/.env.production.local` と同じ) |
-| Workload Identity 連携 | プール `github`、プロバイダ `github-actions`(発行元 `https://token.actions.githubusercontent.com`) |
+| Workload Identity 連携 | プール `github`、プロバイダ `github-actions`(発行元 `https://token.actions.githubusercontent.com/`) |
 | 権限の借用を許可する相手 | リポジトリ ID `1409915528`(`tomooshima0828/portfolio-rails-vue-firebase-gcp-library`)の、Environment `production` を宣言したジョブ |
 | デプロイ用のサービスアカウント | `deployer@knowledge-library-prod.iam.gserviceaccount.com` |
 | イメージのタグ | CI が確認したコミットの短い ID(7文字)。手でビルドしていたときと同じ |

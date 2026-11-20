@@ -29,6 +29,11 @@
 | Firebase Auth | ログインの方法は Google。ウェブアプリ `knowledge-library-web` |
 | Rails が信じる Firebase のプロジェクト | Cloud Run の環境変数 `FIREBASE_PROJECT_ID=knowledge-library-prod` |
 | 今のイメージ | `4f5855b`(サービス `api` とジョブ `migrate` の両方)。2026-11-16 から |
+| 自動デプロイ | `.github/workflows/deploy.yml`。main の CI が成功したときに起動する |
+| Workload Identity 連携 | プール `github`、プロバイダ `github-actions`(発行元 `https://token.actions.githubusercontent.com/`) |
+| デプロイ用のサービスアカウント | `deployer@knowledge-library-prod.iam.gserviceaccount.com`。GitHub Actions のジョブが権限を借用する |
+| GitHub の Environment | `production`。main ブランチだけで使用できる。Vue の設定値を Variables に保存する |
+| Artifact Registry のクリーンアップ ポリシー | 最新の2つのイメージを残し、それ以外を削除する |
 
 ## 1. プロジェクトと課金(#29)
 
@@ -852,3 +857,176 @@ AC-4(ログインして投稿し、一覧に出る)は、オーナーがブラ�
 - **`firebase.json` を変えたら、Firebase Hosting をデプロイし直す**:`rewrites` などの設定は、デプロイのときに Firebase Hosting に写される
 - **Rails をデプロイし直しても、Firebase Hosting はデプロイし直さなくてよい**:`rewrites` は Cloud Run のサービスを名前で指し、`pinTag` を使っていないので、Cloud Run でいま動いている版に転送される
 - **投稿した記事は、DB の作り直しで消える**:3.12 で DB を作り直したら、画面から入れ直す
+
+## 5. 自動デプロイ(#33)
+
+作業した日:2026-11-18〜19
+
+main にマージすると、GitHub Actions が、3 章と 4 章で手で行っていたデプロイ(イメージのビルドと保存、ジョブ `migrate` の実行、サービス `api` の更新、Firebase Hosting へのデプロイ)を、同じ順に実行する。この章は、そのための準備の手順と、前のバージョンに戻す手順を記載する。仕様は [docs/specs/033-auto-deploy.md](specs/033-auto-deploy.md)、Workload Identity 連携と借用を許可する相手の絞り方の判断は [ADR 0009](adr/0009-deploy-with-workload-identity-federation.md)、仕組みの図は [docs/notes/033-auto-deploy.html](notes/033-auto-deploy.html)、OIDC トークンの中身は [docs/notes/033-oidc-token.html](notes/033-oidc-token.html)、IAM ポリシーとサービスアカウントの関係は [docs/notes/033-google-cloud-map.html](notes/033-google-cloud-map.html)。
+
+5.1〜5.3 と 5.5 は Google Cloud のコンソールで、5.4 は GitHub の画面で、オーナーが行う。
+
+### 5.1 Security Token Service API を有効にする
+
+「API とサービス」の「ライブラリ」で「Security Token Service API」を探し、「有効にする」を押す。Workload Identity 連携が、OIDC トークンを連携トークンに交換するときに使用する。#33 では、2026-11-18 に有効にした。
+
+連携トークンを `deployer` のアクセストークンに交換するときに使用する IAM Service Account Credentials API は、すでに有効になっていた。
+
+### 5.2 Workload Identity 連携を設定する
+
+「IAM と管理」の「Workload Identity 連携」で、プールとプロバイダを作成する。
+
+| 項目 | 値 |
+|---|---|
+| プールの名前 | `github`。説明は「GitHub Actions から本番にデプロイするための外部 ID」 |
+| プロバイダの種類 | OpenID Connect(OIDC) |
+| プロバイダの名前 | `github-actions` |
+| 発行元(URL) | `https://token.actions.githubusercontent.com/`。コンソールが末尾に `/` を付けて保存した |
+| オーディエンス | デフォルトのオーディエンス |
+| 属性のマッピング | 下の表 |
+| 属性の条件 | `assertion.repository_id == "1409915528" && assertion.environment == "production"` |
+
+| Google の属性 | OIDC トークンの項目 |
+|---|---|
+| `google.subject` | `assertion.sub` |
+| `attribute.repository_id` | `assertion.repository_id` |
+| `attribute.environment` | `assertion.environment` |
+| `attribute.repo_env` | `assertion.repository_id + "_" + assertion.environment` |
+
+`1409915528` は、このリポジトリの ID である。リポジトリの名前は変更でき、削除後に別の人が同じ名前で作成することもできるが、ID は変わらない。`attribute.repo_env` は、5.3 の 2-6 で「リポジトリ ID と Environment の両方が一致するジョブ」を1行で指定するために作った属性である。
+
+### 5.3 サービスアカウント `deployer` を作成し、ロールを付与する
+
+「IAM と管理」の「サービス アカウント」で、`deployer` を作成する。説明は「GitHub Actions が本番にデプロイするときに使う」。鍵は作成しない。
+
+次の 2-1〜2-6 の順に、ロールを付与する。2-1 は作成の画面の「ロールを選択」で、2-2〜2-6 は各リソースの画面の「権限」で、プリンシパルとロールを追加する。
+
+| 順 | リソース | プリンシパル | ロール |
+|---|---|---|---|
+| 2-1 | プロジェクト `knowledge-library-prod` | `deployer` | Firebase Hosting 管理者(`roles/firebasehosting.admin`) |
+| 2-2 | Artifact Registry のリポジトリ `knowledge-library` | `deployer` | Artifact Registry 書き込み(`roles/artifactregistry.writer`) |
+| 2-3 | Cloud Run のジョブ `migrate` | `deployer` | Cloud Run デベロッパー(`roles/run.developer`) |
+| 2-4 | Cloud Run のサービス `api` | `deployer` | Cloud Run デベロッパー(`roles/run.developer`) |
+| 2-5 | サービスアカウント `api-runtime` | `deployer` | サービス アカウント ユーザー(`roles/iam.serviceAccountUser`) |
+| 2-6 | サービスアカウント `deployer` | 下の `principalSet` | Workload Identity ユーザー(`roles/iam.workloadIdentityUser`) |
+
+2-6 のプリンシパルには、次の文字列を入力する。このリポジトリの、Environment `production` を宣言したジョブを表す。
+
+```
+principalSet://iam.googleapis.com/projects/656607631341/locations/global/workloadIdentityPools/github/attribute.repo_env/1409915528_production
+```
+
+2-1 だけはプロジェクト全体に付与している。Firebase Hosting のロールは、サイトの単位では付与できないためである。
+
+### 5.4 GitHub の Environment `production` を作成する
+
+GitHub のリポジトリの「Settings」の「Environments」で、「New environment」を押し、`production` を作成する。
+
+1. 「Deployment branches and tags」で「Selected branches and tags」を選び、`main` だけを追加する。main 以外のブランチのジョブは、`production` を宣言できなくなる
+2. 「Environment variables」で、4.2 と同じ4つの名前の変数を追加する。値は、オーナーが `web/.env.production.local` から転記する。値はブラウザに配信される公開情報なので、Secrets ではなく Variables に保存する
+
+```
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_APP_ID
+```
+
+### 5.5 Artifact Registry にクリーンアップ ポリシーを設定する
+
+「Artifact Registry」で `knowledge-library` を開き、「編集」で、次の2つのポリシーを追加する。マージのたびにイメージ(約 192MB)が1つ増えるため、無料枠(0.5GB)に収める。
+
+| ポリシーの名前 | 種類 | 条件 |
+|---|---|---|
+| `delete-all` | 削除 | タグの状態:すべて |
+| `keep-latest-2` | 保持 | 最新のバージョンを 2 つ保持 |
+
+保持のポリシーは、削除のポリシーより優先される。そのため、最新の2つ以外が削除される。2つ残すのは、現在動作しているイメージと、5.7 で戻すための1つ前のイメージである。
+
+「テストを実行」(削除せずに記録だけを残す)は選ばず、実際に削除する設定にする。削除は定期的に実行されるため、すぐには削除されない。
+
+### 5.6 確認する
+
+読み取りだけのコマンドで確認する。
+
+```bash
+P=knowledge-library-prod; D=serviceAccount:deployer@$P.iam.gserviceaccount.com; R=asia-northeast1
+F=(--flatten='bindings[].members' --filter="bindings.members=$D" --format='value(bindings.role)')
+
+# プロバイダの発行元、属性のマッピング、属性の条件
+gcloud iam workload-identity-pools providers describe github-actions \
+  --workload-identity-pool=github --location=global --project=$P
+# deployer の権限を借用できる相手(2-6)
+gcloud iam service-accounts get-iam-policy deployer@$P.iam.gserviceaccount.com --project=$P
+# deployer に、利用者が作成した鍵がない(Listed 0 items.)
+gcloud iam service-accounts keys list --iam-account=deployer@$P.iam.gserviceaccount.com --managed-by=user --project=$P
+# deployer のロール(2-1〜2-5)
+gcloud projects get-iam-policy $P "${F[@]}"
+gcloud artifacts repositories get-iam-policy knowledge-library --location=$R --project=$P "${F[@]}"
+gcloud run jobs get-iam-policy migrate --region=$R --project=$P "${F[@]}"
+gcloud run services get-iam-policy api --region=$R --project=$P "${F[@]}"
+gcloud iam service-accounts get-iam-policy api-runtime@$P.iam.gserviceaccount.com --project=$P "${F[@]}"
+# クリーンアップ ポリシー。cleanupPolicyDryRun が出なければ、実際に削除する設定
+gcloud artifacts repositories describe knowledge-library --location=$R --project=$P
+
+# Environment production。使用できるブランチ、変数の名前、Secrets の数
+G=repos/tomooshima0828/portfolio-rails-vue-firebase-gcp-library
+gh api $G/environments/production/deployment-branch-policies --jq '.branch_policies[].name'
+gh api $G/environments/production/variables --jq '.variables[].name'
+gh api $G/environments/production/secrets --jq '.total_count'
+gh api $G/actions/secrets --jq '.total_count'
+```
+
+2026-11-20 の結果:
+
+| 確認したこと | 結果 |
+|---|---|
+| プロバイダ | 5.2 の表のとおり。状態は `ACTIVE` |
+| `deployer` の権限を借用できる相手 | 5.3 の `principalSet` だけ(Workload Identity ユーザー) |
+| `deployer` の鍵 | 0 個 |
+| `deployer` のロール | 5.3 の 2-1〜2-5 のとおり。ほかにはない |
+| クリーンアップ ポリシー | `delete-all` と `keep-latest-2`。テストの実行ではない |
+| Environment `production` | 使用できるブランチは `main` だけ。変数は4つ。Secrets は、Environment とリポジトリのどちらも 0 個 |
+| API | Security Token Service API と IAM Service Account Credentials API が有効 |
+
+初めての自動デプロイは、#33 の PR をマージしたときに実行される。結果は、マージの後に、この節に追記する。
+
+### 5.7 前のバージョンに戻す
+
+デプロイの後に本番で問題が見つかったときは、次のどちらかで戻す。
+
+**基本:問題の PR を revert する**
+
+1. GitHub で、問題の PR を開き、「Revert」を押す。revert のブランチと PR が作成される
+2. revert の PR の CI が成功したら、main にマージする
+3. 自動デプロイで、前のコードがデプロイされる
+
+「main の最新のコミットが本番で動作している」という状態が保たれるので、こちらを基本にする。
+
+**急ぐとき:手で、1つ前のイメージに戻す**
+
+Rails は、サービス `api` とジョブ `migrate` のイメージを、1つ前のタグに戻す。ジョブは実行しない。両方を同じイメージにそろえるために、ジョブのイメージも替える(3.13)。
+
+```bash
+IMAGE=asia-northeast1-docker.pkg.dev/knowledge-library-prod/knowledge-library/api
+# 残っているイメージのタグ(最新の2つ)
+gcloud artifacts docker images list $IMAGE --include-tags --project=knowledge-library-prod
+# 1つ前のタグに戻す。<前のタグ> は、上の一覧の古い方
+gcloud run services update api --image=$IMAGE:<前のタグ> --region=asia-northeast1 --project=knowledge-library-prod
+gcloud run jobs update migrate --image=$IMAGE:<前のタグ> --region=asia-northeast1 --project=knowledge-library-prod
+```
+
+Vue は、Firebase のコンソールの「Hosting」の「リリース履歴」で、1つ前のリリースを選び、「ロールバック」を押す。
+
+手で戻した後も、main には問題のコードが残っている。次のマージで、そのコードが再びデプロイされるので、続けて revert か修正の PR を作成する。
+
+- **表(DB のスキーマ)は戻らない**:どちらの方法でも、ジョブ `migrate` が変更した表は元に戻らない。マイグレーションを含む PR を戻すときは、前のコードが新しい表で動作するかを確認する
+- **Cloud Run の「トラフィックの管理」で、前の版に切り替えない**:切り替えると、トラフィックが特定の版に固定され、次の自動デプロイで作成された版にトラフィックが移らなくなる
+
+### 5.8 注意点
+
+- **初めての自動デプロイは、#33 の PR のマージで実行される**:`workflow_run` は、main にあるワークフローのファイルしか使わない。そのため、マージの前には実行できない
+- **DB がない間は、デプロイが失敗する**:Cloud SQL を削除している間(ADR 0007)や、3.12 の作り直しの最中は、ジョブ `migrate` が DB に接続できずに失敗し、デプロイはそこで停止する。サービス `api` と Firebase Hosting は更新されない。DB を作り直した後に、GitHub の「Actions」で失敗した実行を開き、「Re-run jobs」を押す
+- **Firebase CLI に必要なロールは、まだ確認していない**:`deployer` には、Firebase Hosting 管理者だけを付与している。Firebase CLI がほかの権限を必要とした場合は、失敗したときのエラーを確認してからロールを追加し、この章に記録する(仕様書の判断 C)
+- **手作業のデプロイの手順は残す**:3 章と 4 章の手順は、自動デプロイが使えないとき(GitHub Actions の障害、権限の不足など)に使う。手作業でデプロイしても、次のマージで main の最新のコードに戻る
+- **Vue の設定値を変えたら、Environment の Variables も変える**:自動デプロイは、`web/.env.production.local` ではなく、Environment `production` の Variables からビルドする

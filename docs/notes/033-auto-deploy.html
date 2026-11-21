@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自動デプロイと、サービスアカウントの権限借用</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* 学習ノート(layered-tech-explanation スキルのひな形から作った)。
+   登場人物の色:
+   a1=オーナー、a2=deploy.yml のジョブ(私たちが書く・今ここ)、a3=GitHub、a4=Workload Identity 連携
+   (Security Token Service、IAM Credentials API)、a5=deployer(サービスアカウント)、
+   a6=デプロイで新しくするもの(Artifact Registry、Cloud Run、Firebase Hosting。同じ色で、箱と名前は別々) */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+
+/* 見出しは、日本語の単語の途中で折り返さない。折り返してよい位置は <wbr> で示す。入りきらないときだけ、どこでも折り返す */
+h1, h2, h3 { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+.t-a6 { color: var(--a6); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+.card.a6 { border-left-color: var(--a6); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-a6 { fill: var(--a6-soft); stroke: var(--a6); stroke-width: 1.5; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .ln-a6 { stroke: var(--a6); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+svg .mk-a6 { fill: var(--a6); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note.here { border-left-color: var(--a2); }
+.note.warn { border-left-color: var(--a6); }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.step { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.story td:nth-child(2) { min-width: 15em; }
+table.story th:first-child { white-space: nowrap; }
+
+/* 居場所のバッジ(中心のものが、その時点でどこにあるか) */
+.loc { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.7; margin: 1px 2px 1px 0; white-space: nowrap; border: 1px solid currentColor; }
+.loc.a1 { color: var(--a1); background: var(--a1-soft); }
+.loc.a2 { color: var(--a2); background: var(--a2-soft); }
+.loc.a3 { color: var(--a3); background: var(--a3-soft); }
+.loc.a4 { color: var(--a4); background: var(--a4-soft); }
+.loc.a5 { color: var(--a5); background: var(--a5-soft); }
+.loc.a6 { color: var(--a6); background: var(--a6-soft); }
+.loc.none { color: var(--muted); background: transparent; border-style: dashed; }
+
+/* コード */
+pre { background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; margin: 12px 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre .c { color: var(--accent); }
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top" id="top">
+    <p class="eyebrow">Issue #33 · 学習メモ</p>
+    <h1>自動デプロイと、<wbr>サービスアカウントの<wbr>権限借用</h1>
+    <p class="lead">Issue #33 で、main にマージするたびに、GitHub Actions が本番へのデプロイを自動で行うようにします。このノートは、仕様書を決める前に、全体の流れと、GitHub Actions が Google Cloud に入るための「サービスアカウントの権限を借用する方法」を図にしたものです。Rails を本番に置いたときのノート「<a href="030-cloud-run-deploy.html">置き場と、動かす場所と、鍵の金庫</a>」と、Issue #8 の「<a href="008-id-token-signature.html">ID トークンの署名</a>」を下敷きにしています。</p>
+    <div class="note">
+      <p><strong>サービスアカウント</strong>は、Google Cloud の中にある、人ではなくプログラムのためのアカウントです。権限(<strong>ロール</strong>)は、このアカウントに付けます。</p>
+      <p><strong>権限借用</strong>は、別のプログラム(このノートでは GitHub Actions)が、サービスアカウントの権限を一時的に使うことです。</p>
+    </div>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>なぜ権限借用の仕組みが必要なのか(1章)</li>
+        <li>誰が登場し、それぞれ何者か。仕様書に出てくる名前の意味(2章)</li>
+        <li>マージしてから本番が新しくなるまでに、何が起きるか(3章)</li>
+        <li>GitHub の OIDC トークンが、誰の手を通って deployer のアクセストークンに替わるか。鍵ファイルを使わない理由(4章)</li>
+        <li>仕様書で決める5つの事項と、その理由(5章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:なぜ権限借用の仕組みが必要なのか</h2>
+    <p>今は、オーナーが手元で、次の4つを順に行って、本番を新しくしています(<a href="../production-setup.md">production-setup.md</a> の 3 章と 4 章)。</p>
+    <ol class="flow">
+      <li>Rails のイメージをビルドし、Artifact Registry に置く</li>
+      <li>Cloud Run のジョブ <code>migrate</code> のイメージを替えて実行し、表を更新する</li>
+      <li>Cloud Run のサービス <code>api</code> のイメージを替える</li>
+      <li>Vue をビルドし、Firebase Hosting に置く</li>
+    </ol>
+    <p>手で行うと、時間がかかるうえに、順番を間違えたり(表を更新する前に新しいコードを動かす)、コミットしていない変更を混ぜてビルドしたりする心配があります。そこで Issue #33 では、この4つを、main にマージするたびに GitHub Actions(GitHub が用意する、決めた手順を自動で行う仕組み)に行わせます。</p>
+    <p>困るのは、Google Cloud が「誰からの操作か」が分かるものしか受け付けないことです。オーナーが手で行うときは、オーナーの Google アカウントでログインしているので、Google Cloud はオーナーからの操作だと分かり、受け付けます。ところが、GitHub Actions には Google アカウントがありません。</p>
+    <p>昔からある方法は、Google Cloud でサービスアカウント(2章)の鍵ファイルを作り、GitHub に預けておくことです。ただ、この鍵ファイルは、消すまでずっと使えます。漏れると、誰でも本番を操作できてしまいます。</p>
+    <p>そこで Issue #33 では、鍵ファイルを預けずに、<strong>GitHub が発行する OIDC トークンを Google Cloud に提示し、デプロイ用のサービスアカウントの権限を、その場で1時間だけ借用する</strong>方法を使います。この仕組みを、Workload Identity 連携と呼びます。形は、Issue #8 で作った「Vue が提示する ID トークンを、Rails が検証する」とほぼ同じです(4章)。</p>
+  </section>
+
+  <section id="cast">
+    <h2><span class="num">2</span>登場人物</h2>
+    <p>GitHub の側に2人、Google Cloud の側に5人、両方を操作する <span class="t-a1">オーナー</span> が1人です。Artifact Registry、Cloud Run、Firebase Hosting は、どれも「デプロイで新しくするもの」なので、同じ赤で描きます。色は、このページの図と本文で共通です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 372" role="img" aria-label="登場人物の配置。オーナーが GitHub にマージする。GitHub が deploy.yml のジョブを起動し、OIDC トークンを渡す。GitHub の公開鍵は Workload Identity 連携に渡る。deploy.yml のジョブは OIDC トークンで deployer の権限を借用し、Artifact Registry、Cloud Run、Firebase Hosting にデプロイする。Workload Identity 連携が deployer の権限の借用を許可する">
+          <defs>
+            <marker id="f1-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <rect x="8" y="40" width="96" height="56" rx="8" class="bx-a1"/>
+          <text x="56" y="63" text-anchor="middle" class="b">オーナー</text>
+          <text x="56" y="83" text-anchor="middle" class="s">マージする</text>
+
+          <rect x="140" y="12" width="260" height="345" rx="12" class="bx-frame"/>
+          <text x="156" y="30" class="s">GitHub</text>
+          <rect x="160" y="40" width="230" height="56" rx="8" class="bx-a3"/>
+          <text x="275" y="63" text-anchor="middle" class="b">GitHub</text>
+          <text x="275" y="83" text-anchor="middle" class="s">Environment、OIDC トークンの発行</text>
+          <rect x="160" y="130" width="230" height="120" rx="8" class="bx-a2"/>
+          <text x="275" y="172" text-anchor="middle" class="b">deploy.yml のジョブ</text>
+          <text x="275" y="194" text-anchor="middle" class="s">GitHub Actions のランナーで動く</text>
+          <text x="275" y="214" text-anchor="middle" class="s">私たちが書く手順</text>
+
+          <rect x="470" y="12" width="275" height="345" rx="12" class="bx-frame"/>
+          <text x="486" y="30" class="s">Google Cloud(Firebase を含む)</text>
+          <rect x="490" y="40" width="235" height="56" rx="8" class="bx-a4"/>
+          <text x="607" y="63" text-anchor="middle" class="b">Workload Identity 連携</text>
+          <text x="607" y="83" text-anchor="middle" class="s">OIDC トークンを検証し、権限借用を許可</text>
+          <rect x="520" y="118" width="175" height="46" rx="8" class="bx-a5"/>
+          <text x="607" y="137" text-anchor="middle" class="b">deployer</text>
+          <text x="607" y="156" text-anchor="middle" class="s">デプロイ用のサービスアカウント</text>
+          <rect x="490" y="186" width="235" height="44" rx="8" class="bx-a6"/>
+          <text x="607" y="204" text-anchor="middle" class="b">Artifact Registry</text>
+          <text x="607" y="222" text-anchor="middle" class="s">イメージの保存先</text>
+          <rect x="490" y="240" width="235" height="44" rx="8" class="bx-a6"/>
+          <text x="607" y="258" text-anchor="middle" class="b">Cloud Run</text>
+          <text x="607" y="276" text-anchor="middle" class="s">ジョブ migrate とサービス api</text>
+          <rect x="490" y="294" width="235" height="44" rx="8" class="bx-a6"/>
+          <text x="607" y="312" text-anchor="middle" class="b">Firebase Hosting</text>
+          <text x="607" y="330" text-anchor="middle" class="s">Vue を配る</text>
+
+          <line x1="104" y1="68" x2="156" y2="68" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="117" y="60" text-anchor="middle" class="s">マージ</text>
+          <line x1="275" y1="96" x2="275" y2="126" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="285" y="115" class="s">起動、OIDC トークン</text>
+          <line x1="390" y1="68" x2="486" y2="68" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="438" y="60" text-anchor="middle" class="s">公開鍵</text>
+          <line x1="390" y1="141" x2="516" y2="141" class="ln" marker-start="url(#f1-mk)" marker-end="url(#f1-mk)"/>
+          <text x="435" y="106" text-anchor="middle" class="s">OIDC</text>
+          <text x="435" y="120" text-anchor="middle" class="s">トークンで</text>
+          <text x="435" y="134" text-anchor="middle" class="s">権限借用</text>
+          <line x1="607" y1="96" x2="607" y2="114" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="617" y="110" class="s">借用を許可</text>
+          <path d="M390 236 H450" class="ln"/>
+          <path d="M450 208 V316" class="ln"/>
+          <line x1="450" y1="208" x2="486" y2="208" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="450" y1="262" x2="486" y2="262" class="ln" marker-end="url(#f1-mk)"/>
+          <line x1="450" y1="316" x2="486" y2="316" class="ln" marker-end="url(#f1-mk)"/>
+          <text x="420" y="228" text-anchor="middle" class="s">デプロイ</text>
+        </svg>
+      </div>
+      <figcaption>図1:<span class="t-a2">deploy.yml のジョブ</span> は、<span class="t-a3">GitHub</span> から受け取った OIDC トークンを提示して、<span class="t-a5">deployer</span> の権限を借用します。<span class="t-a4">Workload Identity 連携</span> は、<span class="t-a3">GitHub</span> の公開鍵で、OIDC トークンが本物かを検証します。<span class="t-a1">オーナー</span> と Google Cloud の間に線がないのは、マージの後はオーナーが Google Cloud を操作しないからです(準備のときだけ操作します。3章の場面 0)。</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card a1"><p><span class="who t-a1">オーナー</span><span class="kind">人 · GitHub と Google Cloud の両方の画面を操作する</span>準備(Workload Identity 連携と deployer を作る)を1回だけ手で行います。その後は、PR を main にマージするだけです。</p></div>
+      <div class="card a3"><p><span class="who t-a3">GitHub</span><span class="kind">インターネットの先 · GitHub が運営する</span>リポジトリを預かり、GitHub Actions を動かします。ジョブに、署名つきの <strong>OIDC トークン</strong>(「このジョブは、どのリポジトリの、どの Environment で動いているか」を書いたもの)を発行します。リポジトリの設定で作る <strong>Environment</strong>(下の「GitHub の Environment」)も、GitHub が持ちます。</p></div>
+      <div class="card a2"><p><span class="who t-a2">deploy.yml のジョブ</span><span class="kind">GitHub Actions のランナー · 私たちが書く</span>GitHub Actions への指示書を <strong>ワークフロー</strong>(<code>.github/workflows/</code> の yml ファイル)と呼び、その中の「1台のランナーで順に実行する手順のまとまり」を <strong>ジョブ</strong> と呼びます。今あるワークフローは CI(<code>ci.yml</code>)だけです。Issue #33 では <code>deploy.yml</code> を追加し、デプロイの手順をジョブ1つに書きます。ジョブは、GitHub Actions が用意する<strong>ランナー</strong>(ジョブごとに用意され、終了後に破棄される仮想マシン)で動きます。</p></div>
+      <div class="card a4"><p><span class="who t-a4">Workload Identity 連携</span><span class="kind">Google Cloud の中 · Google が用意し、オーナーが設定する</span>外(GitHub)から来た OIDC トークンを検証し、条件に合えば、サービスアカウントの権限の借用を許可する仕組みです。「どこが発行した OIDC トークンを、どんな条件なら信じるか」は、オーナーが登録します。中では、Security Token Service と IAM Credentials API の2つが働きます(4章)。</p></div>
+      <div class="card a5"><p><span class="who t-a5">deployer</span><span class="kind">Google Cloud の中 · オーナーが作る</span>デプロイ用に新しく作るサービスアカウント(冒頭の説明)です。Issue #30 で作った <code>api-runtime</code>(Rails が動作するときのサービスアカウント)も、サービスアカウントの1つです。何をしてよいかは、ロール(できることのまとまり。例:「Artifact Registry 書き込み」= イメージを保存できる)を付けて決めます。deployer には、デプロイに必要なロールだけを付与します。</p></div>
+      <div class="card a6"><p><span class="who t-a6">Artifact Registry、Cloud Run、Firebase Hosting</span><span class="kind">Google Cloud の中 · Issue #30〜#32 で作った</span>Artifact Registry はイメージの保存先、Cloud Run は Rails を動かす場所(サービス <code>api</code> とジョブ <code>migrate</code>)、Firebase Hosting は Vue を配る場所です。操作のリクエストを受けると、リクエストを送ったサービスアカウントに、そのロールが付いているかを確認します。</p></div>
+    </div>
+
+    <h3>GitHub の Environment</h3>
+    <p><strong>Environment</strong> は、<span class="t-a3">GitHub</span> のリポジトリの設定画面(Settings → Environments)で作る、デプロイ先の名前です。Issue #33 では <code>production</code> を1つ作ります。Environment はリポジトリごとに作るものなので、「このリポジトリの Environment <code>production</code>」は、このリポジトリの設定画面で作った <code>production</code> のことです。</p>
+    <p><span class="t-a2">deploy.yml のジョブ</span> は、「自分は <code>production</code> へのデプロイだ」と宣言して動きます。Issue #33 では、Environment に3つの役目があります。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>役目</th><th>中身</th></tr></thead>
+        <tbody>
+          <tr><td>値の保存先</td><td>Vue の設定値(5章の B)を置く。<code>production</code> を宣言したジョブだけが読める</td></tr>
+          <tr><td>使えるブランチを絞る</td><td>main からしか使えないようにする</td></tr>
+          <tr><td>OIDC トークンに書かれる</td><td><span class="t-a3">GitHub</span> は、<code>production</code> を宣言したジョブの OIDC トークンに「Environment: production」と書く。<span class="t-a4">Workload Identity 連携</span> はそれを見て、<span class="t-a5">deployer</span> の権限の借用を許可するかを決める(4章、5章の D)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn"><p>「ジョブ」という言葉が2つ出てきます。<span class="t-a2">deploy.yml のジョブ</span> は GitHub Actions の手順のまとまりで、Cloud Run のジョブ <code>migrate</code> は「表を更新して終わる Rails」です。名前は同じですが、別のものです。このノートでは、前者を「deploy.yml のジョブ」、後者を「ジョブ <code>migrate</code>」と書き分けます。</p></div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">3</span>全体の流れ</h2>
+    <p>全体を5つの場面に分けました。場面 0 は最初に1回だけ、場面 1〜4 はマージのたびに起きます。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。<span class="t-a5">deployer</span> は、自分からは動かないので、縦の線にはしていません(4章の図3 に描きます)。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 955 660" role="img" aria-label="全体の流れ。場面0:オーナーが Workload Identity 連携と deployer を作り、GitHub に Environment を作る。場面1:オーナーがマージし、GitHub の CI が確認する。場面2:GitHub が deploy.yml のジョブを起動して OIDC トークンを渡し、ジョブが Workload Identity 連携に OIDC トークンを提示し、Workload Identity 連携が deployer のアクセストークンを渡す。場面3:ジョブが Artifact Registry にイメージを置き、Cloud Run で migrate を実行して api を替え、Firebase Hosting に Vue を配る。場面4:ジョブが GitHub に結果を記録し、GitHub がオーナーに成功か失敗かを表示する">
+          <defs>
+            <marker id="f2-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f2-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+          </defs>
+
+          <rect x="0" y="96" width="955" height="90" class="band-here"/>
+          <rect x="0" y="190" width="955" height="90" class="band"/>
+          <rect x="0" y="284" width="955" height="120" class="band"/>
+          <rect x="0" y="408" width="955" height="150" class="band"/>
+          <rect x="0" y="562" width="955" height="90" class="band"/>
+
+          <text x="12" y="120" class="scene">場面 0</text>
+          <text x="12" y="138" class="a">準備</text>
+          <text x="12" y="156" class="lab-here">次の作業</text>
+          <text x="12" y="214" class="scene">場面 1</text>
+          <text x="12" y="232" class="a">マージと CI</text>
+          <text x="12" y="308" class="scene">場面 2</text>
+          <text x="12" y="326" class="a">権限の借用</text>
+          <text x="12" y="432" class="scene">場面 3</text>
+          <text x="12" y="450" class="a">デプロイ</text>
+          <text x="12" y="586" class="scene">場面 4</text>
+          <text x="12" y="604" class="a">結果</text>
+
+          <path d="M272 38 V30 H515 V38" class="ln"/>
+          <text x="393" y="22" text-anchor="middle" class="s">GitHub</text>
+          <path d="M527 38 V30 H943 V38" class="ln"/>
+          <text x="735" y="22" text-anchor="middle" class="s">Google Cloud</text>
+
+          <line x1="180" y1="84" x2="180" y2="652" class="life"/>
+          <line x1="320" y1="84" x2="320" y2="652" class="life"/>
+          <line x1="450" y1="84" x2="450" y2="652" class="life"/>
+          <line x1="575" y1="84" x2="575" y2="652" class="life"/>
+          <line x1="685" y1="84" x2="685" y2="652" class="life"/>
+          <line x1="790" y1="84" x2="790" y2="652" class="life"/>
+          <line x1="895" y1="84" x2="895" y2="652" class="life"/>
+
+          <rect x="132" y="44" width="96" height="40" rx="7" class="bx-a1"/>
+          <text x="180" y="69" text-anchor="middle" class="b a">オーナー</text>
+          <rect x="272" y="44" width="96" height="40" rx="7" class="bx-a3"/>
+          <text x="320" y="69" text-anchor="middle" class="b a">GitHub</text>
+          <rect x="385" y="44" width="130" height="40" rx="7" class="bx-a2"/>
+          <text x="450" y="61" text-anchor="middle" class="b a">deploy.yml</text>
+          <text x="450" y="77" text-anchor="middle" class="b a">のジョブ</text>
+          <rect x="527" y="44" width="96" height="40" rx="7" class="bx-a4"/>
+          <text x="575" y="61" text-anchor="middle" class="b a">Workload</text>
+          <text x="575" y="77" text-anchor="middle" class="b a">Identity 連携</text>
+          <rect x="637" y="44" width="96" height="40" rx="7" class="bx-a6"/>
+          <text x="685" y="61" text-anchor="middle" class="b a">Artifact</text>
+          <text x="685" y="77" text-anchor="middle" class="b a">Registry</text>
+          <rect x="742" y="44" width="96" height="40" rx="7" class="bx-a6"/>
+          <text x="790" y="69" text-anchor="middle" class="b a">Cloud Run</text>
+          <rect x="847" y="44" width="96" height="40" rx="7" class="bx-a6"/>
+          <text x="895" y="61" text-anchor="middle" class="b a">Firebase</text>
+          <text x="895" y="77" text-anchor="middle" class="b a">Hosting</text>
+
+          <!-- 場面 0 -->
+          <line x1="180" y1="126" x2="571" y2="126" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="375" y="118" text-anchor="middle" class="a">Workload Identity 連携と deployer を作る</text>
+          <line x1="180" y1="156" x2="316" y2="156" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="250" y="148" text-anchor="middle" class="a">Environment を作る</text>
+
+          <!-- 場面 1 -->
+          <line x1="180" y1="220" x2="316" y2="220" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="250" y="212" text-anchor="middle" class="a">マージ</text>
+          <rect x="272" y="238" width="96" height="24" rx="5" class="bx-a3"/>
+          <text x="320" y="254" text-anchor="middle" class="s">CI が確認する</text>
+
+          <!-- 場面 2 -->
+          <line x1="320" y1="314" x2="446" y2="314" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="385" y="306" text-anchor="middle" class="a">OIDC トークン</text>
+          <line x1="450" y1="344" x2="571" y2="344" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="512" y="336" text-anchor="middle" class="a">OIDC トークン</text>
+          <line x1="575" y1="374" x2="454" y2="374" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="512" y="366" text-anchor="middle" class="a">アクセストークン</text>
+
+          <!-- 場面 3 -->
+          <line x1="450" y1="438" x2="681" y2="438" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="565" y="430" text-anchor="middle" class="a">① イメージを置く</text>
+          <line x1="450" y1="468" x2="786" y2="468" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="618" y="460" text-anchor="middle" class="a">② migrate を実行</text>
+          <line x1="450" y1="498" x2="786" y2="498" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="618" y="490" text-anchor="middle" class="a">③ api を替える</text>
+          <line x1="450" y1="528" x2="891" y2="528" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="670" y="520" text-anchor="middle" class="a">④ Vue を配る</text>
+
+          <!-- 場面 4 -->
+          <line x1="450" y1="592" x2="324" y2="592" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="385" y="584" text-anchor="middle" class="a">結果を記録</text>
+          <line x1="320" y1="622" x2="184" y2="622" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="250" y="614" text-anchor="middle" class="a">成功・失敗を表示</text>
+        </svg>
+      </div>
+      <figcaption>図2:場面 1 から先は、オーナーは何もしません。場面 3 の4つの矢印は、どれも場面 2 で受け取った <span class="t-a5">deployer</span> のアクセストークンを付けてリクエストを送ります。場面 2 は、4章の図3 で拡大します。</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 0:準備<span class="tag">最初に1回だけ、手で</span></h3>
+    <ol class="flow">
+      <li><span class="t-a1">オーナー</span> が、Google Cloud のコンソールで、<span class="t-a4">Workload Identity 連携</span> を設定し、「GitHub が発行した、このリポジトリの、Environment <code>production</code> のジョブの OIDC トークンだけを信じる」と登録する</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a5">deployer</span> を作り、デプロイに必要なロールだけを付与する。さらに、<span class="t-a4">Workload Identity 連携</span> を通った相手に <span class="t-a5">deployer</span> の権限の借用を許可する、と <span class="t-a5">deployer</span> の権限に登録する</li>
+      <li><span class="t-a1">オーナー</span> が、<span class="t-a3">GitHub</span> で Environment <code>production</code> を作り、main からしか使えないようにする。Vue の設定値(Vue が本番の Firebase につなぐための4つの値。5章の B)を置く</li>
+    </ol>
+    <div class="note here"><p>今は、仕様書を決めている段階です。仕様書が決まったら、最初に手を動かすのが、この場面 0 です。Issue #33 で新しく作るのは、場面 0 の準備と、場面 2〜4 を行う <code>deploy.yml</code> です。場面 1 の CI は、今もあります。</p></div>
+
+    <h3 class="scene-h">場面 1:マージと CI<span class="tag">マージのたび</span></h3>
+    <ol class="flow">
+      <li><span class="t-a1">オーナー</span> が、PR を main にマージする</li>
+      <li><span class="t-a3">GitHub</span> が、CI(<code>ci.yml</code>)を動かし、テストと静的解析で、マージした後のコードを確認する</li>
+    </ol>
+
+    <h3 class="scene-h">場面 2:権限の借用<span class="tag">CI が成功したら</span></h3>
+    <ol class="flow">
+      <li><span class="t-a3">GitHub</span> が、deploy.yml のジョブを起動する。<span class="t-a2">deploy.yml のジョブ</span> が要求すると、<span class="t-a3">GitHub</span> は OIDC トークンを渡す</li>
+      <li><span class="t-a2">deploy.yml のジョブ</span> が、<span class="t-a4">Workload Identity 連携</span> に OIDC トークンを提示する</li>
+      <li><span class="t-a4">Workload Identity 連携</span> が、OIDC トークンが本物か、条件に合うかを検証し、<span class="t-a2">deploy.yml のジョブ</span> に <span class="t-a5">deployer</span> のアクセストークンを渡す</li>
+    </ol>
+    <p>CI が失敗したときは、場面 2 から先は起きません。テストを通過したコードだけが、本番に反映されます。</p>
+
+    <h3 class="scene-h">場面 3:デプロイ<span class="tag">場面 2 のすぐ後</span></h3>
+    <p><span class="t-a2">deploy.yml のジョブ</span> が、<span class="t-a5">deployer</span> のアクセストークンを付けて、次の4つを順に依頼します。今オーナーが手で行っている4つと同じです(1章)。依頼を受けた側は、そのたびに、<span class="t-a5">deployer</span> にそのロールが付いているかを確認してから実行します。</p>
+    <ol class="flow">
+      <li><span class="t-a2">deploy.yml のジョブ</span> が、Rails のイメージをビルドし、<span class="t-a6">Artifact Registry</span> に置く</li>
+      <li><span class="t-a2">deploy.yml のジョブ</span> が、<span class="t-a6">Cloud Run</span> のジョブ <code>migrate</code> のイメージを替えて実行し、表の更新が終わるまで待つ</li>
+      <li><span class="t-a2">deploy.yml のジョブ</span> が、<span class="t-a6">Cloud Run</span> のサービス <code>api</code> のイメージを替える</li>
+      <li><span class="t-a2">deploy.yml のジョブ</span> が、Vue をビルドし、<span class="t-a6">Firebase Hosting</span> に配る</li>
+    </ol>
+    <p>途中のどれかが失敗したら、そこで止まり、その先は行いません。たとえば 2 が失敗したら、3 と 4 は行わないので、本番は前の版のまま動き続けます。</p>
+
+    <h3 class="scene-h">場面 4:結果<span class="tag">場面 3 の後</span></h3>
+    <ol class="flow">
+      <li><span class="t-a2">deploy.yml のジョブ</span> が、<span class="t-a3">GitHub</span> に、成功したか失敗したかを記録する。ジョブが終了すると、ランナーは破棄される</li>
+      <li><span class="t-a3">GitHub</span> が、リポジトリの画面(Actions のタブと Environment の履歴)で、<span class="t-a1">オーナー</span> に結果を表示する</li>
+    </ol>
+  </section>
+
+  <section id="object">
+    <h2><span class="num">4</span>OIDC トークンが、アクセストークンに替わるまで</h2>
+    <p>3章の場面のうち、安全に関わるのは場面 2 です。この章では、場面 2 を拡大し、<span class="t-a3">GitHub</span> が発行した OIDC トークンが、誰の手を通って <span class="t-a5">deployer</span> のアクセストークンに替わり、どこで失効するかを追います。</p>
+
+    <h3>deployer と、deployer のアクセストークン</h3>
+    <p>先に、2つを分けておきます。<span class="t-a5">deployer</span> は、Google Cloud の中にずっとあるサービスアカウントで、外には出ません。<span class="t-a2">deploy.yml のジョブ</span> が受け取るのは、「<span class="t-a5">deployer</span> として、1時間だけ操作してよい」というアクセストークンです。このアクセストークンを付けたリクエストは、<span class="t-a5">deployer</span> からのリクエストとして扱われます。たとえると、次のようになります(たとえ話の言葉は、この表の中だけで使います)。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>たとえ話</th><th>このアプリでは</th></tr></thead>
+        <tbody>
+          <tr><td>会社に登録された社員</td><td><span class="t-a5">deployer</span>(Google Cloud の中にあり、外に出ない)</td></tr>
+          <tr><td>その社員が入ってよい部屋</td><td><span class="t-a5">deployer</span> に付けたロール</td></tr>
+          <tr><td>外の会社が書いた紹介状</td><td><span class="t-a3">GitHub</span> の OIDC トークン</td></tr>
+          <tr><td>紹介状を確認し、入館証を出す受付</td><td><span class="t-a4">Workload Identity 連携</span></td></tr>
+          <tr><td>その社員として、1時間だけ使える入館証</td><td><span class="t-a5">deployer</span> のアクセストークン</td></tr>
+          <tr><td>入館証を持って部屋に入る人</td><td><span class="t-a2">deploy.yml のジョブ</span></td></tr>
+          <tr><td>部屋の入口で、入館証の社員に許可があるかを確認する</td><td><span class="t-a6">Artifact Registry</span> などが、<span class="t-a5">deployer</span> のロールを確認する</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Issue #8 のログインと同じ形</h3>
+    <p>形は、Issue #8 で作った、Rails が ID トークンを検証する仕組みとほとんど同じです。発行する側、提示する側、検証する側が入れ替わっただけです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>Issue #8 のログイン</th><th>Issue #33 の自動デプロイ</th></tr></thead>
+        <tbody>
+          <tr><td>発行する側</td><td>Firebase Auth(Google)</td><td><span class="t-a3">GitHub</span></td></tr>
+          <tr><td>トークンの名前</td><td>ID トークン</td><td>OIDC トークン</td></tr>
+          <tr><td>提示する側</td><td>Vue のコード</td><td><span class="t-a2">deploy.yml のジョブ</span></td></tr>
+          <tr><td>検証する側</td><td>Rails</td><td><span class="t-a4">Workload Identity 連携</span>(Security Token Service)</td></tr>
+          <tr><td>検証の方法</td><td>Google の公開鍵で、署名を検証する</td><td><span class="t-a3">GitHub</span> の公開鍵で、署名を検証する</td></tr>
+          <tr><td>中身で見るところ</td><td>どのプロジェクト向けか(<code>aud</code>、<code>iss</code>)</td><td>どのリポジトリの、どの Environment のジョブか</td></tr>
+          <tr><td>検証した後</td><td>会員を特定する</td><td><span class="t-a5">deployer</span> のアクセストークンを渡す</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>違うのは、検証した後に、OIDC トークンをアクセストークンに交換するところです。Artifact Registry、Cloud Run、Firebase Hosting は、GitHub の OIDC トークンを直接は受け付けません。Google Cloud のサービスアカウントのアクセストークンを付けたリクエストだけを受け付けます。そのため、<span class="t-a4">Workload Identity 連携</span> で、OIDC トークンを <span class="t-a5">deployer</span> のアクセストークンに交換します。</p>
+
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 780 565" role="img" aria-label="トークンの動き。左が GitHub、右が Google Cloud。1、GitHub が OIDC トークンを deploy.yml のジョブに渡す。2、ジョブが Security Token Service に OIDC トークンを提示する。Security Token Service は GitHub の公開鍵で署名を検証する。3、Security Token Service が連携トークンをジョブに渡す。4、ジョブが IAM Credentials API に連携トークンを提示する。5、IAM Credentials API が deployer のアクセストークンをジョブに渡す。6、ジョブがアクセストークンを付けて Artifact Registry、Cloud Run、Firebase Hosting にリクエストを送り、それぞれが deployer のロールを確認する。7、ジョブが終了するとランナーごと破棄される。deployer は Google Cloud の中にあり、動かない">
+          <defs>
+            <marker id="f3-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+            <marker id="f3-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f3-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f3-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+          </defs>
+
+          <!-- 左:GitHub -->
+          <rect x="10" y="12" width="230" height="540" rx="12" class="bx-frame"/>
+          <text x="26" y="30" class="s">GitHub</text>
+          <rect x="30" y="40" width="190" height="56" rx="8" class="bx-a3"/>
+          <text x="125" y="63" text-anchor="middle" class="b">GitHub</text>
+          <text x="125" y="83" text-anchor="middle" class="s">OIDC トークンを発行</text>
+          <rect x="30" y="130" width="190" height="410" rx="8" class="bx-a2"/>
+          <text x="125" y="330" text-anchor="middle" class="b">deploy.yml のジョブ</text>
+          <text x="125" y="352" text-anchor="middle" class="s">GitHub Actions の</text>
+          <text x="125" y="370" text-anchor="middle" class="s">ランナーで動く</text>
+          <text x="125" y="400" text-anchor="middle" class="s">⑦ 終了後、ランナーごと破棄</text>
+
+          <!-- 右:Google Cloud -->
+          <rect x="360" y="12" width="405" height="540" rx="12" class="bx-frame"/>
+          <text x="376" y="30" class="s">Google Cloud(Firebase を含む)</text>
+          <rect x="380" y="118" width="370" height="212" rx="10" class="bx-frame"/>
+          <text x="396" y="136" class="s">Workload Identity 連携</text>
+          <rect x="400" y="148" width="330" height="64" rx="8" class="bx-a4"/>
+          <text x="565" y="172" text-anchor="middle" class="b">Security Token Service</text>
+          <text x="565" y="194" text-anchor="middle" class="s">OIDC トークンを検証し、連携トークンに交換</text>
+          <rect x="400" y="240" width="330" height="72" rx="8" class="bx-a4"/>
+          <text x="565" y="264" text-anchor="middle" class="b">IAM Credentials API</text>
+          <text x="565" y="284" text-anchor="middle" class="s">連携トークンを検証し、</text>
+          <text x="565" y="300" text-anchor="middle" class="s">deployer のアクセストークンを出す</text>
+
+          <!-- deployer は動かない。点線(矢印なし)は、動きではなく、つながり -->
+          <rect x="470" y="350" width="190" height="46" rx="8" class="bx-a5"/>
+          <text x="565" y="369" text-anchor="middle" class="b">deployer</text>
+          <text x="565" y="388" text-anchor="middle" class="s">Google Cloud から出ない</text>
+          <line x1="565" y1="312" x2="565" y2="350" class="ln dash"/>
+          <text x="575" y="337" class="s">権限を借用</text>
+          <line x1="565" y1="396" x2="565" y2="420" class="ln dash"/>
+          <text x="575" y="412" class="s">ロールを確認</text>
+
+          <rect x="400" y="420" width="330" height="34" rx="8" class="bx-a6"/>
+          <text x="565" y="442" text-anchor="middle" class="b a">Artifact Registry</text>
+          <rect x="400" y="462" width="330" height="34" rx="8" class="bx-a6"/>
+          <text x="565" y="484" text-anchor="middle" class="b a">Cloud Run</text>
+          <rect x="400" y="504" width="330" height="34" rx="8" class="bx-a6"/>
+          <text x="565" y="526" text-anchor="middle" class="b a">Firebase Hosting</text>
+
+          <!-- GitHub の公開鍵 -->
+          <path d="M220 68 H565 V144" class="ln dash" marker-end="url(#f3-mk)"/>
+          <text x="372" y="60" class="s">GitHub の公開鍵(Security Token Service が取りに行く)</text>
+
+          <!-- トークンの動き -->
+          <line x1="125" y1="96" x2="125" y2="126" class="ln-a3" marker-end="url(#f3-a3)"/>
+          <text x="125" y="115" class="a">① OIDC トークン</text>
+          <line x1="220" y1="168" x2="396" y2="168" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="300" y="160" text-anchor="middle" class="a">② OIDC トークン</text>
+          <line x1="400" y1="200" x2="224" y2="200" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="300" y="192" text-anchor="middle" class="a">③ 連携トークン</text>
+          <line x1="220" y1="258" x2="396" y2="258" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="300" y="250" text-anchor="middle" class="a">④ 連携トークン</text>
+          <line x1="400" y1="292" x2="224" y2="292" class="ln-a4" marker-end="url(#f3-a4)"/>
+          <text x="300" y="284" text-anchor="middle" class="a">⑤ アクセストークン</text>
+          <line x1="220" y1="437" x2="396" y2="437" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <line x1="220" y1="479" x2="396" y2="479" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <line x1="220" y1="521" x2="396" y2="521" class="ln-a2" marker-end="url(#f3-a2)"/>
+          <text x="300" y="414" text-anchor="middle" class="a">⑥ アクセストークン</text>
+          <text x="300" y="428" text-anchor="middle" class="s">を付けてリクエスト</text>
+        </svg>
+      </div>
+      <figcaption>図3:図1 と同じく、左の枠が GitHub、右の枠が Google Cloud です。実線の矢印は、3つのトークン(OIDC トークン、連携トークン、アクセストークン)が動く向きです。OIDC トークンは、② で Security Token Service に提示した後は使いません。<span class="t-a5">deployer</span> は Google Cloud の中にあり、動きません。動くのは、⑤ で IAM Credentials API が出す「<span class="t-a5">deployer</span> のアクセストークン」です。矢印のない点線は、動きではなくつながりです。IAM Credentials API は <span class="t-a5">deployer</span> のアクセストークンを出し、<span class="t-a6">Artifact Registry</span> などは ⑥ のリクエストを受けると、<span class="t-a5">deployer</span> に付いたロールを確認します。<span class="t-a3">GitHub</span> と Artifact Registry などの間には矢印がありません。</figcaption>
+    </figure>
+
+    <h3>トークンは受け渡されるのではなく、2回交換される</h3>
+    <p>図3 は、同じトークンが順に受け渡されていくように見えますが、実際には、同じトークンが渡っていくわけではありません。<span class="t-a2">deploy.yml のジョブ</span> が、Security Token Service と IAM Credentials API に順にトークンを提示し、そのたびに別のトークンと交換します。交換を行うのは、<span class="t-a2">deploy.yml のジョブ</span> だけです。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>交換</th><th>deploy.yml のジョブが提示するもの</th><th>提示する先</th><th>受け取るもの</th></tr></thead>
+        <tbody>
+          <tr><td class="step">1回目(②③)</td><td>OIDC トークン(<span class="t-a3">GitHub</span> が発行)</td><td>Security Token Service</td><td>連携トークン</td></tr>
+          <tr><td class="step">2回目(④⑤)</td><td>連携トークン</td><td>IAM Credentials API</td><td><span class="t-a5">deployer</span> のアクセストークン(<span class="t-a5">deployer</span> の権限で1時間使える)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>その後、<span class="t-a2">deploy.yml のジョブ</span> は、このアクセストークンを付けて、<span class="t-a6">Artifact Registry</span>、<span class="t-a6">Cloud Run</span>、<span class="t-a6">Firebase Hosting</span> にリクエストを送ります(⑥)。</p>
+
+    <h3>3つのトークンの一生</h3>
+    <p>右の列は、その時点で、その順に出てくるトークン(OIDC トークン、連携トークン、アクセストークンのどれか)がどこにあるかです。</p>
+    <div class="tablewrap">
+      <table class="story">
+        <thead><tr><th>順</th><th>誰が、何をするか</th><th>ある場所</th></tr></thead>
+        <tbody>
+          <tr><td class="step">①</td><td><span class="t-a2">deploy.yml のジョブ</span> が <span class="t-a3">GitHub</span> に OIDC トークンを要求する。<span class="t-a3">GitHub</span> は「リポジトリ ID 1409915528 の、Environment <code>production</code> のジョブ」などを書き、署名して渡す</td><td><span class="loc a2">ランナー</span></td></tr>
+          <tr><td class="step">②</td><td><span class="t-a2">deploy.yml のジョブ</span> が、Security Token Service に OIDC トークンを提示する。Security Token Service は、<span class="t-a3">GitHub</span> の公開鍵で署名を検証し、中身が登録した条件(次の節)に合うかを確認する。合わなければ、ここで拒否する</td><td><span class="loc a2">ランナー</span><span class="loc a4">Security Token Service</span></td></tr>
+          <tr><td class="step">③</td><td>Security Token Service が、<span class="t-a2">deploy.yml のジョブ</span> に連携トークン(Google の文書では federated token)を渡す。連携トークンは「Workload Identity 連携を通った」ことを示すだけで、まだ <span class="t-a5">deployer</span> としては何もできない</td><td><span class="loc a2">ランナー</span></td></tr>
+          <tr><td class="step">④</td><td><span class="t-a2">deploy.yml のジョブ</span> が、IAM Credentials API に連携トークンを提示し、<span class="t-a5">deployer</span> のアクセストークンを要求する</td><td><span class="loc a2">ランナー</span><span class="loc a4">IAM Credentials API</span></td></tr>
+          <tr><td class="step">⑤</td><td>IAM Credentials API が、「この相手には <span class="t-a5">deployer</span> の権限の借用を許可する」と登録されているかを確認し(場面 0 の 2)、<span class="t-a5">deployer</span> のアクセストークンを渡す。期限は、初めの値で1時間。<span class="t-a5">deployer</span> そのものは、Google Cloud の中に残る</td><td><span class="loc a2">ランナー</span></td></tr>
+          <tr><td class="step">⑥</td><td><span class="t-a2">deploy.yml のジョブ</span> が、アクセストークンを付けて、<span class="t-a6">Artifact Registry</span>、<span class="t-a6">Cloud Run</span>、<span class="t-a6">Firebase Hosting</span> にリクエストを送る(場面 3)。それぞれが、<span class="t-a5">deployer</span> にそのロールがあるかを確認する</td><td><span class="loc a2">ランナー</span></td></tr>
+          <tr><td class="step">⑦</td><td>ジョブが終了し、<span class="t-a3">GitHub</span> がランナーを破棄する。アクセストークンも、期限が来れば使えなくなる</td><td><span class="loc none">どこにもない</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><p>簡略化したところ:図と表では、受け渡しを「deploy.yml のジョブ」がしているように書きました。実際には、ジョブの中で動く Google 製の道具(gcloud、Firebase CLI、Google が配る Action)が、①〜⑤ を自動で行い、期限が近づけば取り直します。私たちは、道具に「どの Workload Identity 連携で、どのサービスアカウントの権限を借用するか」を書くだけです。</p></div>
+
+    <h3>Workload Identity 連携は、OIDC トークンのどこを見て借用を許可するか</h3>
+    <p>② で、Security Token Service は、OIDC トークンに書かれた次の3つが、場面 0 で登録した値と合うかを見ます。1つでも違えば断ります。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>見るところ</th><th>登録する値</th><th>何を断るためか</th></tr></thead>
+        <tbody>
+          <tr><td>発行元</td><td>GitHub Actions</td><td>GitHub 以外が作った OIDC トークン</td></tr>
+          <tr><td>リポジトリ ID</td><td><code>1409915528</code>(このリポジトリ)</td><td>ほかの人のリポジトリのジョブ。名前ではなく数字の ID を見るのは、名前は付け替えたり、消した後に別の人が同じ名前で作ったりできるが、ID は変わらないから</td></tr>
+          <tr><td>Environment</td><td><code>production</code></td><td>このリポジトリの中でも、deploy.yml のジョブ以外(PR の CI のジョブなど)。CI のジョブは Environment を使わないので、OIDC トークンに <code>production</code> と書かれない</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>さらに、<span class="t-a3">GitHub</span> の側で、Environment <code>production</code> を main からしか使えないようにします。main 以外のブランチのジョブは、<code>production</code> と書かれた OIDC トークンを、そもそも受け取れません。Google Cloud の側と GitHub の側の、二重の絞り込みになります。</p>
+
+    <h3>鍵ファイルを使わない理由</h3>
+    <p>結論から言うと、<strong>長く使える鍵をどこにも置かないので、盗まれて困るものがない</strong>からです。比べる相手は、<span class="t-a5">deployer</span> の鍵ファイル(JSON)を作り、GitHub の Secrets(値を隠して置く場所)に入れておく方法です。</p>
+    <ol class="flow">
+      <li><strong>鍵ファイルは、消すまでずっと使える。</strong>ログに出てしまう、悪意のある Action に読まれる、などで漏れると、拾った人は、どこからでも、気づいて消すまで本番を操作できます。定期的に作り直す手間も、オーナーの仕事になります。</li>
+      <li><strong>権限借用なら、盗まれ得るものが小さい。</strong>deploy.yml のジョブが持つのは、期限の短い OIDC トークンと、期限が1時間のアクセストークンだけで、どちらもランナーの中にしかありません。万一盗まれても、使えるのは期限が切れるまでです。また、ほかのリポジトリのジョブが、自分の OIDC トークンの中身(リポジトリ ID や Environment)を書き換えて権限を借用しようとしても、書き換えると署名が合わなくなるので、Security Token Service で断られます。</li>
+      <li><strong>隠れた損は、準備の手間だけ。</strong>場面 0 で、Workload Identity 連携と条件を1回登録する手間が増えます。動き出した後の手間は、鍵ファイルの方法より少なくなります(作り直しがない)。Google の文書も、Workload Identity 連携は「サービスアカウントの鍵の管理と、安全の負担をなくす」と説明しています(<a href="https://docs.cloud.google.com/iam/docs/workload-identity-federation">Workload Identity Federation</a>)。</li>
+    </ol>
+    <p>つまり、準備の手間を1回払う代わりに、漏れたときの被害と、鍵ファイルを管理し続ける手間がなくなります。仕様書の「GitHub Actions から Google Cloud には、Workload Identity 連携で入る」と「権限の借用を許可する相手は、リポジトリ ID と Environment で絞る」は、このことです。詳しい判断は ADR 0009 に書きます。</p>
+
+    <h3>受け持ち:私たちが決めるのは、条件とロールと、数行だけ</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>すること</th><th>誰がするか</th></tr></thead>
+        <tbody>
+          <tr><td>OIDC トークンを作り、署名する</td><td><span class="t-a3">GitHub</span></td></tr>
+          <tr><td>OIDC トークンを検証し、アクセストークンに交換する</td><td><span class="t-a4">Workload Identity 連携</span>(Security Token Service、IAM Credentials API)</td></tr>
+          <tr><td>3つのトークンを受け渡し、期限が近づけば取り直す</td><td>ジョブの中の Google 製の道具</td></tr>
+          <tr><td>deployer のロールを確認する</td><td><span class="t-a6">Artifact Registry</span>、<span class="t-a6">Cloud Run</span>、<span class="t-a6">Firebase Hosting</span></td></tr>
+          <tr class="now"><td>Workload Identity 連携の条件と、deployer のロールを決めて登録する</td><td><span class="t-a1">オーナー</span>(場面 0。コンソールで)</td></tr>
+          <tr class="now"><td>「どの Workload Identity 連携で、どのサービスアカウントの権限を借用し、何を順に行うか」を書く</td><td>私たち(<code>deploy.yml</code>)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>検証の仕組みそのものは、GitHub と Google Cloud が受け持ちます。私たちが間違えやすいのは、色を付けた2行です。条件を緩くしすぎると、ほかのリポジトリのジョブにも <span class="t-a5">deployer</span> の権限の借用を許可してしまいます。ロールを多く付けすぎると、アクセストークンが漏れたときに、できることが増えてしまいます。</p>
+  </section>
+
+  <section id="decisions">
+    <h2><span class="num">5</span>仕様書で決める5つのこと</h2>
+    <p>仕様書で決めることは5つです。下の図は、マージから本番の更新までの処理を1列に並べ、5つの決定事項(A〜E)がどの処理に関わるかを示したものです。この章は、前の章の図に戻らなくても読めるように構成しています。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="mid" viewBox="0 0 760 215" role="img" aria-label="決定事項の対応図。マージ、CI が確認する、deployer の権限を借用、1 イメージを置く、2 migrate を実行、3 api を替える、4 Vue を配る の順に並ぶ。A は CI と deployer の権限の借用の間、D は deployer の権限の借用、E は 1 イメージを置く、B は 4 Vue を配る、C は 1 から 4 までのすべてにかかる。マージと CI は場面1、deployer の権限の借用は場面2、1 から 4 は場面3">
+          <defs>
+            <marker id="f4-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <!-- 決めること(A〜E)の印 -->
+          <circle cx="217" cy="30" r="13" class="bx-a2"/>
+          <text x="217" y="35" text-anchor="middle" class="lab-here">A</text>
+          <line x1="217" y1="43" x2="217" y2="92" class="ln"/>
+          <circle cx="270" cy="30" r="13" class="bx-a2"/>
+          <text x="270" y="35" text-anchor="middle" class="lab-here">D</text>
+          <line x1="270" y1="43" x2="270" y2="66" class="ln"/>
+          <circle cx="376" cy="30" r="13" class="bx-a2"/>
+          <text x="376" y="35" text-anchor="middle" class="lab-here">E</text>
+          <line x1="376" y1="43" x2="376" y2="66" class="ln"/>
+          <circle cx="694" cy="30" r="13" class="bx-a2"/>
+          <text x="694" y="35" text-anchor="middle" class="lab-here">B</text>
+          <line x1="694" y1="43" x2="694" y2="66" class="ln"/>
+
+          <!-- 流れ -->
+          <rect x="10" y="70" width="96" height="52" rx="7" class="bx-a1"/>
+          <text x="58" y="92" text-anchor="middle" class="b a">マージ</text>
+          <text x="58" y="110" text-anchor="middle" class="s">オーナー</text>
+          <rect x="116" y="70" width="96" height="52" rx="7" class="bx-a3"/>
+          <text x="164" y="92" text-anchor="middle" class="b a">CI が</text>
+          <text x="164" y="110" text-anchor="middle" class="b a">確認する</text>
+          <rect x="222" y="70" width="96" height="52" rx="7" class="bx-a4"/>
+          <text x="270" y="92" text-anchor="middle" class="b a">deployer の</text>
+          <text x="270" y="110" text-anchor="middle" class="b a">権限を借用</text>
+          <rect x="328" y="70" width="96" height="52" rx="7" class="bx-a6"/>
+          <text x="376" y="92" text-anchor="middle" class="b a">① イメージ</text>
+          <text x="376" y="110" text-anchor="middle" class="b a">を置く</text>
+          <rect x="434" y="70" width="96" height="52" rx="7" class="bx-a6"/>
+          <text x="482" y="92" text-anchor="middle" class="b a">② migrate</text>
+          <text x="482" y="110" text-anchor="middle" class="b a">を実行</text>
+          <rect x="540" y="70" width="96" height="52" rx="7" class="bx-a6"/>
+          <text x="588" y="92" text-anchor="middle" class="b a">③ api を</text>
+          <text x="588" y="110" text-anchor="middle" class="b a">替える</text>
+          <rect x="646" y="70" width="96" height="52" rx="7" class="bx-a6"/>
+          <text x="694" y="92" text-anchor="middle" class="b a">④ Vue を</text>
+          <text x="694" y="110" text-anchor="middle" class="b a">配る</text>
+
+          <line x1="106" y1="96" x2="114" y2="96" class="ln" marker-end="url(#f4-mk)"/>
+          <line x1="212" y1="96" x2="220" y2="96" class="ln" marker-end="url(#f4-mk)"/>
+          <line x1="318" y1="96" x2="326" y2="96" class="ln" marker-end="url(#f4-mk)"/>
+          <line x1="424" y1="96" x2="432" y2="96" class="ln" marker-end="url(#f4-mk)"/>
+          <line x1="530" y1="96" x2="538" y2="96" class="ln" marker-end="url(#f4-mk)"/>
+          <line x1="636" y1="96" x2="644" y2="96" class="ln" marker-end="url(#f4-mk)"/>
+
+          <!-- C は ①〜④ のすべてにかかる -->
+          <path d="M328 132 V140 H742 V132" class="ln"/>
+          <circle cx="535" cy="158" r="13" class="bx-a2"/>
+          <text x="535" y="163" text-anchor="middle" class="lab-here">C</text>
+          <line x1="535" y1="140" x2="535" y2="145" class="ln"/>
+
+          <!-- 3章の場面 -->
+          <text x="111" y="200" text-anchor="middle" class="s">場面 1</text>
+          <text x="270" y="200" text-anchor="middle" class="s">場面 2</text>
+          <text x="535" y="200" text-anchor="middle" class="s">場面 3</text>
+        </svg>
+      </div>
+      <figcaption>図4:決定事項の対応図。A いつデプロイを開始するか、B Vue の設定値をどこに保存するか、C deployer に何を許可するか(①〜④ のすべて)、D 誰に deployer の権限の借用を許可するか、E 古いイメージをどうするか。下の「場面」は、3章の図2 の場面の番号です。</figcaption>
+    </figure>
+
+    <h3>A. いつデプロイを開始するか</h3>
+    <p><strong>対象:</strong><span class="t-a1">オーナー</span> が PR を main にマージすると、<span class="t-a3">GitHub</span> が CI(テストと静的解析)を実行します。その CI の終了後に、deploy.yml のジョブを開始するかどうかです。</p>
+    <p><strong>決定事項:</strong>main へのマージで実行された CI が成功したときだけ開始します。CI は PR の作成時や更新時にも実行されますが、そのときは開始しません。</p>
+    <p><strong>理由:</strong>テストを通過したコードだけを、本番に反映するためです。</p>
+
+    <h3>B. Vue の設定値をどこに保存するか</h3>
+    <p><strong>対象:</strong>④ で、<span class="t-a2">deploy.yml のジョブ</span> が Vue をビルドする処理です。<strong>Vue の設定値</strong>は、Vue が本番の Firebase(Google ログイン)に接続するための4つの値(API キー、プロジェクト ID、認証ドメイン、アプリ ID)です。Issue #32 では、<span class="t-a1">オーナー</span> が自分の Mac の <code>web/.env.production.local</code> に書き、手元でビルドしました。自動デプロイでは GitHub Actions のランナーでビルドするため、このファイルは存在しません。そのため、値を <span class="t-a3">GitHub</span> に保存しておく必要があります。保存は、最初の準備(場面 0)で1回だけ行います。</p>
+    <p><strong>決定事項:</strong>このリポジトリの Environment <code>production</code>(2章の「GitHub の Environment」)に、秘匿しない形で保存します。</p>
+    <p><strong>理由:</strong>これらの値は、Firebase Hosting がすべての利用者のブラウザに配信する JavaScript に含まれる公開情報です。秘匿しても保護できるものはありません。秘匿しない形であれば、どの値でビルドしたかを GitHub の画面で確認できるため、誤った値に気づきやすくなります。</p>
+
+    <h3>C. deployer に何を許可するか</h3>
+    <p><strong>対象:</strong>① 〜 ④ で、<span class="t-a6">Artifact Registry</span>、<span class="t-a6">Cloud Run</span>、<span class="t-a6">Firebase Hosting</span> は、リクエストを送ったのが <span class="t-a5">deployer</span> であることを確認すると、<span class="t-a5">deployer</span> にその操作の許可(ロール)があるかを確認します。その許可の範囲です。</p>
+    <p><strong>決定事項:</strong>① 〜 ④ に必要な操作だけを許可します。範囲も、使用するリソースだけに限定します(リポジトリ <code>knowledge-library</code>、サービス <code>api</code>、ジョブ <code>migrate</code>)。Firebase Hosting はプロジェクト単位でしか許可を付与できないため、プロジェクトに付与します。</p>
+    <p><strong>理由:</strong>アクセストークンが漏洩した場合でも、操作できる範囲を最小限にするためです。</p>
+
+    <h3>D. 誰に deployer の権限の借用を許可するか</h3>
+    <p><strong>対象:</strong><span class="t-a2">deploy.yml のジョブ</span> は、<span class="t-a3">GitHub</span> から受け取った OIDC トークンを <span class="t-a4">Workload Identity 連携</span> に提示し、<span class="t-a5">deployer</span> の権限を借用します(4章)。<span class="t-a4">Workload Identity 連携</span> が、どの OIDC トークンであれば借用を許可するかです。</p>
+    <p><strong>決定事項:</strong>このリポジトリの、Environment <code>production</code> を宣言したジョブだけに許可します。Environment <code>production</code> は、main ブランチからのみ使用できるように設定します。</p>
+    <p><strong>理由:</strong>他のリポジトリのジョブや、このリポジトリの PR の CI のジョブには、許可しないためです。PR の CI のジョブは Environment <code>production</code> を宣言しないため、OIDC トークンに <code>production</code> が記載されず、借用は拒否されます。</p>
+
+    <h3>E. 古いイメージをどうするか</h3>
+    <p><strong>対象:</strong>① で、<span class="t-a2">deploy.yml のジョブ</span> は、Rails のイメージ(約 192MB)を <span class="t-a6">Artifact Registry</span> に保存します。自動デプロイでは、マージのたびにイメージが1つ増えます。</p>
+    <p><strong>決定事項:</strong>最新の2つだけを残し、それ以外は <span class="t-a6">Artifact Registry</span> に自動で削除させます。</p>
+    <p><strong>理由:</strong>Artifact Registry の無料枠(0.5GB)に収めるためです。2つ残すのは、現在動作しているイメージと、問題があったときに戻すための1つ前のイメージです。</p>
+
+    <h3>詳細な仕組みの説明時期</h3>
+    <p>上の5つを実際に設定する際には、より詳細な仕組みの理解が必要です。現在は仕様書を決める段階のため、それぞれの説明は、該当する作業の直前に行います。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>詳細な仕組み</th><th>説明する時期</th></tr></thead>
+        <tbody>
+          <tr><td>Workload Identity 連携の中の、プールとプロバイダ(D)</td><td>準備で、<span class="t-a1">オーナー</span> が Workload Identity 連携を作成する前</td></tr>
+          <tr><td>deployer に付与するロールの一覧と、<code>api-runtime</code> を使う権限が必要な理由(C)</td><td>準備で、<span class="t-a1">オーナー</span> が deployer を作成する前</td></tr>
+          <tr><td>GitHub に値を保存する2つの場所(Variables と Secrets)の違い(B)</td><td>準備で、<span class="t-a1">オーナー</span> が Environment を作成する前</td></tr>
+          <tr><td>Artifact Registry の、古いイメージを削除する設定(クリーンアップ ポリシー)(E)</td><td><span class="t-a1">オーナー</span> がその設定を行う前</td></tr>
+          <tr><td>CI の終了時に deploy.yml を起動する仕組み(<code>workflow_run</code>)と、その注意点(A)</td><td><code>deploy.yml</code> を書く前</td></tr>
+          <tr><td>連続してマージしたときの待機の設定、Action の指定方法</td><td><code>deploy.yml</code> を書く前</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">6</span>確認用の問い</h2>
+    <ol class="check">
+      <li>GitHub Actions は Google アカウントを持っていません。それでも本番を操作できるのは、なぜですか。<span class="hint">1章と、4章の図3 です。</span></li>
+      <li>deploy.yml のジョブが最初に受け取るトークンは何で、誰から受け取りますか。Artifact Registry などが受け取るトークンは何ですか。<span class="hint">4章の図3 の ① と ⑥ です。</span></li>
+      <li>deployer そのものと、deployer のアクセストークンは、それぞれどこにありますか。<span class="hint">4章の「deployer と、deployer のアクセストークン」と、図3 です。</span></li>
+      <li>PR の CI のジョブが、Workload Identity 連携に OIDC トークンを提示したら、どうなりますか。それはなぜですか。<span class="hint">4章の「Workload Identity 連携は、OIDC トークンのどこを見て借用を許可するか」です。</span></li>
+      <li>鍵ファイルを GitHub に預ける方法と比べて、何が得で、何が損ですか。<span class="hint">4章の「鍵ファイルを使わない理由」です。</span></li>
+      <li>Vue の設定値を、秘匿しない形で保存するのは、なぜですか。<span class="hint">5章の B です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

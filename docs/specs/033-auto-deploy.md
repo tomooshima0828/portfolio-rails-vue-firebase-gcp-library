@@ -44,7 +44,7 @@ Google Cloud と GitHub の画面の操作は、オーナーが行う。Claude �
 
 ## 完了条件
 
-<!-- インフラの設定のタスクなので、RSpec や Vitest のテストはない。Claude が gcloud・gh・curl の読み取りだけのコマンドで確認し、ブラウザでの操作はオーナーが行って、結果を PR に記録する。AC-1、AC-6、AC-7、AC-8 はマージの後にしか確認できないため、結果は後の docs の PR に記載する -->
+<!-- インフラの設定のタスクなので、RSpec や Vitest のテストはない。Claude が gcloud・gh・curl の読み取りだけのコマンドで確認し、ブラウザでの操作はオーナーが行って、結果を PR に記録する。AC-1、AC-6、AC-7、AC-8 はマージの後にしか確認できないため、AC-1、AC-6、AC-7 の結果は後の docs の PR に記載する。AC-8 は、その docs の PR のマージの翌日以降に確認し、Issue #33 のコメントに記録する -->
 
 - AC-1:main へのマージで実行された CI が成功したとき、deploy.yml のジョブは、CI が確認したコミットから Rails のイメージをビルドして Artifact Registry に保存し、Cloud Run のジョブ `migrate` の実行、Cloud Run のサービス `api` の更新、Firebase Hosting への Vue のデプロイを、この順に実行する。デプロイの後、ジョブ `migrate` とサービス `api` のイメージのタグは、そのコミットの短い ID になる
 - AC-2:PR の作成・更新で CI が実行されたとき、または main の CI が失敗したとき、デプロイは開始されない
@@ -75,7 +75,7 @@ AC-2 と AC-3 は、意図的に CI やマイグレーションを失敗させ�
 
 マージの後に、別の PR(`docs/` のブランチ)で行う。
 
-10. `docs/production-setup.md`:5 章に、初めての自動デプロイの結果(AC-1、AC-6、AC-7、AC-8)を追記する。追加が必要になったロールがあれば、ここに記録する
+10. `docs/production-setup.md`:5 章に、初めての自動デプロイの結果(AC-1、AC-6、AC-7)を追記する。追加が必要になったロールがあれば、ここに記録する。AC-8 は、この PR に含めず、Issue #33 のコメントに記録する。初めての自動デプロイの時点ではイメージが2つしかなく、削除されるものがない。この docs の PR のマージで3つ目のイメージができ、その翌日以降に、自動で削除されたかを確認できる
 
 ### 全体の流れ
 
@@ -119,7 +119,10 @@ AC-2 と AC-3 は、意図的に CI やマイグレーションを失敗させ�
 | サービス `api` のイメージを替える | Cloud Run デベロッパー(`roles/run.developer`) | サービス `api` |
 | ジョブとサービスを `api-runtime` として動作させる | サービス アカウント ユーザー(`roles/iam.serviceAccountUser`) | サービスアカウント `api-runtime` |
 | Firebase Hosting にデプロイする | Firebase Hosting 管理者(`roles/firebasehosting.admin`) | プロジェクト(部品単位では付与できない) |
+| Firebase CLI が、デプロイの前に、Firebase Hosting の API が有効かを確認する | Service Usage 閲覧者(`roles/serviceusage.serviceUsageViewer`) | プロジェクト(部品単位では付与できない) |
 | 権限の借用を許可する | Workload Identity ユーザー(`roles/iam.workloadIdentityUser`) | `deployer` 自身。相手は「権限の借用を許可する相手」の行のとおり |
+
+Service Usage 閲覧者は、初めての自動デプロイ(2026-11-24)で不足が分かり、判断 C のとおり、エラーを確認してから追加した。エラーと経緯は `docs/production-setup.md` の 5.6 に記録する。
 
 ### 判断したこと
 

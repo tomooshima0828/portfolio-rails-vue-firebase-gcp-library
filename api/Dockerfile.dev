@@ -1,5 +1,5 @@
 # 開発用のイメージ。本番用は Dockerfile(フェーズ2で Cloud Run に使う)
-ARG RUBY_VERSION=3.4.11
+ARG RUBY_VERSION=3.4.13
 FROM docker.io/library/ruby:$RUBY_VERSION-slim
 
 WORKDIR /rails

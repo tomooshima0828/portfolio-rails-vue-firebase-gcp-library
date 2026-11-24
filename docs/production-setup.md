@@ -28,7 +28,7 @@
 | 画面の URL(Firebase Hosting) | `https://knowledge-library-prod.web.app`。`/api/**` は Cloud Run のサービス `api` へ転送する(`firebase.json`) |
 | Firebase Auth | ログインの方法は Google。ウェブアプリ `knowledge-library-web` |
 | Rails が信じる Firebase のプロジェクト | Cloud Run の環境変数 `FIREBASE_PROJECT_ID=knowledge-library-prod` |
-| 今のイメージ | `4f5855b`(サービス `api` とジョブ `migrate` の両方)。2026-11-16 から |
+| 今のイメージ | `590ad7f`(サービス `api` とジョブ `migrate` の両方)。2026-11-24 から。自動デプロイでデプロイした |
 | 自動デプロイ | `.github/workflows/deploy.yml`。main の CI が成功したときに起動する |
 | Workload Identity 連携 | プール `github`、プロバイダ `github-actions`(発行元 `https://token.actions.githubusercontent.com/`) |
 | デプロイ用のサービスアカウント | `deployer@knowledge-library-prod.iam.gserviceaccount.com`。GitHub Actions のジョブが権限を借用する |
@@ -909,6 +909,7 @@ main にマージすると、GitHub Actions が、3 章と 4 章で手で行っ�
 | 2-4 | Cloud Run のサービス `api` | `deployer` | Cloud Run デベロッパー(`roles/run.developer`) |
 | 2-5 | サービスアカウント `api-runtime` | `deployer` | サービス アカウント ユーザー(`roles/iam.serviceAccountUser`) |
 | 2-6 | サービスアカウント `deployer` | 下の `principalSet` | Workload Identity ユーザー(`roles/iam.workloadIdentityUser`) |
+| 2-7 | プロジェクト `knowledge-library-prod` | `deployer` | Service Usage 閲覧者(`roles/serviceusage.serviceUsageViewer`) |
 
 2-6 のプリンシパルには、次の文字列を入力する。このリポジトリの、Environment `production` を宣言したジョブを表す。
 
@@ -916,7 +917,9 @@ main にマージすると、GitHub Actions が、3 章と 4 章で手で行っ�
 principalSet://iam.googleapis.com/projects/656607631341/locations/global/workloadIdentityPools/github/attribute.repo_env/1409915528_production
 ```
 
-2-1 だけはプロジェクト全体に付与している。Firebase Hosting のロールは、サイトの単位では付与できないためである。
+2-1 と 2-7 は、プロジェクト全体に付与している。Firebase Hosting のロールはサイトの単位では、Service Usage のロールは API の単位では付与できないためである。
+
+2-7 は、初めての自動デプロイ(2026-11-24)で不足が分かり、追加した(5.6)。Firebase CLI は、デプロイの前に、Firebase Hosting の API が有効かを Service Usage API で確認する。
 
 ### 5.4 GitHub の Environment `production` を作成する
 
@@ -960,7 +963,7 @@ gcloud iam workload-identity-pools providers describe github-actions \
 gcloud iam service-accounts get-iam-policy deployer@$P.iam.gserviceaccount.com --project=$P
 # deployer に、利用者が作成した鍵がない(Listed 0 items.)
 gcloud iam service-accounts keys list --iam-account=deployer@$P.iam.gserviceaccount.com --managed-by=user --project=$P
-# deployer のロール(2-1〜2-5)
+# deployer のロール(2-1〜2-5、2-7)
 gcloud projects get-iam-policy $P "${F[@]}"
 gcloud artifacts repositories get-iam-policy knowledge-library --location=$R --project=$P "${F[@]}"
 gcloud run jobs get-iam-policy migrate --region=$R --project=$P "${F[@]}"
@@ -989,7 +992,43 @@ gh api $G/actions/secrets --jq '.total_count'
 | Environment `production` | 使用できるブランチは `main` だけ。変数は4つ。Secrets は、Environment とリポジトリのどちらも 0 個 |
 | API | Security Token Service API と IAM Service Account Credentials API が有効 |
 
-初めての自動デプロイは、#33 の PR をマージしたときに実行される。結果は、マージの後に、この節に追記する。
+2026-11-20 の時点では、2-7 はまだ付与していない。
+
+**初めての自動デプロイ(2026-11-24)**
+
+PR #44 のマージで、実行 `45353708027` が起動した(コミット `590ad7f`)。
+
+1. 1回目の実行は、Firebase Hosting へのデプロイのステップで失敗した。エラーは 403 で、`deployer` に `serviceusage.services.get` の権限がなかった。この時点で、ジョブ `migrate` の実行(`migrate-9bpst`)と、サービス `api` の更新(版 `api-00005-mjn`)は、すでに完了していた
+2. オーナーが、`deployer` に 2-7 を付与した
+3. GitHub の「Actions」で「Re-run jobs」を押し、2回目の実行が成功した(ジョブの実行 `migrate-rxjlq`、版 `api-00006-l9k`)
+4. 再実行でイメージが作り直され、タグ `590ad7f` は新しいイメージに移った。1回目のイメージはタグのないまま残ったため、オーナーが削除した(5.8)
+
+上の確認のコマンドに加えて、次のコマンドで確認した。
+
+```bash
+U=https://knowledge-library-prod.web.app
+# サービス api の版とイメージ、ジョブ migrate のイメージと実行
+gcloud run services describe api --region=$R --project=$P --format='value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)'
+gcloud run jobs describe migrate --region=$R --project=$P --format='value(spec.template.spec.template.spec.containers[0].image)'
+gcloud run jobs executions list --job=migrate --region=$R --project=$P --limit=3
+# 残っているイメージ
+gcloud artifacts docker images list $R-docker.pkg.dev/$P/knowledge-library/api --include-tags --project=$P
+# 画面、API、ログインせずに投稿すると 401
+curl -s -o /dev/null -w "%{http_code}\n" $U/
+curl -s -o /dev/null -w "%{http_code}\n" $U/api/articles
+curl -s -X POST -H "Content-Type: application/json" -d '{}' -o /dev/null -w "%{http_code}\n" $U/api/articles
+```
+
+2026-11-24 の結果:
+
+| 完了条件 | 確認したこと | 結果 |
+|---|---|---|
+| AC-1 | Rails のデプロイ | サービス `api`(版 `api-00006-l9k`)とジョブ `migrate` のイメージが、どちらも `590ad7f`。ジョブの実行 `migrate-rxjlq` が成功 |
+| AC-1 | Vue のデプロイ | Firebase Hosting の「リリース履歴」に、`deployer` による 2026-11-24 のリリースがある |
+| AC-6 | `deployer` のロール | 5.3 の 2-1〜2-7 のとおり。ほかにはない |
+| AC-7 | 画面と API | `/` は 200、`/api/articles` は 200、ログインせずに `POST /api/articles` は 401 |
+| AC-7 | ログインして投稿する | オーナーがブラウザで投稿し、一覧に表示された |
+| - | 残っているイメージ | `4f5855b`(1つ前)と `590ad7f`(今)の2つ |
 
 ### 5.7 前のバージョンに戻す
 
@@ -1027,6 +1066,7 @@ Vue は、Firebase のコンソールの「Hosting」の「リリース履歴」
 
 - **初めての自動デプロイは、#33 の PR のマージで実行される**:`workflow_run` は、main にあるワークフローのファイルしか使わない。そのため、マージの前には実行できない
 - **DB がない間は、デプロイが失敗する**:Cloud SQL を削除している間(ADR 0007)や、3.12 の作り直しの最中は、ジョブ `migrate` が DB に接続できずに失敗し、デプロイはそこで停止する。サービス `api` と Firebase Hosting は更新されない。DB を作り直した後に、GitHub の「Actions」で失敗した実行を開き、「Re-run jobs」を押す
-- **Firebase CLI に必要なロールは、まだ確認していない**:`deployer` には、Firebase Hosting 管理者だけを付与している。Firebase CLI がほかの権限を必要とした場合は、失敗したときのエラーを確認してからロールを追加し、この章に記録する(仕様書の判断 C)
+- **Firebase CLI に必要なロールは、Firebase Hosting 管理者と Service Usage 閲覧者の2つ**:初めての自動デプロイで確認した(5.6)。`firebase-tools` の版を上げて、ほかの権限が必要になった場合も、失敗したときのエラーを確認してからロールを追加し、この章に記録する(仕様書の判断 C)
+- **再実行の後は、タグのないイメージを削除する**:「Re-run jobs」は、イメージのビルドからやり直す。同じタグ(コミットの短い ID)が新しいイメージに移り、前のイメージはタグのないまま残る。残したままにすると、クリーンアップ ポリシーの「最新の2つ」にこのイメージが数えられ、5.7 で戻すための1つ前のイメージが先に削除される。再実行の後に、5.7 のコマンドでイメージの一覧を確認し、タグのないイメージを Artifact Registry の画面で削除する
 - **手作業のデプロイの手順は残す**:3 章と 4 章の手順は、自動デプロイが使えないとき(GitHub Actions の障害、権限の不足など)に使う。手作業でデプロイしても、次のマージで main の最新のコードに戻る
 - **Vue の設定値を変えたら、Environment の Variables も変える**:自動デプロイは、`web/.env.production.local` ではなく、Environment `production` の Variables からビルドする

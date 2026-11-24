@@ -51,10 +51,11 @@ Brakeman は、Rails のコードを実行せずに読み、SQL インジェク�
 ### 変更するファイル
 
 1. `docs/specs/045-bump-ruby-brakeman-puma.md`:この仕様書
-2. `api/.ruby-version`、`api/Dockerfile`、`api/Dockerfile.dev`:Ruby の版を 3.4.13 にする。3つは同じ版でなければならないので(`api/Dockerfile` のコメントのとおり)、1回のコミットにする。CI(`ruby/setup-ruby`)は `.ruby-version` を読むので、`ci.yml` は変えない
+2. `api/.ruby-version`、`api/Dockerfile`、`api/Dockerfile.dev`:Ruby の版を 3.4.13 にする。3つは同じ版でなければならないので(`api/Dockerfile` のコメントのとおり)、1回のコミットにする。CI(`ruby/setup-ruby`)は `.ruby-version` を読む
 3. `api/Gemfile.lock`:次の2つのコマンドで、brakeman と puma の版の2行だけを変える。2つの gem の変更を1コミットにする
    - `bundle update brakeman --conservative`
    - `bundle update puma --patch --conservative`
+4. `.github/workflows/ci.yml`:`ruby/setup-ruby` の3か所を、v1.329.0 から v1.342.0(SHA `f9c4492e86def3e644ab32a0ef185eda5b0c20d0`)に上げる。v1.329.0 は Ruby 3.4.11 までしか入れられず、PR の CI が「Unknown version 3.4.13」で失敗した(PR を作成した後に発覚)
 
 2 と 3 の後に、api のイメージを作り直し、完了条件を確認する。
 
@@ -62,6 +63,7 @@ Brakeman は、Rails のコードを実行せずに読み、SQL インジェク�
 
 - **`Gemfile` は変えない**。`gem "brakeman", require: false` には版の指定がなく、`gem "puma", ">= 5.0"` は 8.0.4 を許す。`Gemfile.lock` だけを更新すればよい
 - **puma は `--patch` で、最後の桁だけを上げる**。付けないと、Gemfile の範囲で一番新しい 8.1.2 まで上がる。Issue #40 と同じ
+- **`ruby/setup-ruby` は、Ruby 3.4.13 に対応した最初の版 v1.342.0 にする**。v1.342.0 の変更は、Ruby 3.3.14、3.4.13、4.0.10 を入れられるようにすることだけである。その後の v1.343.0 と v1.344.0 は、Windows と JRuby の変更で、このプロジェクトには関係がない。puma の `--patch` と同じく、目的に要る一番小さい変更にする。Action は SHA で指定する(仕様書 007)
 - **`--conservative` で、2つが使うほかの gem(brakeman の racc、puma の nio4r)は上げない**。Issue #25、#40 と同じ
 - **Ruby、brakeman、puma を1つの Issue にする**。どれも「CI の api-security を通す」という同じ目的で、1つでも欠けると CI が通らない。特に、Ruby を上げないと Brakeman 8.1.1 が通らない。Issue #40 で puma と msgpack をまとめたのと同じ
 - **Issue #20、#25、#40 と同じく、別の PR にする**。PR #44(自動デプロイ)の変更と混ぜない。この PR がマージされた後に、PR #44 に main を取り込めば、CI が通る

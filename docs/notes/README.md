@@ -23,6 +23,9 @@
 | Issue #30 | 置き場と、動かす場所と、鍵の金庫 | Rails を Cloud Run で動かすまでの流れと、master.key の渡り方 | [030-cloud-run-deploy.html](030-cloud-run-deploy.html) |
 | Issue #31 | データベースと、接続口と、2つの門 | Rails から Cloud SQL までの繋がり方と、DB のパスワードの渡り方 | [031-cloud-sql-connection.html](031-cloud-sql-connection.html) |
 | Issue #32 | Firebase Hosting と、3つのつなぎ | Vue を Firebase Hosting で本番に置き、ログイン → 投稿 → 一覧を通す流れ。`docker build` と `npm run build` の違い | [032-vue-firebase-hosting.html](032-vue-firebase-hosting.html) |
+| Issue #33 | 自動デプロイと、サービスアカウントの権限借用 | main へのマージから本番が更新されるまでの流れ。GitHub の OIDC トークンが deployer のアクセストークンに交換される仕組みと、仕様書で決める5つの事項 | [033-auto-deploy.html](033-auto-deploy.html) |
+| Issue #33 | OIDC と、GitHub Actions の OIDC トークン | OIDC トークンが発行され、Security Token Service で検証・交換されるまでの流れ。署名の検証で分かることと、属性の条件が必要な理由。OIDC トークンの項目と、プロバイダ github-actions の欄の対応 | [033-oidc-token.html](033-oidc-token.html) |
+| Issue #33 | Google Cloud の全体図と用語 | プロジェクト・製品・リソースの入れ子と、リソースごとの IAM ポリシー。Rails とデプロイのジョブが、サービスアカウント api-runtime と deployer を使ってリクエストを送る関係 | [033-google-cloud-map.html](033-google-cloud-map.html) |
 
 ## Issue に紐づかないもの
 

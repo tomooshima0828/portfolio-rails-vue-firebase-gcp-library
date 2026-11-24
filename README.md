@@ -234,7 +234,7 @@ docker compose run --rm api bin/rails db:prepare  # DB を作り直す
 |---|---|---|
 | Git / GitHub(GitHub Flow、ブランチ保護、PR テンプレート) | 変更は必ず PR 経由 | A |
 | GitHub Actions(CI) | RSpec、RuboCop、Brakeman、Vitest、vue-tsc、ルールテストを PR ごとに実行 | A |
-| GitHub Actions(CD)+ Workload Identity 連携 | サービスアカウントの鍵ファイルを使わずに Cloud Run へデプロイ | A |
+| GitHub Actions(CD)+ Workload Identity 連携 | main へのマージで、サービスアカウントの鍵ファイルを使わずに Cloud Run と Firebase Hosting へデプロイ | A |
 | GitHub Projects | スプリントのボード、バックログ | A |
 | Dependabot | 依存ライブラリの更新 | B |
 

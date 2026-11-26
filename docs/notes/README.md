@@ -26,6 +26,7 @@
 | Issue #33 | 自動デプロイと、サービスアカウントの権限借用 | main へのマージから本番が更新されるまでの流れ。GitHub の OIDC トークンが deployer のアクセストークンに交換される仕組みと、仕様書で決める5つの事項 | [033-auto-deploy.html](033-auto-deploy.html) |
 | Issue #33 | OIDC と、GitHub Actions の OIDC トークン | OIDC トークンが発行され、Security Token Service で検証・交換されるまでの流れ。署名の検証で分かることと、属性の条件が必要な理由。OIDC トークンの項目と、プロバイダ github-actions の欄の対応 | [033-oidc-token.html](033-oidc-token.html) |
 | Issue #33 | Google Cloud の全体図と用語 | プロジェクト・製品・リソースの入れ子と、リソースごとの IAM ポリシー。Rails とデプロイのジョブが、サービスアカウント api-runtime と deployer を使ってリクエストを送る関係 | [033-google-cloud-map.html](033-google-cloud-map.html) |
+| Issue #35 | リクエストの数と、DB の接続の数 | Cloud Run の同時実行数、Puma のスレッド、Rails の接続の上限、Cloud SQL の最大接続数の関係。Issue #35 で決める4つの値の計算と、worker・CPU を増やすときの見直し | [035-cloud-run-scaling.html](035-cloud-run-scaling.html) |
 
 ## Issue に紐づかないもの
 

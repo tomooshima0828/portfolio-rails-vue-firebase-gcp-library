@@ -28,12 +28,14 @@
 | 画面の URL(Firebase Hosting) | `https://knowledge-library-prod.web.app`。`/api/**` は Cloud Run のサービス `api` へ転送する(`firebase.json`) |
 | Firebase Auth | ログインの方法は Google。ウェブアプリ `knowledge-library-web` |
 | Rails が信じる Firebase のプロジェクト | Cloud Run の環境変数 `FIREBASE_PROJECT_ID=knowledge-library-prod` |
-| 今のイメージ | `590ad7f`(サービス `api` とジョブ `migrate` の両方)。2026-11-24 から。自動デプロイでデプロイした |
+| 今のイメージ | `e912526`(サービス `api` とジョブ `migrate` の両方)。2026-11-24 から。自動デプロイでデプロイした |
 | 自動デプロイ | `.github/workflows/deploy.yml`。main の CI が成功したときに起動する |
 | Workload Identity 連携 | プール `github`、プロバイダ `github-actions`(発行元 `https://token.actions.githubusercontent.com/`) |
 | デプロイ用のサービスアカウント | `deployer@knowledge-library-prod.iam.gserviceaccount.com`。GitHub Actions のジョブが権限を借用する |
 | GitHub の Environment | `production`。main ブランチだけで使用できる。Vue の設定値を Variables に保存する |
 | Artifact Registry のクリーンアップ ポリシー | 最新の2つのイメージを残し、それ以外を削除する |
+| サービス `api` のスケール | 同時実行数 `3`、最大インスタンス数 `2`(サービス全体の値)、最小インスタンス数 `0` |
+| Puma のスレッド数、接続の上限 | 環境変数 `RAILS_MAX_THREADS=3`(サービス `api` だけ)。worker は 1 つ(`WEB_CONCURRENCY` を設定していない) |
 
 ## 1. プロジェクトと課金(#29)
 
@@ -1070,3 +1072,123 @@ Vue は、Firebase のコンソールの「Hosting」の「リリース履歴」
 - **再実行の後は、タグのないイメージを削除する**:「Re-run jobs」は、イメージのビルドからやり直す。同じタグ(コミットの短い ID)が新しいイメージに移り、前のイメージはタグのないまま残る。残したままにすると、クリーンアップ ポリシーの「最新の2つ」にこのイメージが数えられ、5.7 で戻すための1つ前のイメージが先に削除される。再実行の後に、5.7 のコマンドでイメージの一覧を確認し、タグのないイメージを Artifact Registry の画面で削除する
 - **手作業のデプロイの手順は残す**:3 章と 4 章の手順は、自動デプロイが使えないとき(GitHub Actions の障害、権限の不足など)に使う。手作業でデプロイしても、次のマージで main の最新のコードに戻る
 - **Vue の設定値を変えたら、Environment の Variables も変える**:自動デプロイは、`web/.env.production.local` ではなく、Environment `production` の Variables からビルドする
+
+## 6. スケールの設定(#35)
+
+作業した日:2026-11-27
+
+アクセスが増えて Cloud Run のインスタンスが増えても、Cloud SQL の接続数が最大接続数を超えないように、サービス `api` のスケールの設定を決める。決める値は、同時実行数、最大インスタンス数、Puma のスレッド数、接続の上限の4つ。この章は、接続数の計算と、設定の手順、計測の結果を記載する。仕様は [docs/specs/035-cloud-run-scaling.md](specs/035-cloud-run-scaling.md)、仕組みの図は [docs/notes/035-cloud-run-scaling.html](notes/035-cloud-run-scaling.html)。
+
+Rails のコードは変更しない。`api/config/puma.rb` のスレッド数と、`api/config/database.yml` の接続の上限(`max_connections`)は、どちらも環境変数 `RAILS_MAX_THREADS` を読むので、Cloud Run にこの環境変数を足すだけで、2つの値がそろう。
+
+### 6.1 接続数を計算する
+
+計算の相手は、2026-12-11 までに作り直す `db-f1-micro` の最大接続数 25(初めの値)にする(3.12)。今の無料お試しの DB より、最大接続数が小さいため。
+
+| 使う側 | 計算 | 接続数 |
+|---|---|---|
+| サービス `api` | 最大インスタンス数 2 × 接続の上限 3 本 | 6 |
+| ジョブ `migrate` | 接続の上限 5 本(ジョブには `RAILS_MAX_THREADS` がないため、`database.yml` の初めの値) | 5 |
+| 管理者用の予約 | PostgreSQL が管理者のために残しておく接続(`superuser_reserved_connections` の初めの値) | 3 |
+| 合計 | | 14 |
+
+合計 14 は、最大接続数 25 に収まる。残りの 11 は、Cloud SQL が内部で使う接続と、作業のために手で接続するときの余裕にする。
+
+同じ式で、DB の側から決まる最大インスタンス数の上限は、(25 − 5(ジョブ)− 5(予約と余裕))÷ 3 = 5 台。
+
+この計算は、Puma の worker(プロセス)が 1 つである前提。環境変数 `WEB_CONCURRENCY` を設定していないため、worker は初めの値の 1 になる。
+
+### 6.2 サービス `api` のスケールの設定を変更する
+
+3つの値を、1回のデプロイでまとめて変更する。
+
+1. 「Cloud Run」でサービス `api` を開き、「コンテナ」タブの「変数とシークレット」→「変数を追加」で、`RAILS_MAX_THREADS` = `3` を足す。シークレットではなく、ふつうの環境変数にする
+2. 「スケーリング」タブを開き、次のように直す。表にない項目は変えない
+
+| 画面の場所 | 項目 | 値 |
+|---|---|---|
+| リクエスト | インスタンスあたりの最大同時リクエスト数 | `80` → `3` |
+| サービスのスケーリング | インスタンスの最大数 | `1` → `2` |
+| サービスのスケーリング | インスタンスの最小数 | `0` のまま |
+
+同時実行数(インスタンスあたりの最大同時リクエスト数)は、「コンテナ」タブではなく「スケーリング」タブにある。
+
+3. 「差分を表示して再デプロイ」を押し、変わるのが3点(環境変数、同時実行数、最大インスタンス数)だけであることを確認して、デプロイする
+
+#35 では、今のイメージ `e912526` のまま、版 `api-00009-6zk` が起動し、リクエストの 100% が届くようになった。
+
+```bash
+gcloud run services update api \
+  --region=asia-northeast1 --project=knowledge-library-prod \
+  --update-env-vars=RAILS_MAX_THREADS=3 \
+  --concurrency=3
+# サービス全体の最大インスタンス数は、2.8 と同じく、コンソールの「スケーリング」タブで変更する
+```
+
+### 6.3 確認する
+
+読み取りだけのコマンドで確認する。環境変数は、秘密の値を表示しないように、`RAILS_MAX_THREADS` だけを取り出す。
+
+```bash
+P=knowledge-library-prod; R=asia-northeast1
+# 同時実行数、サービス全体の最大インスタンス数、最小インスタンス数(3	2	0 と出る)
+gcloud run services describe api --region=$R --project=$P \
+  --format="value(spec.template.spec.containerConcurrency, metadata.annotations.'run.googleapis.com/maxScale', spec.template.metadata.annotations.'autoscaling.knative.dev/minScale')"
+# 環境変数 RAILS_MAX_THREADS(RAILS_MAX_THREADS,3 と出る)
+gcloud run services describe api --region=$R --project=$P \
+  --flatten='spec.template.spec.containers[].env[]' \
+  --format='csv[no-heading](spec.template.spec.containers.env.name,spec.template.spec.containers.env.value)' \
+  | grep '^RAILS_MAX_THREADS,'
+# Puma の起動のログ。Min threads: 3、Max threads: 3 と出る
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="api" AND textPayload:"threads"' \
+  --project=$P --freshness=1d --limit=2 --format='value(timestamp, textPayload)'
+```
+
+#35 では、次のとおりだった。
+
+- 同時実行数 `3`、サービス全体の最大インスタンス数 `2`、最小インスタンス数 `0`、`RAILS_MAX_THREADS` は `3`
+- 版ごとの最大インスタンス数は `20` のまま。効くのは、小さいほうのサービス全体の値 `2`(2.8)
+- イメージ、CPU(`1000m`)、メモリ(`512Mi`)、ほかの環境変数は変わっていない
+- Puma の起動のログに、`Puma starting in single mode`(worker 1 つ)、`Min threads: 3`、`Max threads: 3` と出た
+- オーナーがブラウザで本番の URL を開き、記事の一覧の表示、Google でのログイン、記事の投稿ができた
+
+### 6.4 コールドスタートを計測する
+
+最小インスタンス数を 0 にしているので、リクエストがない状態が続くと、インスタンスは 0 台になる。その後の最初のリクエストは、インスタンスの起動を待つ(コールドスタート)。この待ち時間を計測する。
+
+1. リクエストがない状態で、15分以上待つ。Cloud Run は、リクエストがなくなってから最大15分、インスタンスを残す
+2. `/up` を2回続けて呼び、応答までの時間を測る
+
+```bash
+for i in 1 2; do
+  curl -s -o /dev/null -w "call$i http=%{http_code} total=%{time_total}s\n" \
+    https://api-656607631341.asia-northeast1.run.app/up
+done
+```
+
+3. Cloud Logging で、1回目の呼び出しのときに、新しいインスタンスが起動したこと(`Starting new instance`)を確認する
+
+#35 では、リクエストがない状態が約1時間続いた後(2026-11-27 10:06)に計測した。
+
+| 呼び出し | 応答までの時間 |
+|---|---|
+| 1回目(インスタンス 0 台から) | 13.71 秒 |
+| 2回目(続けて呼んだとき) | 0.15 秒 |
+
+1回目の内訳(Cloud Logging の時刻から)は、次のとおり。
+
+| 経過 | できごと |
+|---|---|
+| 0 秒 | Cloud Run が新しいインスタンスを起動し始める(`Starting new instance`) |
+| 約 7.7 秒 | Rails と Puma の起動が始まる(`Booting Puma`)。ここまでは、コンテナの用意など、Cloud Run の側の時間 |
+| 約 13.3 秒 | Puma がリクエストを受け付け始める。Rails の起動は約 5.6 秒 |
+| 約 13.6 秒 | `/up` に応答する(Rails の中の処理は 0.006 秒) |
+
+最小インスタンス数を 1 にすると、この待ち時間はなくなるが、リクエストがない間もインスタンスが動き続け、課金される。改善が必要かは、フェーズ3以降の速度改善で判断する(仕様書の判断 D)。
+
+### 6.5 注意点
+
+- **CPU を増やして worker を増やすときは、計算をやり直す**:`RAILS_MAX_THREADS` は worker 1つあたりの値なので、インスタンス1台の接続の上限は「worker の数 × 接続の上限」になる。worker の数は `WEB_CONCURRENCY` で決まり、CPU を増やしても自動では増えない。同時実行数も「worker の数 × スレッド数」にそろえる。増やし方は [ノートの「参考」の節](notes/035-cloud-run-scaling.html)
+- **Issue #49 で DB を作り直した後に、最大接続数を確認する**:`SHOW max_connections` と `SHOW superuser_reserved_connections` で確認する。25 と 3 でなかった場合は、6.1 の計算をやり直す
+- **自動デプロイは、この設定を上書きしない**:`deploy.yml` は `gcloud run services update` に `--image` だけを渡すので、それ以外の設定は前の版から引き継がれる。#35 の PR のマージの後に確認する
+- **ジョブ `migrate` の設定は変えていない**:ジョブには `RAILS_MAX_THREADS` がないので、接続の上限は 5 本のまま。ジョブの設定を変えるときは、サービスと同じ値にそろえ、6.1 の計算を直す

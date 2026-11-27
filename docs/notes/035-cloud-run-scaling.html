@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Run のスケール設定と、DB の接続数</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* 学習ノート(layered-tech-explanation スキルのひな形から作成)。
+   登場人物の色:
+   a1=ブラウザ(リクエストも同じ色)、a2=Puma と Rails(私たちのコード・今ここ)、a3=Cloud SQL、
+   a4=Firebase Hosting、a5=Cloud Run(サービス api、ジョブ migrate)、a6=使わない */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --band: #eaedf3;
+  --ink: #1a2130;
+  --muted: #586275;
+  --line: #d8dde6;
+  --accent: #34459f;
+  --code-bg: #f0f2f7;
+  --a1: #1a2130;  --a1-soft: #eceff4;
+  --a2: #7b3fa6;  --a2-soft: #efe4f6;
+  --a3: #3f67a3;  --a3-soft: #e3eaf5;
+  --a4: #8a5a14;  --a4-soft: #f6ecd9;
+  --a5: #0f766e;  --a5-soft: #dcf1ee;
+  --a6: #b0303d;  --a6-soft: #f8e2e4;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+    --accent: #8f9ef0; --code-bg: #141821;
+    --a1: #e5e8ee;  --a1-soft: #222834;
+    --a2: #c49bf0;  --a2-soft: #2b1f3a;
+    --a3: #8badde;  --a3-soft: #1a2538;
+    --a4: #e0b46a;  --a4-soft: #33281a;
+    --a5: #4fd1c5;  --a5-soft: #12302d;
+    --a6: #ef7480;  --a6-soft: #3a1b21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #191e28; --band: #161a23; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2b3240;
+  --accent: #8f9ef0; --code-bg: #141821;
+  --a1: #e5e8ee;  --a1-soft: #222834;
+  --a2: #c49bf0;  --a2-soft: #2b1f3a;
+  --a3: #8badde;  --a3-soft: #1a2538;
+  --a4: #e0b46a;  --a4-soft: #33281a;
+  --a5: #4fd1c5;  --a5-soft: #12302d;
+  --a6: #ef7480;  --a6-soft: #3a1b21;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+main { max-width: 800px; margin: 0 auto; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+p { margin: 0 0 14px; }
+
+/* 冒頭 */
+header.top { padding-top: 56px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.3; margin: 0 0 20px; text-wrap: balance; }
+.lead { font-size: 17px; }
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 0; }
+.answer p { margin: 0; }
+.answer ul, .answer ol { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+.answer + .answer { margin-top: 12px; }
+
+h1, h2, h3 { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 章 */
+section { padding-top: 52px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.4; margin: 0 0 16px; text-wrap: balance; display: flex; gap: 12px; align-items: baseline; }
+h2 .num { font-family: var(--font-mono); font-size: 14px; color: var(--muted); font-weight: 400; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 26px 0 8px; line-height: 1.5; text-wrap: balance; }
+
+/* 本文の中の登場人物の名前(図と同じ色) */
+.t-a1 { color: var(--a1); font-weight: 700; }
+.t-a2 { color: var(--a2); font-weight: 700; }
+.t-a3 { color: var(--a3); font-weight: 700; }
+.t-a4 { color: var(--a4); font-weight: 700; }
+.t-a5 { color: var(--a5); font-weight: 700; }
+
+/* 登場人物のカード */
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; min-width: 0; font-size: 14.5px; line-height: 1.75; }
+.card p { margin: 0; }
+.card .who { font-weight: 700; display: block; }
+.card .kind { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.card.a1 { border-left-color: var(--a1); }
+.card.a2 { border-left-color: var(--a2); }
+.card.a3 { border-left-color: var(--a3); }
+.card.a4 { border-left-color: var(--a4); }
+.card.a5 { border-left-color: var(--a5); }
+
+/* 図 */
+figure { margin: 18px 0 8px; }
+.figbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+.figbox svg { display: block; width: 100%; height: auto; }
+.figbox svg.wide { min-width: 700px; }
+.figbox svg.mid { min-width: 620px; }
+figcaption { font-size: 13.5px; color: var(--muted); margin: 8px 2px 0; line-height: 1.7; }
+
+/* 図の中。色はすべて CSS 変数で指定する(SVG に色を直接書かない) */
+svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+svg .s { font-size: 11.5px; fill: var(--muted); }
+svg .a { font-size: 12px; }
+svg .m { font-family: var(--font-mono); font-size: 11.5px; fill: var(--muted); }
+svg .b { font-weight: 700; }
+svg .scene { font-weight: 700; font-size: 13px; }
+svg .lab-here { fill: var(--a2); font-weight: 700; font-size: 11.5px; }
+svg .bx-frame { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .bx-a1 { fill: var(--surface); stroke: var(--a1); stroke-width: 1.5; }
+svg .bx-a2 { fill: var(--a2-soft); stroke: var(--a2); stroke-width: 1.5; }
+svg .bx-a3 { fill: var(--a3-soft); stroke: var(--a3); stroke-width: 1.5; }
+svg .bx-a4 { fill: var(--a4-soft); stroke: var(--a4); stroke-width: 1.5; }
+svg .bx-a5 { fill: var(--a5-soft); stroke: var(--a5); stroke-width: 1.5; }
+svg .bx-free { fill: var(--surface); stroke: var(--muted); stroke-width: 1; }
+svg .band { fill: var(--band); }
+svg .band-here { fill: var(--a2-soft); }
+svg .bx-here { fill: var(--band); stroke: var(--a2); stroke-width: 2; }
+svg .bx-in { fill: var(--surface); stroke: var(--a2); stroke-width: 1.5; }
+svg .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .ln-a1 { stroke: var(--a1); stroke-width: 1.6; fill: none; }
+svg .ln-a2 { stroke: var(--a2); stroke-width: 1.8; fill: none; }
+svg .ln-a3 { stroke: var(--a3); stroke-width: 1.8; fill: none; }
+svg .ln-a4 { stroke: var(--a4); stroke-width: 1.8; fill: none; }
+svg .ln-a5 { stroke: var(--a5); stroke-width: 1.8; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+svg .mk { fill: var(--muted); }
+svg .mk-a1 { fill: var(--a1); }
+svg .mk-a2 { fill: var(--a2); }
+svg .mk-a3 { fill: var(--a3); }
+svg .mk-a4 { fill: var(--a4); }
+svg .mk-a5 { fill: var(--a5); }
+
+/* 手順 */
+.scene-h { display: flex; gap: 10px; align-items: baseline; }
+.scene-h .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+ol.flow { margin: 0 0 6px; padding-left: 1.4em; display: grid; gap: 4px; }
+ol.flow li { padding-left: 4px; }
+
+/* 注記。.here は「今ここ」の注記 */
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.75; margin: 12px 0 16px; }
+.note p:last-child { margin-bottom: 0; }
+.note ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.note.here { border-left-color: var(--a2); }
+.note.defs { font-size: 17px; line-height: 1.8; padding: 14px 20px; }
+.note.defs li { margin: 6px 0; }
+
+/* 表。tr.now は「今ここ」の行 */
+.tablewrap { overflow-x: auto; margin: 12px 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--font-display); font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+tr.now td { background: var(--a2-soft); }
+td.num { font-family: var(--font-mono); white-space: nowrap; text-align: right; }
+
+code, pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+pre.tree { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0 16px; overflow-x: auto; font-size: 13px; line-height: 1.7; }
+pre.tree code { background: none; padding: 0; font-size: inherit; }
+
+/* 確認用の問い */
+ol.check { padding-left: 1.4em; display: grid; gap: 8px; }
+ol.check .hint { display: block; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 640px) {
+  .cast { grid-template-columns: minmax(0, 1fr); }
+  h2 { font-size: 21px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header class="top">
+    <p class="eyebrow">Issue #35 · 学習メモ</p>
+    <h1>Cloud Run のスケール設定と、DB の接続数</h1>
+    <p class="lead">アクセスが増えたときに、Cloud Run がインスタンスを増やしても、Cloud SQL の接続数が上限を超えないようにします。このページでは、リクエストが Cloud SQL に届くまでに通る段と、段ごとの上限の数を見渡し、Issue #35 で決める4つの値の関係を説明します。</p>
+    <div class="note">
+      <ul>
+        <li><strong>インスタンス</strong>:Cloud Run が、Rails のイメージから起動したコンテナ1つ。Cloud Run が、アクセスに応じて台数を増減する。</li>
+        <li><strong>同時実行数</strong>:Cloud Run が、1つのインスタンスに同時に送るリクエストの上限。</li>
+        <li><strong>worker</strong>:Puma が起動するプロセス。worker ごとに、自分のスレッドと接続プールを持つ。数は環境変数 <code>WEB_CONCURRENCY</code> で決まる(2章の「Puma、worker、スレッド」)。</li>
+        <li><strong>スレッド</strong>:Puma の中で、リクエストを1件ずつ処理する作業の単位。3本あれば、3件を同時に処理できる(2章の「Puma、worker、スレッド」)。</li>
+        <li><strong>接続</strong>:Rails と Cloud SQL の間の通信路。一度作ると、閉じるまで何度でも SQL を送れる。Cloud SQL は、開いている接続を1本ずつ数える(2章の「接続プールと接続」)。</li>
+        <li><strong>接続プール</strong>:Rails の中にある、DB への接続の置き場。接続を使い回して速くし、接続の本数に上限をかける(2章の「接続プールと接続」)。</li>
+        <li><strong>最大接続数</strong>:Cloud SQL が、全体で同時に受け付ける接続の上限。</li>
+      </ul>
+    </div>
+    <div class="answer">
+      <p><strong>要点</strong></p>
+      <ol>
+        <li>リクエストは、Cloud Run → インスタンス → Puma のスレッド → DB の接続 の順に進み、それぞれの段に上限の数がある。</li>
+        <li>同時実行数を Puma のスレッド数(3)にそろえると、インスタンスに入りきらないリクエストを、Cloud Run が別のインスタンスに送る。</li>
+        <li>インスタンスが増えても DB の接続数の合計(最大 14)が Cloud SQL の最大接続数(25)に収まるように、最大インスタンス数を 2 にする。</li>
+      </ol>
+    </div>
+    <div class="answer">
+      <p>このページで分かること</p>
+      <ul>
+        <li>数を計算して決める必要がある理由(1章)</li>
+        <li>誰が登場し、それぞれの上限の数がいくつか。worker、スレッド、接続、接続プールとは何か(2章)</li>
+        <li>リクエストが届いてから、インスタンスが止まるまでの流れ(3章)</li>
+        <li>リクエストの数と、DB の接続の数を追う。値を選んだ理由(4章)</li>
+        <li>設定の名前が、図のどこにあたるか(5章)</li>
+        <li>Issue #35 の作業と完了条件(6章)</li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2><span class="num">1</span>出発点:数を計算して決める理由</h2>
+    <p>Cloud Run は、アクセスが増えると、インスタンスを自動で増やします。インスタンスの中の Rails は、それぞれ自分の接続プールを持ち、Cloud SQL に接続します。そのため、インスタンスが増えるほど、Cloud SQL への接続も増えます。Cloud SQL には最大接続数があり、上限を超えた接続は拒否されます。拒否されると、Rails はリクエストを処理できず、エラーを返します。</p>
+    <p>つまり、インスタンスの数、1台あたりの接続の数、Cloud SQL の上限は、互いに関係しています。どれか1つを決めると、ほかの値の範囲が決まります。Issue #35 では、この関係を計算して4つの値を決め、計算の過程を docs に残します。</p>
+    <p>今の設定には、もう1つ問題があります。Cloud Run は、1つのインスタンスに最大 80 件のリクエストを同時に送ります。一方、Puma が同時に処理できるのは 3 件です。4 件目以降は Puma の中で待ちますが、Cloud Run からは、インスタンスにまだ空きがあるように見えます(4章の図5)。</p>
+  </section>
+
+  <section id="cast">
+    <h2><span class="num">2</span>登場人物と、それぞれの上限</h2>
+    <p>登場人物は5つです。ブラウザ以外は、すべて本番のプロジェクト <code>knowledge-library-prod</code> の中にあります。色は、このページの図と本文で共通です。図1 の数は、Issue #35 で決める値です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 824 384" role="img" aria-label="配置図。ブラウザが Firebase Hosting にリクエストを送り、Firebase Hosting が Cloud Run のサービス api に転送する。サービス api の中に、インスタンス 1 と、混んだときだけ起動するインスタンス 2 があり、それぞれ Puma のスレッド 3、Rails の接続の上限 3 本を持つ。Cloud Run のジョブ migrate は接続の上限 5 本を持つ。それぞれが Cloud SQL(最大接続数 25)に接続する">
+          <defs>
+            <marker id="f1-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <rect x="12" y="135" width="96" height="60" rx="8" class="bx-a1"/>
+          <text x="60" y="160" text-anchor="middle" class="b">ブラウザ</text>
+          <text x="60" y="180" text-anchor="middle" class="s">利用者</text>
+
+          <rect x="184" y="12" width="628" height="360" rx="12" class="bx-frame"/>
+          <text x="198" y="32" class="s">プロジェクト knowledge-library-prod(Firebase と Google Cloud)</text>
+
+          <rect x="196" y="128" width="136" height="74" rx="8" class="bx-a4"/>
+          <text x="264" y="152" text-anchor="middle" class="b a">Firebase Hosting</text>
+          <text x="264" y="172" text-anchor="middle" class="s">Vue を配る</text>
+          <text x="264" y="190" text-anchor="middle" class="s">/api を転送</text>
+
+          <rect x="372" y="44" width="236" height="208" rx="10" class="bx-a5"/>
+          <text x="490" y="64" text-anchor="middle" class="b">Cloud Run サービス api</text>
+          <text x="490" y="82" text-anchor="middle" class="s">最大インスタンス数 2 · 同時実行数 3</text>
+
+          <rect x="386" y="92" width="208" height="68" rx="8" class="bx-a2"/>
+          <text x="490" y="114" text-anchor="middle" class="b">インスタンス 1</text>
+          <text x="490" y="132" text-anchor="middle" class="s">Puma:スレッド 3</text>
+          <text x="490" y="150" text-anchor="middle" class="s">Rails:接続の上限 3 本</text>
+
+          <rect x="386" y="172" width="208" height="68" rx="8" class="bx-a2 dash"/>
+          <text x="490" y="194" text-anchor="middle" class="b">インスタンス 2</text>
+          <text x="490" y="212" text-anchor="middle" class="s">Puma:スレッド 3</text>
+          <text x="490" y="230" text-anchor="middle" class="s">Rails:接続の上限 3 本</text>
+
+          <rect x="372" y="264" width="236" height="96" rx="10" class="bx-a5"/>
+          <text x="490" y="284" text-anchor="middle" class="b">Cloud Run ジョブ migrate</text>
+          <text x="490" y="300" text-anchor="middle" class="s">デプロイのときだけ動く</text>
+          <rect x="386" y="308" width="208" height="44" rx="8" class="bx-a2"/>
+          <text x="490" y="327" text-anchor="middle" class="b a">Rails(db:migrate)</text>
+          <text x="490" y="344" text-anchor="middle" class="s">接続の上限 5 本</text>
+
+          <rect x="660" y="100" width="146" height="250" rx="8" class="bx-a3"/>
+          <text x="733" y="200" text-anchor="middle" class="b">Cloud SQL</text>
+          <text x="733" y="220" text-anchor="middle" class="s">インスタンス db</text>
+          <text x="733" y="238" text-anchor="middle" class="m">db-f1-micro</text>
+          <text x="733" y="258" text-anchor="middle" class="s">最大接続数 25</text>
+
+          <line x1="112" y1="165" x2="192" y2="165" class="ln" marker-start="url(#f1-mk)" marker-end="url(#f1-mk)"/>
+          <text x="150" y="157" text-anchor="middle" class="s">リクエスト</text>
+          <line x1="336" y1="165" x2="368" y2="165" class="ln" marker-start="url(#f1-mk)" marker-end="url(#f1-mk)"/>
+
+          <line x1="598" y1="126" x2="656" y2="126" class="ln" marker-start="url(#f1-mk)" marker-end="url(#f1-mk)"/>
+          <text x="634" y="118" text-anchor="middle" class="s">最大 3</text>
+          <line x1="598" y1="206" x2="656" y2="206" class="ln" marker-start="url(#f1-mk)" marker-end="url(#f1-mk)"/>
+          <text x="634" y="198" text-anchor="middle" class="s">最大 3</text>
+          <line x1="598" y1="330" x2="656" y2="330" class="ln" marker-start="url(#f1-mk)" marker-end="url(#f1-mk)"/>
+          <text x="634" y="322" text-anchor="middle" class="s">最大 5</text>
+        </svg>
+      </div>
+      <figcaption>図1:破線のインスタンス 2 は、同時に届くリクエストが 1 台で処理できる数を超えたときだけ起動します。Cloud SQL への線の数字は、そのインスタンスまたはジョブが同時に持つ接続の上限です。ブラウザは Cloud SQL と直接やりとりしません。Rails と Cloud SQL の間にある Cloud Run の Cloud SQL 接続(Issue #31 のノート)は、接続の数を変えないので省略しました。</figcaption>
+    </figure>
+
+    <div class="cast">
+      <div class="card a1"><p><span class="who t-a1">ブラウザ</span><span class="kind">利用者の端末</span>本番の URL を開き、<code>/api/articles</code> などのリクエストを Firebase Hosting に送る。</p></div>
+      <div class="card a4"><p><span class="who t-a4">Firebase Hosting</span><span class="kind">Firebase · Issue #32 で設定した</span>Vue のファイルを配る。<code>/api</code> で始まるリクエストは、Cloud Run のサービス <code>api</code> に転送する。</p></div>
+      <div class="card a5"><p><span class="who t-a5">Cloud Run</span><span class="kind">Google Cloud · Issue #30 と #31 で作った</span>サービス <code>api</code> では、届いたリクエストをどのインスタンスに送るかを決め、必要ならインスタンスを起動・停止する。ジョブ <code>migrate</code> では、デプロイのたびに Rails を1回だけ動かす。</p></div>
+      <div class="card a2"><p><span class="who t-a2">Puma と Rails</span><span class="kind">インスタンスの中 · 私たちが書いて、設定する</span>Puma は、Rails のアプリを動かす Web サーバー(gem)。スレッドを用意し、1本のスレッドに1件のリクエストを割り当てる。Rails は、DB が必要になると、接続プールから接続を1本借りる。</p></div>
+      <div class="card a3"><p><span class="who t-a3">Cloud SQL</span><span class="kind">Google Cloud · Issue #49 で作り直す</span>PostgreSQL のサーバー(インスタンス <code>db</code>)。最大接続数を超える接続は拒否する。2026-12-11 までに、無料お試しから <code>db-f1-micro</code> に作り直す。</p></div>
+    </div>
+
+    <p>図2 は、図1 のインスタンス 1 の中を拡大したものです。この後の2つの節で、図2 の点線の枠(worker)と左の箱(Puma とスレッド)、右の箱(接続プールと接続)を順に説明します。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 792 316" role="img" aria-label="インスタンス 1 の中の図。Cloud Run がリクエスト A をスレッド 1 に、リクエスト B をスレッド 2 に送る。スレッド 3 は空き。スレッド 1 は、Rails の接続プールから接続 1 を借り、接続 1 で Cloud SQL にクエリを送り、終わったら接続 1 を返す。スレッド 2 は接続 2 を借りている。接続 3 は空き。接続 1 から 3 は、Cloud SQL への接続を開いたまま残す">
+          <defs>
+            <marker id="ft-mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker>
+          </defs>
+
+          <rect x="12" y="96" width="112" height="114" rx="8" class="bx-a5"/>
+          <text x="68" y="138" text-anchor="middle" class="b">Cloud Run</text>
+          <text x="68" y="158" text-anchor="middle" class="s">サービス api</text>
+          <text x="68" y="176" text-anchor="middle" class="s">同時実行数 3</text>
+
+          <rect x="150" y="12" width="446" height="290" rx="12" class="bx-frame"/>
+          <text x="164" y="32" class="s">インスタンス 1(CPU 1 つ)の中の、Puma の worker 1 つ(プロセス)</text>
+
+          <rect x="166" y="44" width="170" height="242" rx="10" class="bx-a2"/>
+          <text x="251" y="66" text-anchor="middle" class="b">Puma</text>
+          <text x="251" y="84" text-anchor="middle" class="s">スレッド 3 本</text>
+          <rect x="180" y="96" width="142" height="50" rx="6" class="bx-in"/>
+          <text x="251" y="117" text-anchor="middle" class="b">スレッド 1</text>
+          <text x="251" y="135" text-anchor="middle" class="s">リクエスト A を処理中</text>
+          <rect x="180" y="158" width="142" height="50" rx="6" class="bx-in"/>
+          <text x="251" y="179" text-anchor="middle" class="b">スレッド 2</text>
+          <text x="251" y="197" text-anchor="middle" class="s">リクエスト B を処理中</text>
+          <rect x="180" y="220" width="142" height="50" rx="6" class="bx-free"/>
+          <text x="251" y="241" text-anchor="middle" class="b">スレッド 3</text>
+          <text x="251" y="259" text-anchor="middle" class="s">空き</text>
+
+          <rect x="420" y="44" width="160" height="242" rx="10" class="bx-a2"/>
+          <text x="500" y="66" text-anchor="middle" class="b">Rails の接続プール</text>
+          <text x="500" y="84" text-anchor="middle" class="s">上限 3 本</text>
+          <rect x="434" y="96" width="132" height="50" rx="6" class="bx-in"/>
+          <text x="500" y="117" text-anchor="middle" class="b">接続 1</text>
+          <text x="500" y="135" text-anchor="middle" class="s">スレッド 1 に貸出中</text>
+          <rect x="434" y="158" width="132" height="50" rx="6" class="bx-in"/>
+          <text x="500" y="179" text-anchor="middle" class="b">接続 2</text>
+          <text x="500" y="197" text-anchor="middle" class="s">スレッド 2 に貸出中</text>
+          <rect x="434" y="220" width="132" height="50" rx="6" class="bx-free"/>
+          <text x="500" y="241" text-anchor="middle" class="b">接続 3</text>
+          <text x="500" y="259" text-anchor="middle" class="s">空き</text>
+
+          <rect x="676" y="96" width="104" height="174" rx="8" class="bx-a3"/>
+          <text x="728" y="176" text-anchor="middle" class="b">Cloud SQL</text>
+          <text x="728" y="196" text-anchor="middle" class="s">インスタンス db</text>
+
+          <line x1="128" y1="121" x2="176" y2="121" class="ln" marker-start="url(#ft-mk)" marker-end="url(#ft-mk)"/>
+          <line x1="128" y1="183" x2="176" y2="183" class="ln" marker-start="url(#ft-mk)" marker-end="url(#ft-mk)"/>
+
+          <line x1="430" y1="113" x2="326" y2="113" class="ln-a2" marker-end="url(#ft-mk)"/>
+          <text x="378" y="106" text-anchor="middle" class="s">① 借りる</text>
+          <line x1="326" y1="130" x2="430" y2="130" class="ln-a2" marker-end="url(#ft-mk)"/>
+          <text x="378" y="146" text-anchor="middle" class="s">③ 返す</text>
+          <line x1="322" y1="183" x2="434" y2="183" class="ln"/>
+
+          <line x1="570" y1="121" x2="672" y2="121" class="ln" marker-start="url(#ft-mk)" marker-end="url(#ft-mk)"/>
+          <text x="636" y="113" text-anchor="middle" class="s">② クエリ</text>
+          <line x1="570" y1="183" x2="672" y2="183" class="ln" marker-start="url(#ft-mk)" marker-end="url(#ft-mk)"/>
+          <line x1="570" y1="245" x2="676" y2="245" class="ln"/>
+        </svg>
+      </div>
+      <figcaption>図2:リクエストが 2 件届いている瞬間です。① 〜 ③ は、スレッド 1 が DB を使う手順で、「接続プールと接続」の番号付きの手順と同じです。接続から Cloud SQL への線は、開いたままの接続です。接続 3 は今は使われていませんが、閉じずに残っています。Puma のスレッドは 3 本ありますが、Ruby のコードを同時に実行できるのは 1 本だけです(GVL)。</figcaption>
+    </figure>
+
+    <h3>Puma、worker、スレッド</h3>
+    <div class="note here defs">
+      <ul>
+        <li><strong>Puma</strong>:Rails のアプリを動かす Web サーバー(gem)。インスタンスの中で動き、届いたリクエストをスレッドに割り当てる。</li>
+        <li><strong>worker</strong>:Puma が起動するプロセス。worker ごとに、自分のスレッドと接続プールを持つ。数は環境変数 <code>WEB_CONCURRENCY</code> で決まり、このプロジェクトでは初めの値の 1。</li>
+        <li><strong>スレッド</strong>:Puma の中で、リクエストを1件ずつ処理する作業の単位。3本あれば、3件を同時に処理できる。</li>
+      </ul>
+    </div>
+    <p>1つのインスタンスには、同時に複数のリクエストが届きます。<span class="t-a2">Puma</span> が1件ずつしか処理できなければ、2件目は1件目が終わるまで待ちます。そこで <span class="t-a2">Puma</span> は、1つの worker(プロセス)の中にスレッドを 3 本用意し、1本のスレッドに1件のリクエストを割り当てます。ローカルの <code>rails s</code> も、同じ Puma が 3 本のスレッドで動いています。ただし、Ruby では、1つのプロセスの中で Ruby のコードを同時に実行できるスレッドは1本だけです(GVL)。スレッドが同時に進められるのは、DB の応答を待つ時間など、Ruby のコードを実行していない部分です。そのため、スレッドを増やしても、その分だけ速くなるわけではありません。</p>
+    <p><strong>worker と CPU</strong>:<span class="t-a2">Puma</span> は、worker(プロセス)を複数起動することもできます。worker はそれぞれ、自分のスレッドと接続プールを持ちます。そのため、worker が 2 つなら、スレッドも接続の上限も、インスタンス1台で2倍になります。worker の数は、CPU の数に合わせるのが一般的です。GVL があるので、1つの worker は CPU を1つしか使えないためです。CPU が複数あるサーバーでは、worker を CPU の数だけ起動して、すべての CPU を使います。</p>
+    <p>Cloud Run のサービス <code>api</code> のインスタンスは、CPU が 1 つです(設定の値は <code>1000m</code>)。worker の数を決める環境変数 <code>WEB_CONCURRENCY</code> は設定していないので、worker は初めの値の 1 つです。結果として、CPU の数と worker の数がそろっています。処理できる量を増やすときは、worker を増やすのではなく、<span class="t-a5">Cloud Run</span> がインスタンスの台数を増やします。</p>
+    <pre class="tree"><code>インスタンス 1台(Cloud Run が起動する。CPU 1 つ)
+└─ Puma の worker 1 つ(プロセス):WEB_CONCURRENCY。設定していないので 1
+   ├─ スレッド 3 本:RAILS_MAX_THREADS
+   └─ 接続プール(Rails)
+      └─ 接続 最大 3 本:RAILS_MAX_THREADS。接続の先は Cloud SQL</code></pre>
+
+    <h3>接続プールと接続</h3>
+    <div class="note here defs">
+      <ul>
+        <li><strong>接続プール</strong>:Rails の中にある、DB への接続の置き場。接続を使い回して速くし、接続の本数に上限をかける。</li>
+        <li><strong>接続</strong>:Rails と Cloud SQL の間の通信路。一度作ると、閉じるまで何度でも SQL を送れる。Cloud SQL は、開いている接続を1本ずつ数える。</li>
+      </ul>
+    </div>
+    <p>スレッドが DB にクエリを送るには、DB への接続が必要です。クエリのたびに接続を作ると、通信の確立とパスワードの認証を毎回行うので遅くなります。また、1本の接続を2本のスレッドが同時に使うことはできません。そこで <span class="t-a2">Rails</span>(Active Record)は、作った接続を閉じずに接続プールに置き、スレッドに貸し出します。</p>
+    <ol class="flow">
+      <li>スレッドが、接続プールから接続を1本借りる。空いている接続がなければ、上限までは新しく作る</li>
+      <li>スレッドが、その接続で <span class="t-a3">Cloud SQL</span> にクエリを送る</li>
+      <li>処理が終わると、スレッドが接続を接続プールに返す。接続は閉じずに、次のスレッドが使い回す</li>
+    </ol>
+    <p>スレッドは、1本につき接続を最大1本使います。そのため、2つの数はそろえます(図3)。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 780 264" role="img" aria-label="比較図。スレッド 3 本、接続の上限 2 本 では、スレッド 3 に貸す接続がなく、接続が返されるのを待つ。スレッド 3 本、接続の上限 5 本(今の本番)では、接続 4 と 5 を使わない。スレッド 3 本、接続の上限 3 本(Issue #35)では、スレッド 1 から 3 に、接続 1 から 3 が 1 本ずつ対応し、過不足がない">
+          <rect x="12" y="12" width="244" height="240" rx="10" class="band"/>
+          <text x="134" y="36" text-anchor="middle" class="b">スレッド 3 本 · 接続の上限 2 本</text>
+          <text x="134" y="54" text-anchor="middle" class="s">接続が足りない</text>
+          <text x="134" y="72" text-anchor="middle" class="s">スレッド 3 は、接続が返されるのを待つ</text>
+          <rect x="32" y="84" width="84" height="26" rx="5" class="bx-a2"/><text x="74" y="102" text-anchor="middle">スレッド 1</text>
+          <rect x="32" y="116" width="84" height="26" rx="5" class="bx-a2"/><text x="74" y="134" text-anchor="middle">スレッド 2</text>
+          <rect x="32" y="148" width="84" height="26" rx="5" class="bx-a2"/><text x="74" y="166" text-anchor="middle">スレッド 3</text>
+          <rect x="152" y="84" width="84" height="26" rx="5" class="bx-a2"/><text x="194" y="102" text-anchor="middle">接続 1</text>
+          <rect x="152" y="116" width="84" height="26" rx="5" class="bx-a2"/><text x="194" y="134" text-anchor="middle">接続 2</text>
+          <rect x="152" y="148" width="84" height="26" rx="5" class="bx-frame"/><text x="194" y="166" text-anchor="middle" class="s">なし</text>
+          <line x1="116" y1="97" x2="152" y2="97" class="ln"/>
+          <line x1="116" y1="129" x2="152" y2="129" class="ln"/>
+
+          <rect x="268" y="12" width="244" height="240" rx="10" class="band"/>
+          <text x="390" y="36" text-anchor="middle" class="b">スレッド 3 本 · 接続の上限 5 本</text>
+          <text x="390" y="54" text-anchor="middle" class="s">今の本番</text>
+          <text x="390" y="72" text-anchor="middle" class="s">接続 4・5 は使わない</text>
+          <rect x="288" y="84" width="84" height="26" rx="5" class="bx-a2"/><text x="330" y="102" text-anchor="middle">スレッド 1</text>
+          <rect x="288" y="116" width="84" height="26" rx="5" class="bx-a2"/><text x="330" y="134" text-anchor="middle">スレッド 2</text>
+          <rect x="288" y="148" width="84" height="26" rx="5" class="bx-a2"/><text x="330" y="166" text-anchor="middle">スレッド 3</text>
+          <rect x="408" y="84" width="84" height="26" rx="5" class="bx-a2"/><text x="450" y="102" text-anchor="middle">接続 1</text>
+          <rect x="408" y="116" width="84" height="26" rx="5" class="bx-a2"/><text x="450" y="134" text-anchor="middle">接続 2</text>
+          <rect x="408" y="148" width="84" height="26" rx="5" class="bx-a2"/><text x="450" y="166" text-anchor="middle">接続 3</text>
+          <rect x="408" y="180" width="84" height="26" rx="5" class="bx-free"/><text x="450" y="198" text-anchor="middle" class="s">接続 4</text>
+          <rect x="408" y="212" width="84" height="26" rx="5" class="bx-free"/><text x="450" y="230" text-anchor="middle" class="s">接続 5</text>
+          <line x1="372" y1="97" x2="408" y2="97" class="ln"/>
+          <line x1="372" y1="129" x2="408" y2="129" class="ln"/>
+          <line x1="372" y1="161" x2="408" y2="161" class="ln"/>
+
+          <rect x="524" y="12" width="244" height="240" rx="10" class="bx-here"/>
+          <text x="646" y="36" text-anchor="middle" class="b">スレッド 3 本 · 接続の上限 3 本</text>
+          <text x="646" y="54" text-anchor="middle" class="lab-here">Issue #35 で決める値</text>
+          <text x="646" y="72" text-anchor="middle" class="s">過不足がない</text>
+          <rect x="544" y="84" width="84" height="26" rx="5" class="bx-a2"/><text x="586" y="102" text-anchor="middle">スレッド 1</text>
+          <rect x="544" y="116" width="84" height="26" rx="5" class="bx-a2"/><text x="586" y="134" text-anchor="middle">スレッド 2</text>
+          <rect x="544" y="148" width="84" height="26" rx="5" class="bx-a2"/><text x="586" y="166" text-anchor="middle">スレッド 3</text>
+          <rect x="664" y="84" width="84" height="26" rx="5" class="bx-a2"/><text x="706" y="102" text-anchor="middle">接続 1</text>
+          <rect x="664" y="116" width="84" height="26" rx="5" class="bx-a2"/><text x="706" y="134" text-anchor="middle">接続 2</text>
+          <rect x="664" y="148" width="84" height="26" rx="5" class="bx-a2"/><text x="706" y="166" text-anchor="middle">接続 3</text>
+          <line x1="628" y1="97" x2="664" y2="97" class="ln"/>
+          <line x1="628" y1="129" x2="664" y2="129" class="ln"/>
+          <line x1="628" y1="161" x2="664" y2="161" class="ln"/>
+        </svg>
+      </div>
+      <figcaption>図3:3つとも、3 本のスレッドが同時に DB を使う瞬間です。線は、スレッドが接続を借りていることを表します。左では、スレッド 3 が接続を待ち、待ちきれないとエラーになります。中央(今の本番)では、接続 4・5 は使われませんが、Cloud SQL の接続数を計算するときは 5 本として数える必要があります(4章の図6)。</figcaption>
+    </figure>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">3</span>全体の流れ</h2>
+    <p>リクエストが届いてからインスタンスが止まるまでを、3つの場面に分けました。縦の点線が登場人物で、上から下へ時間が進みます。矢印の色は、矢印を出した側の色です。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 700 600" role="img" aria-label="場面の帯つきシーケンス図。場面 1 起動する:Cloud Run が Puma と Rails を起動し、スレッドを用意する。場面 2 処理する:ブラウザ、Firebase Hosting、Cloud Run、Puma と Rails の順にリクエストが進み、Rails が Cloud SQL にクエリを送り、結果を受け取り、レスポンスを逆の順に返す。場面 3 止める:Cloud Run がインスタンスを停止し、Rails の接続が閉じる">
+          <defs>
+            <marker id="f2-a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a1"/></marker>
+            <marker id="f2-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a2"/></marker>
+            <marker id="f2-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a3"/></marker>
+            <marker id="f2-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a4"/></marker>
+            <marker id="f2-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+
+          <rect x="0" y="96" width="700" height="90" class="band"/>
+          <rect x="0" y="190" width="700" height="300" class="band-here"/>
+          <rect x="0" y="494" width="700" height="90" class="band"/>
+
+          <text x="12" y="120" class="scene">場面 1</text>
+          <text x="12" y="138" class="a">起動する</text>
+          <text x="12" y="214" class="scene">場面 2</text>
+          <text x="12" y="232" class="a">処理する</text>
+          <text x="12" y="248" class="lab-here">今ここ</text>
+          <text x="12" y="518" class="scene">場面 3</text>
+          <text x="12" y="536" class="a">止める</text>
+
+          <path d="M132 38 V30 H228 V38" class="ln"/>
+          <text x="180" y="22" text-anchor="middle" class="s">利用者の端末</text>
+          <path d="M242 38 V30 H668 V38" class="ln"/>
+          <text x="455" y="22" text-anchor="middle" class="s">プロジェクト knowledge-library-prod</text>
+
+          <line x1="180" y1="84" x2="180" y2="584" class="life"/>
+          <line x1="290" y1="84" x2="290" y2="584" class="life"/>
+          <line x1="400" y1="84" x2="400" y2="584" class="life"/>
+          <line x1="510" y1="84" x2="510" y2="584" class="life"/>
+          <line x1="620" y1="84" x2="620" y2="584" class="life"/>
+
+          <rect x="132" y="44" width="96" height="40" rx="7" class="bx-a1"/>
+          <text x="180" y="69" text-anchor="middle" class="b a">ブラウザ</text>
+          <rect x="242" y="44" width="96" height="40" rx="7" class="bx-a4"/>
+          <text x="290" y="60" text-anchor="middle" class="b a">Firebase</text>
+          <text x="290" y="76" text-anchor="middle" class="b a">Hosting</text>
+          <rect x="352" y="44" width="96" height="40" rx="7" class="bx-a5"/>
+          <text x="400" y="69" text-anchor="middle" class="b a">Cloud Run</text>
+          <rect x="462" y="44" width="96" height="40" rx="7" class="bx-a2"/>
+          <text x="510" y="60" text-anchor="middle" class="b a">Puma と</text>
+          <text x="510" y="76" text-anchor="middle" class="b a">Rails</text>
+          <rect x="572" y="44" width="96" height="40" rx="7" class="bx-a3"/>
+          <text x="620" y="69" text-anchor="middle" class="b a">Cloud SQL</text>
+
+          <!-- 場面 1 -->
+          <line x1="400" y1="126" x2="506" y2="126" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <text x="455" y="118" text-anchor="middle" class="a">起動</text>
+          <rect x="458" y="143" width="104" height="24" rx="5" class="bx-a2"/>
+          <text x="510" y="160" text-anchor="middle" class="a">スレッドを用意</text>
+
+          <!-- 場面 2 -->
+          <line x1="180" y1="220" x2="286" y2="220" class="ln-a1" marker-end="url(#f2-a1)"/>
+          <text x="235" y="212" text-anchor="middle" class="a">リクエスト</text>
+          <line x1="290" y1="250" x2="396" y2="250" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="345" y="242" text-anchor="middle" class="a">転送</text>
+          <line x1="400" y1="280" x2="506" y2="280" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <text x="455" y="272" text-anchor="middle" class="a">空いた台へ</text>
+          <rect x="458" y="297" width="104" height="24" rx="5" class="bx-a2"/>
+          <text x="510" y="314" text-anchor="middle" class="a">スレッドが処理</text>
+          <line x1="510" y1="340" x2="616" y2="340" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="565" y="332" text-anchor="middle" class="a">クエリ</text>
+          <line x1="620" y1="370" x2="514" y2="370" class="ln-a3" marker-end="url(#f2-a3)"/>
+          <text x="565" y="362" text-anchor="middle" class="a">結果</text>
+          <line x1="510" y1="400" x2="404" y2="400" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="455" y="392" text-anchor="middle" class="a">レスポンス</text>
+          <line x1="400" y1="430" x2="294" y2="430" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <text x="345" y="422" text-anchor="middle" class="a">レスポンス</text>
+          <line x1="290" y1="460" x2="184" y2="460" class="ln-a4" marker-end="url(#f2-a4)"/>
+          <text x="235" y="452" text-anchor="middle" class="a">レスポンス</text>
+
+          <!-- 場面 3 -->
+          <line x1="400" y1="524" x2="506" y2="524" class="ln-a5" marker-end="url(#f2-a5)"/>
+          <text x="455" y="516" text-anchor="middle" class="a">停止</text>
+          <line x1="510" y1="554" x2="616" y2="554" class="ln-a2" marker-end="url(#f2-a2)"/>
+          <text x="565" y="546" text-anchor="middle" class="a">接続を閉じる</text>
+        </svg>
+      </div>
+      <figcaption>図4:場面 1 は、リクエストを渡せるインスタンスがないときだけ起きます。そのとき、届いたリクエストは、場面 1 が終わるまで待ってから場面 2 に進みます(コールドスタート)。ブラウザが Cloud Run や Cloud SQL を直接呼ぶ場面はありません。</figcaption>
+    </figure>
+
+    <h3 class="scene-h">場面 1:起動する<span class="tag">インスタンスが 0 台のとき、または全台が満杯のとき</span></h3>
+    <ol class="flow">
+      <li><span class="t-a5">Cloud Run</span> が、リクエストを渡せるインスタンスがないとき、新しいインスタンスを起動し、<span class="t-a2">Puma と Rails</span> を動かす。最大インスタンス数(2)を超えては起動しない</li>
+      <li><span class="t-a2">Puma</span> が、スレッドを 3 本用意する。<span class="t-a2">Rails</span> の接続プールは、まだ空のまま(接続は、場面 2 の ⑤ で初めて作る)</li>
+    </ol>
+
+    <h3 class="scene-h">場面 2:処理する<span class="tag">リクエストのたび</span></h3>
+    <ol class="flow">
+      <li><span class="t-a1">ブラウザ</span> が、<span class="t-a4">Firebase Hosting</span> に、<code>/api/articles</code> のリクエストを送る</li>
+      <li><span class="t-a4">Firebase Hosting</span> が、<span class="t-a5">Cloud Run</span> のサービス <code>api</code> に、リクエストを転送する</li>
+      <li><span class="t-a5">Cloud Run</span> が、処理中のリクエストが同時実行数(3)より少ないインスタンスを選び、その <span class="t-a2">Puma</span> にリクエストを渡す</li>
+      <li><span class="t-a2">Puma</span> が、空いているスレッド1本にリクエストを割り当て、そのスレッドで <span class="t-a2">Rails</span> が処理する</li>
+      <li><span class="t-a2">Rails</span> が、接続プールから接続を1本借り、<span class="t-a3">Cloud SQL</span> にクエリを送る。接続がまだなければ、このときに作る</li>
+      <li><span class="t-a3">Cloud SQL</span> が、<span class="t-a2">Rails</span> に結果を返す。<span class="t-a2">Rails</span> は、処理を終えると、接続を接続プールに返す</li>
+      <li><span class="t-a2">Rails</span> が、<span class="t-a5">Cloud Run</span> にレスポンスを返す</li>
+      <li><span class="t-a5">Cloud Run</span> が、<span class="t-a4">Firebase Hosting</span> にレスポンスを返す</li>
+      <li><span class="t-a4">Firebase Hosting</span> が、<span class="t-a1">ブラウザ</span> にレスポンスを返す</li>
+    </ol>
+    <div class="note here"><p>Issue #35 で決めるのは、この場面の ③ の「同時実行数」、④ の「スレッド数」、⑤ の「接続プール」と、場面 1 の「最大インスタンス数」、場面 3 の「最小インスタンス数」です。どれもコードではなく、設定の値です。</p></div>
+
+    <h3 class="scene-h">場面 3:止める<span class="tag">リクエストがない状態が続いたとき</span></h3>
+    <ol class="flow">
+      <li><span class="t-a5">Cloud Run</span> が、リクエストのない状態が続いたインスタンスを停止する。Cloud Run の文書では、アイドル状態のインスタンスを残すのは最大15分。最小インスタンス数が 0 なので、全台が停止することもある</li>
+      <li><span class="t-a2">Rails</span> のプロセスが終了し、<span class="t-a3">Cloud SQL</span> との接続が閉じる</li>
+    </ol>
+  </section>
+
+  <section id="count">
+    <h2><span class="num">4</span>リクエストの数と、DB の接続の数を追う</h2>
+    <p>3章の流れのうち、Issue #35 で大事なのは「何件のリクエストを、どこで処理し、どこで待たせるか」と「DB の接続が、全体で何本になるか」です。この章では、この2つの数だけを追います。</p>
+
+    <h3>同時に 7 件のリクエストが届いたとき</h3>
+    <p>例として、同時に 7 件のリクエストが届いたときを、今の設定と変更後の設定で比べます。2つの設定の違いは、Cloud Run がインスタンスの空きを「Puma が処理できる数」で数えるかどうかです。</p>
+    <div class="note here defs">
+      <ul>
+        <li><strong>同時実行数</strong>:Cloud Run が、1つのインスタンスに同時に送るリクエストの上限。リクエストの数であり、DB の接続の数ではない。</li>
+      </ul>
+    </div>
+    <p>Issue #35 の設定では、次の3つの数がすべて 3 になります。数は同じですが、数えているものは別です。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>数</th><th>数えているもの</th><th>決める側</th></tr></thead>
+        <tbody>
+          <tr><td>同時実行数 3</td><td>インスタンスに同時に送るリクエスト</td><td><span class="t-a5">Cloud Run</span></td></tr>
+          <tr><td>スレッド 3 本</td><td>インスタンスの中で同時に処理できるリクエスト</td><td><span class="t-a2">Puma</span></td></tr>
+          <tr><td>接続の上限 3 本</td><td>Cloud SQL への接続</td><td><span class="t-a2">Rails の接続プール</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>リクエストは、表の上から順に進みます。まず Cloud Run が、インスタンスにリクエストを 3 件まで送ります。次に、Puma が、1件ずつスレッドに割り当てます。最後に、スレッドが接続を1本ずつ借ります。図5 は、このうち上の2行(同時実行数とスレッド)がそろっていないと何が起きるかを描いたものです。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 780 516" role="img" aria-label="縦に2段の比較図。上段は今の設定:リクエストの同時実行数 80、最大インスタンス数 1。Cloud Run は同時に届いた 7 件すべてをインスタンス 1 に送り、Puma が 3 件を処理し、4 件が Puma の中で待つ。下段は変更後:リクエストの同時実行数 3、最大インスタンス数 2。Cloud Run は 3 件をインスタンス 1 に、3 件を新しく起動したインスタンス 2 に送り、7 件目は空くまで待たせる">
+          <defs>
+            <marker id="f3-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="mk-a5"/></marker>
+          </defs>
+
+          <!-- 上段:今の設定 -->
+          <rect x="10" y="10" width="760" height="240" rx="12" class="bx-frame"/>
+          <text x="24" y="34" class="b">今の設定</text>
+          <text x="24" y="56" class="s">リクエストの同時実行数 80:Cloud Run が、インスタンス 1 台に、同時にリクエストを 80 件まで送る</text>
+          <text x="24" y="74" class="s">最大インスタンス数 1:Cloud Run が起動するインスタンスは、1 台まで</text>
+
+          <rect x="24" y="92" width="220" height="124" rx="8" class="bx-a5"/>
+          <text x="38" y="114" class="b">Cloud Run</text>
+          <text x="38" y="136" class="s">同時に 7 件のリクエストを受け取り、</text>
+          <text x="38" y="154" class="s">7 件すべてをインスタンス 1 に送る</text>
+          <line x1="248" y1="154" x2="284" y2="154" class="ln-a5" marker-end="url(#f3-a5)"/>
+
+          <rect x="288" y="92" width="466" height="124" rx="8" class="bx-a2"/>
+          <text x="302" y="114" class="b">インスタンス 1(Puma と Rails)</text>
+          <rect x="302" y="126" width="170" height="78" rx="6" class="bx-frame"/>
+          <text x="312" y="144" class="s">Puma が処理中(3 件)</text>
+          <circle cx="338" cy="180" r="12" class="bx-a1"/><text x="338" y="184" text-anchor="middle" class="a">1</text>
+          <circle cx="372" cy="180" r="12" class="bx-a1"/><text x="372" y="184" text-anchor="middle" class="a">2</text>
+          <circle cx="406" cy="180" r="12" class="bx-a1"/><text x="406" y="184" text-anchor="middle" class="a">3</text>
+          <rect x="486" y="126" width="254" height="78" rx="6" class="bx-frame"/>
+          <text x="496" y="144" class="s">Puma の中で待つ(4 件)</text>
+          <circle cx="520" cy="180" r="12" class="bx-a1"/><text x="520" y="184" text-anchor="middle" class="a">4</text>
+          <circle cx="554" cy="180" r="12" class="bx-a1"/><text x="554" y="184" text-anchor="middle" class="a">5</text>
+          <circle cx="588" cy="180" r="12" class="bx-a1"/><text x="588" y="184" text-anchor="middle" class="a">6</text>
+          <circle cx="622" cy="180" r="12" class="bx-a1"/><text x="622" y="184" text-anchor="middle" class="a">7</text>
+          <text x="390" y="238" text-anchor="middle" class="s">Cloud Run からは、インスタンス 1 にまだ空きがあるように見える(80 件まで送れるため)</text>
+
+          <!-- 下段:変更後 -->
+          <rect x="10" y="266" width="760" height="240" rx="12" class="bx-frame"/>
+          <text x="24" y="290" class="b">変更後(Issue #35)</text>
+          <text x="24" y="312" class="s">リクエストの同時実行数 3:Cloud Run が、インスタンス 1 台に、同時にリクエストを 3 件まで送る</text>
+          <text x="24" y="330" class="s">最大インスタンス数 2:Cloud Run が起動するインスタンスは、2 台まで</text>
+
+          <rect x="24" y="348" width="220" height="124" rx="8" class="bx-a5"/>
+          <text x="38" y="370" class="b">Cloud Run</text>
+          <text x="38" y="392" class="s">同時に 7 件のリクエストを受け取り、</text>
+          <text x="38" y="410" class="s">3 件ずつインスタンスに送る</text>
+          <circle cx="50" cy="446" r="12" class="bx-a1"/><text x="50" y="450" text-anchor="middle" class="a">7</text>
+          <text x="68" y="450" class="s">7 件目は、空くまで待たせる</text>
+          <line x1="248" y1="377" x2="284" y2="377" class="ln-a5" marker-end="url(#f3-a5)"/>
+          <line x1="248" y1="443" x2="284" y2="443" class="ln-a5" marker-end="url(#f3-a5)"/>
+
+          <rect x="288" y="348" width="466" height="58" rx="8" class="bx-a2"/>
+          <text x="302" y="382" class="b">インスタンス 1</text>
+          <text x="414" y="382" class="s">Puma が処理中(3 件)</text>
+          <circle cx="620" cy="377" r="12" class="bx-a1"/><text x="620" y="381" text-anchor="middle" class="a">1</text>
+          <circle cx="654" cy="377" r="12" class="bx-a1"/><text x="654" y="381" text-anchor="middle" class="a">2</text>
+          <circle cx="688" cy="377" r="12" class="bx-a1"/><text x="688" y="381" text-anchor="middle" class="a">3</text>
+
+          <rect x="288" y="414" width="466" height="58" rx="8" class="bx-a2 dash"/>
+          <text x="302" y="448" class="b">インスタンス 2</text>
+          <text x="414" y="440" class="s">Cloud Run が新しく起動し、</text>
+          <text x="414" y="456" class="s">Puma が処理中(3 件)</text>
+          <circle cx="620" cy="443" r="12" class="bx-a1"/><text x="620" y="447" text-anchor="middle" class="a">4</text>
+          <circle cx="654" cy="443" r="12" class="bx-a1"/><text x="654" y="447" text-anchor="middle" class="a">5</text>
+          <circle cx="688" cy="443" r="12" class="bx-a1"/><text x="688" y="447" text-anchor="middle" class="a">6</text>
+          <text x="390" y="494" text-anchor="middle" class="s">2 台とも空かなければ、Cloud Run が 7 件目に 429 を返す</text>
+        </svg>
+      </div>
+      <figcaption>図5:丸がリクエストです。同時実行数は、このリクエストの数の上限です。今の設定では、待っているリクエストもインスタンスの中にあるので、Cloud Run は満杯だと判断しません。変更後は、待つ場所が Cloud Run になり、空いたインスタンスに順に渡されます。図は簡略化しています(下の「簡略化したこと」)。</figcaption>
+    </figure>
+
+    <h3>同時実行数をスレッド数にそろえる理由</h3>
+    <p>結論から言うと、<strong>同時実行数をスレッド数と同じ 3 にすると、Cloud Run が数えるインスタンスの空きと、Puma が実際に処理できる数が一致する</strong>からです。理由は3つあります。</p>
+    <ol class="flow">
+      <li><strong>80 のままでは、Cloud Run が台数を増やす判断を誤る。</strong>4 件目以降は Puma の中で待ちますが、Cloud Run は待っているリクエストも「インスタンスが受け付けた数」として数えます。そのため、インスタンスはまだ満杯ではないと判断し、2 台目を起動しません(図5 の上段)。</li>
+      <li><strong>3 にすると、処理できない分は別のインスタンスに回る。</strong>4 件目は、Cloud Run が別のインスタンスに送ります。すべてのインスタンスが満杯なら、Cloud Run がリクエストを待たせ、一定の時間内に空かなければ 429 を返します(図5 の下段)。</li>
+      <li><strong>1 台で処理できる量は減らない。</strong>Puma が同時に処理できるのは、もともと 3 件です。同時実行数を 80 にしても、4 件目以降は処理されずに待っているだけなので、3 にして失うものはありません。</li>
+    </ol>
+    <p>つまり、80 のままにする利点はなく、Cloud Run の判断がずれる欠点だけがあります。仕様書 035 の判断 A は、このことです。スレッド数は、Rails 8 の初めの値の 3 のままにします(判断 B)。</p>
+
+    <h3>DB の接続を数える</h3>
+    <p>次に、Cloud SQL の側から見て、接続が最も多くなるときを数えます。サービス <code>api</code> が最大の 2 台まで増え、同時にジョブ <code>migrate</code> が動いているときです。</p>
+    <figure>
+      <div class="figbox">
+        <svg class="wide" viewBox="0 0 760 232" role="img" aria-label="接続の内訳。最大接続数 25 のうち、サービス api のインスタンス 1 が 3、インスタンス 2 が 3、ジョブ migrate が 5、管理者用の予約が 3 で、最も多いときの合計は 14。余りは 11">
+          <line x1="510" y1="24" x2="510" y2="216" class="ln dash"/>
+          <text x="514" y="18" class="s">最も多いとき 14</text>
+
+          <text x="12" y="45" class="a">サービス api · インスタンス 1</text>
+          <rect x="231" y="30" width="18" height="20" rx="3" class="bx-a2"/>
+          <rect x="251" y="30" width="18" height="20" rx="3" class="bx-a2"/>
+          <rect x="271" y="30" width="18" height="20" rx="3" class="bx-a2"/>
+          <text x="295" y="45" class="a b">3</text>
+
+          <text x="12" y="75" class="a">サービス api · インスタンス 2</text>
+          <rect x="291" y="60" width="18" height="20" rx="3" class="bx-a2 dash"/>
+          <rect x="311" y="60" width="18" height="20" rx="3" class="bx-a2 dash"/>
+          <rect x="331" y="60" width="18" height="20" rx="3" class="bx-a2 dash"/>
+          <text x="355" y="75" class="a b">3</text>
+
+          <text x="12" y="105" class="a">ジョブ migrate</text>
+          <rect x="351" y="90" width="18" height="20" rx="3" class="bx-a2"/>
+          <rect x="371" y="90" width="18" height="20" rx="3" class="bx-a2"/>
+          <rect x="391" y="90" width="18" height="20" rx="3" class="bx-a2"/>
+          <rect x="411" y="90" width="18" height="20" rx="3" class="bx-a2"/>
+          <rect x="431" y="90" width="18" height="20" rx="3" class="bx-a2"/>
+          <text x="455" y="105" class="a b">5</text>
+
+          <text x="12" y="135" class="a">管理者用の予約</text>
+          <rect x="451" y="120" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="471" y="120" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="491" y="120" width="18" height="20" rx="3" class="bx-a3"/>
+          <text x="515" y="135" class="a b">3</text>
+
+          <text x="12" y="165" class="a">余り</text>
+          <rect x="511" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="531" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="551" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="571" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="591" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="611" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="631" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="651" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="671" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="691" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <rect x="711" y="150" width="18" height="20" rx="3" class="bx-free"/>
+          <text x="735" y="165" class="a b">11</text>
+
+          <text x="12" y="205" class="a b">Cloud SQL の最大接続数</text>
+          <rect x="231" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="251" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="271" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="291" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="311" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="331" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="351" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="371" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="391" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="411" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="431" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="451" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="471" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="491" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="511" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="531" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="551" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="571" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="591" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="611" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="631" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="651" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="671" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="691" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <rect x="711" y="190" width="18" height="20" rx="3" class="bx-a3"/>
+          <text x="735" y="205" class="a b">25</text>
+        </svg>
+      </div>
+      <figcaption>図6:四角1つが接続1本です。上の4行を左から積み上げると 14 本になり、一番下の行の最大接続数 25 に収まります。インスタンス 2 の破線は、図1 と同じく、混んだときだけ使う接続です。</figcaption>
+    </figure>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>使う側</th><th>計算</th><th>接続数</th></tr></thead>
+        <tbody>
+          <tr><td>サービス <code>api</code></td><td>最大インスタンス数 2 × 接続の上限 3 本</td><td class="num">6</td></tr>
+          <tr><td>ジョブ <code>migrate</code></td><td>接続の上限 5 本(ジョブには <code>RAILS_MAX_THREADS</code> がないため、<code>database.yml</code> の初めの値)</td><td class="num">5</td></tr>
+          <tr><td>管理者用の予約</td><td>PostgreSQL が管理者のために残しておく接続(初めの値)</td><td class="num">3</td></tr>
+          <tr><td><strong>合計</strong></td><td>最大接続数 25 に収まる。余りの 11 は、Cloud SQL が内部で使う接続と、手で接続する作業のための余裕</td><td class="num"><strong>14</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>同じ式を逆に使うと、DB の側から決まる最大インスタンス数の上限が分かります。予約と余裕を合わせて 5 本残すと、(25 − 5(ジョブ)− 5(予約と余裕))÷ 3(1台あたり)= 5 なので、上限は 5 台です。</p>
+    <h3>参考:CPU を 2 つにするときの増やし方</h3>
+    <p>Issue #35 では設定しません。将来、インスタンスの CPU を増やすときのために、増やし方を残します。上の計算は、worker が 1 つである前提です。結論から言うと、<strong>増やすのは <code>WEB_CONCURRENCY</code>(worker の数)で、それに合わせて変えるのは同時実行数と、この章の計算です。<code>RAILS_MAX_THREADS</code> は変えません。</strong></p>
+    <p><strong><code>RAILS_MAX_THREADS</code> は、worker 1つあたりの値です。</strong>worker はそれぞれ、自分のスレッドと接続プールを持ちます。<code>RAILS_MAX_THREADS=3</code> は、「worker 1つあたり、スレッド 3 本、接続の上限 3 本」という意味です。worker を 2 にすると、3 本の組が2つになり、インスタンス1台の合計は自動で 6 本になります。</p>
+    <pre class="tree"><code>インスタンス 1台(CPU 2 つ)
+├─ worker 1:スレッド 3 本、接続 最大 3 本
+└─ worker 2:スレッド 3 本、接続 最大 3 本
+   → 1台の合計:スレッド 6 本、接続 最大 6 本</code></pre>
+    <p>もし <code>RAILS_MAX_THREADS</code> を 6 にすると、worker 1つあたりが 6 本になります。合計は、スレッド 12 本、接続 12 本になってしまいます。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>設定</th><th>今</th><th>CPU 2 つにするとき</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>インスタンスの CPU</td><td>1</td><td>2</td><td>worker を増やす前提</td></tr>
+          <tr><td><code>WEB_CONCURRENCY</code>(worker の数)</td><td>なし(1)</td><td>2</td><td>CPU の数に合わせる。CPU を増やしても、worker は自動では増えない</td></tr>
+          <tr><td><code>RAILS_MAX_THREADS</code></td><td>3</td><td><strong>3 のまま</strong></td><td>worker 1つあたりの値</td></tr>
+          <tr><td>リクエストの同時実行数(Cloud Run)</td><td>3</td><td><strong>6</strong></td><td>インスタンス1台で同時に処理できるリクエストが、2 × 3 = 6 件になる</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Cloud SQL の計算もやり直します。</strong>インスタンス1台の接続は 6 本になります。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>使う側</th><th>計算</th><th>接続数</th></tr></thead>
+        <tbody>
+          <tr><td>サービス <code>api</code></td><td>最大インスタンス数 2 × worker 2 × 接続の上限 3</td><td class="num">12</td></tr>
+          <tr><td>ジョブ <code>migrate</code></td><td>今と同じ</td><td class="num">5</td></tr>
+          <tr><td>管理者用の予約</td><td>今と同じ</td><td class="num">3</td></tr>
+          <tr><td><strong>合計</strong></td><td>最大接続数 25 に収まる</td><td class="num"><strong>20</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>ただし、DB の側から決まる最大インスタンス数の上限は下がります。(25 − 5(ジョブ)− 5(予約と余裕))÷ 6(1台あたり)= 2.5 なので、上限は 5 台から 2 台になります。</p>
+
+    <h3>最大インスタンス数を 2 にする理由</h3>
+    <p>結論から言うと、<strong>DB の側から決まる上限 5 台の範囲で、今の利用に足りる最小の台数より1つ多い 2 台にする</strong>ためです。</p>
+    <ol class="flow">
+      <li><strong>1 台のままでは、台数が増えたときの計算を設定で示せない。</strong>今の利用者はオーナーだけなので 1 台で足ります。しかし 1 台では、インスタンスが増えても接続数が上限に収まることを、実際の設定として確認できません。</li>
+      <li><strong>5 台にすると、思わぬアクセスで費用が増えやすい。</strong>Cloud Run の費用は、インスタンスがリクエストを処理している時間で決まります。最大インスタンス数は、大量のアクセスを受けたときに、費用が増える速さの上限になります。2 台なら、1 台のときの2倍までに抑えられます。</li>
+      <li><strong>2 台で困る場面は、今はない。</strong>2 台で同時に処理できるのは 6 件です。7 件以上が同時に届く利用は、今はありません。上げるときは、上の式の上限 5 台までは、DB の設定を変えずに上げられます。</li>
+    </ol>
+    <p>つまり、2 台にすると、計算を設定で示せて、費用の上限も小さく保てます。仕様書 035 の判断 C は、このことです。</p>
+
+    <h3>最小インスタンス数を 0 のままにする理由</h3>
+    <p>結論から言うと、<strong>リクエストがない間の費用を 0 にし、その代わりに生じるコールドスタートの時間を、計測して記録する</strong>ためです。最小インスタンス数を 1 にすると、リクエストがない間もインスタンスが動き続け、課金されます。0 のままにすると、場面 3 で全台が止まった後の最初のリクエストは、場面 1 の起動を待ちます。この待ち時間がどれくらいかを、AC-4 で計測します(仕様書 035 の判断 D)。計測の結果は、フェーズ3 以降の速度改善を考えるときの材料になります。</p>
+
+    <h3>私たちが決めるのは、4つの値だけ</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>すること</th><th>誰がするか</th></tr></thead>
+        <tbody>
+          <tr><td>どのインスタンスに送るかを決める。インスタンスを起動・停止する。満杯のときに待たせ、429 を返す</td><td><span class="t-a5">Cloud Run</span></td></tr>
+          <tr><td>スレッドにリクエストを割り当てる</td><td><span class="t-a2">Puma</span>(gem)</td></tr>
+          <tr><td>接続を貸し出し、返してもらい、使い回す</td><td><span class="t-a2">Rails</span> の Active Record</td></tr>
+          <tr><td>最大接続数を超える接続を拒否する</td><td><span class="t-a3">Cloud SQL</span></td></tr>
+          <tr class="now"><td>同時実行数、最大インスタンス数、最小インスタンス数、スレッド数(接続の上限も同じ値)を決める</td><td>私たち(Issue #35)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Rails のコードは変えません。<code>puma.rb</code> と <code>database.yml</code> は、どちらも環境変数 <code>RAILS_MAX_THREADS</code> を読むので、Cloud Run にこの環境変数を足すだけで、スレッド数と接続プールが同じ値になります。</p>
+
+    <div class="note">
+      <p><strong>簡略化したこと</strong></p>
+      <ul>
+        <li>図5 では、インスタンスが満杯になってから 2 台目を起動するように描きました。Cloud Run の文書では、Cloud Run は同時実行数と CPU の使用率がそれぞれ上限の 60% ほどに達した時点で、台数を増やし始めます。</li>
+        <li>Cloud Run がリクエストを待たせる時間は、Cloud Run の文書では、コンテナの平均の起動時間の 3.5 倍か 10 秒の、長いほうです。</li>
+      </ul>
+      <p><strong>確認していないこと</strong></p>
+      <ul>
+        <li>管理者用の予約の 3 は、PostgreSQL の初めの値です。Cloud SQL での実際の値と、Cloud SQL が内部で使う接続の数は確認していません。Issue #49 で DB を作り直した後に、<code>SHOW max_connections</code> と <code>SHOW superuser_reserved_connections</code> で確認します。</li>
+        <li>コールドスタートの時間は、まだ計測していません(AC-4)。</li>
+        <li>上限を超えるリクエストが来たときの実際の振る舞い(待ち時間と 429)は、フェーズ5 の k6 による負荷試験で確認します。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="words">
+    <h2><span class="num">5</span>言葉:設定の名前</h2>
+    <p>図と本文の言葉が、設定ではどの名前になるかの対応です。Cloud Run の画面での項目名は、設定を変える作業の直前に説明します。</p>
+    <h3>Cloud Run と Cloud SQL の側の名前</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>名前</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td><code>containerConcurrency</code></td><td>同時実行数。gcloud では <code>--concurrency</code>。版(リビジョン)ごとの設定</td><td>図1 のサービス api の「同時実行数 3」、図4 場面 2 ③</td></tr>
+          <tr><td><code>run.googleapis.com/maxScale</code></td><td>サービス全体の最大インスタンス数。版をまたいだ合計の台数に効く</td><td>図1 の「最大インスタンス数 2」、図4 場面 1</td></tr>
+          <tr><td><code>autoscaling.knative.dev/maxScale</code></td><td>版ごとの最大インスタンス数(今は 20)。サービス全体の値と比べて、小さいほうが効く</td><td>図には描いていない</td></tr>
+          <tr><td><code>autoscaling.knative.dev/minScale</code></td><td>最小インスタンス数(0)</td><td>図4 場面 3</td></tr>
+          <tr><td><code>max_connections</code>(Cloud SQL)</td><td>Cloud SQL の最大接続数。DB 全体の上限</td><td>図1 の Cloud SQL、図6 の一番下の行</td></tr>
+          <tr><td><code>superuser_reserved_connections</code></td><td>PostgreSQL が管理者のために残しておく接続の数</td><td>図6 の「管理者用の予約」</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>私たちのコードの側の名前</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>名前</th><th>何か</th><th>図のどこか</th></tr></thead>
+        <tbody>
+          <tr><td><code>WEB_CONCURRENCY</code></td><td>環境変数。Puma の worker の数。設定していないので 1。Issue #35 では設定しない</td><td>図2 の点線の枠(worker 1 つ)</td></tr>
+          <tr><td><code>RAILS_MAX_THREADS</code></td><td>環境変数。Issue #35 で、Cloud Run のサービス <code>api</code> に <code>3</code> を足す</td><td>図1 の「スレッド 3」と「接続の上限 3 本」の両方、図3 の右</td></tr>
+          <tr><td><code>threads threads_count, threads_count</code>(<code>api/config/puma.rb</code>)</td><td>Puma のスレッド数。<code>RAILS_MAX_THREADS</code> がなければ 3</td><td>図2 のスレッド 1〜3、図4 場面 1 ②、場面 2 ④</td></tr>
+          <tr><td><code>max_connections:</code>(<code>api/config/database.yml</code>)</td><td>Rails の接続プールの上限。<code>RAILS_MAX_THREADS</code> がなければ 5</td><td>図2 の接続 1〜3、図4 場面 2 ⑤、図6 の上の3行</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><p><code>max_connections</code> という名前は、<code>database.yml</code> と Cloud SQL の両方に出てきますが、別のものです。<code>database.yml</code> の値は、Rails のプロセス1つが持つ接続の上限です。Cloud SQL の値は、DB 全体で受け付ける接続の上限です。前者を台数分足したものが、後者に収まる必要があります(図6)。</p></div>
+  </section>
+
+  <section id="steps">
+    <h2><span class="num">6</span>Issue #35 の作業と完了条件</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>作業</th><th>誰が</th><th>完了条件</th></tr></thead>
+        <tbody>
+          <tr class="now"><td>仕様書と、このノートを書く</td><td>Claude</td><td>―</td></tr>
+          <tr><td>Cloud Run のサービス <code>api</code> の設定を変える(同時実行数、最大インスタンス数、<code>RAILS_MAX_THREADS</code>)</td><td>オーナー(コンソール)</td><td>AC-1</td></tr>
+          <tr><td>本番で、記事の一覧の表示、ログイン、投稿を確認する</td><td>オーナー</td><td>AC-3</td></tr>
+          <tr><td>コールドスタートの時間を計測する</td><td>Claude(curl)</td><td>AC-4</td></tr>
+          <tr><td><code>docs/production-setup.md</code> に「6. スケールの設定」を書く</td><td>Claude</td><td>AC-2</td></tr>
+          <tr><td>マージの後、自動デプロイの後も設定が残っていることを確認する</td><td>Claude</td><td>AC-5</td></tr>
+          <tr><td>DB を作り直し、最大接続数を確認する</td><td>オーナーと Claude</td><td>Issue #49</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="check">
+    <h2><span class="num">7</span>確認用の問い</h2>
+    <ol class="check">
+      <li>同時実行数が 80 のままだと、4 件目のリクエストはどこで待ちますか。そのとき、Cloud Run はインスタンスをどう判断していますか。<span class="hint">4章の図5 の上段と、「同時実行数をスレッド数にそろえる理由」の 1 です。</span></li>
+      <li>サービス <code>api</code> が 2 台に増え、ジョブ <code>migrate</code> も動いているとき、DB の接続は最も多くて何本ですか。内訳は何ですか。<span class="hint">4章の図6 と、その下の表です。</span></li>
+      <li><code>database.yml</code> の <code>max_connections</code> と、Cloud SQL の <code>max_connections</code> は、何が違いますか。<span class="hint">5章の最後の注記です。</span></li>
+      <li>最小インスタンス数を 0 にすると、何を得て、何と引き換えになりますか。<span class="hint">4章の「最小インスタンス数を 0 のままにする理由」と、3章の図4 の場面 1 と場面 3 です。</span></li>
+      <li>Issue #35 で決める値は、図4 のどの場面の、どの手順にあたりますか。<span class="hint">3章の場面 2 の後の注記です。</span></li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>
